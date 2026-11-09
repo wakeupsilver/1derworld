@@ -196,11 +196,18 @@ async function startCamera(deviceId) {
   if (stream) stream.getTracks().forEach(t => t.stop());
   msg.hidden = false; msg.textContent = 'Starting camera…';
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: deviceId ? {deviceId:{exact:deviceId}, width:{ideal:1280}, height:{ideal:720}}
-                      : {width:{ideal:1280}, height:{ideal:720}}, audio:false});
+    // Some cameras (an iPhone's Continuity Camera that isn't awake, a busy virtual camera) never answer,
+    // which used to leave the page stuck on "Starting camera". Give up after 8 seconds.
+    stream = await Promise.race([
+      navigator.mediaDevices.getUserMedia({
+        video: deviceId ? {deviceId:{exact:deviceId}, width:{ideal:1280}, height:{ideal:720}}
+                        : {width:{ideal:1280}, height:{ideal:720}}, audio:false}),
+      new Promise((_, no) => setTimeout(() => no(new Error('that camera did not respond')), 8000)),
+    ]);
   } catch (e) {
-    msg.textContent = 'Could not open the camera: ' + e.message + '. Check that the document camera is plugged in and that this browser has camera permission.';
+    stream = null;
+    msg.textContent = 'Could not open the camera: ' + e.message + '. Pick another camera from the Camera list, check that the document camera is plugged in, and that this browser has camera permission.';
+    await listCameras(deviceId).catch(() => {});
     return;
   }
   video.srcObject = stream;
@@ -232,9 +239,14 @@ async function init() {
   const devs = await navigator.mediaDevices.enumerateDevices().then(d => d.filter(x => x.kind === 'videoinput'));
   const cur = stream.getVideoTracks()[0].getSettings().deviceId;
   const docRe = /doc|ipevo|elmo|hovercam|okiocam|aver|ziggi|lumens|visualizer|external|usb/i;
-  const builtIn = /facetime|built-in|integrated|isight/i;
-  const best = devs.find(d => docRe.test(d.label)) || devs.find(d => !builtIn.test(d.label));
-  if (best && best.deviceId !== cur) await startCamera(best.deviceId);
+  // only switch on our own to a recognizable document camera; never to a phone or virtual camera
+  const skip = /iphone|ipad|continuity|virtual|obs|desk view|snap camera|zoom/i;
+  const best = devs.find(d => docRe.test(d.label) && !skip.test(d.label));
+  if (best && best.deviceId !== cur) {
+    const prev = cur;
+    await startCamera(best.deviceId);
+    if (!stream && prev) await startCamera(prev);   // the document camera didn't start: go back to the one that worked
+  }
 }
 
 /* ---------------- Vision ---------------- */
