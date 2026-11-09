@@ -1,0 +1,966 @@
+// api.js
+// Talks to server.py when it's running locally; falls back to the files tools/export.py writes for the
+// public (static) copy, so the same page works on GitHub Pages.
+let STATIC = false;
+export async function loadProjects() {
+  try {
+    const r = await fetch('/api/projects');
+    if (r.ok && (r.headers.get('content-type') || '').includes('json')) return await r.json();
+  } catch { /* no server */ }
+  STATIC = true;
+  return (await fetch('api/projects.json')).json();
+}
+export const isStatic = () => STATIC;
+export const codeUrl = id => (STATIC ? `api/code/${id}.txt` : `/api/code/${id}`);
+export async function launchInfo(p) {
+  if (STATIC) return { url: p.launch, up: true, kind: p.kind };
+  return (await fetch(`/api/launch/${p.id}`)).json();
+}
+// palette.js
+// JOYWAVE: the 1derworld palette.
+// Pulled from the sites: GameBender red #e8112d and deep purples #480e9e / #340678 / #25258c,
+// GameBender-web lime #a6ee70, magenta #c442dc, pink #ff6caf, amber #ffbf00, and JoyLabz red #ea363e.
+// Code streams run plum -> magenta -> pink with amber heads: matrix-inspired, never black and green.
+import * as THREE from 'three';
+export const HEX = {
+  void: '#0d0420', night: '#1a0838', plum: '#340678', violet: '#480e9e', indigo: '#25258c',
+  red: '#e8112d', joy: '#ea363e', magenta: '#c442dc', pink: '#ff6caf', lime: '#a6ee70',
+  green: '#67da5e', amber: '#ffbf00', orange: '#ff8000', blue: '#4c97ff', cream: '#fff3e0',
+  aqua: '#3fd0c9', deep: '#06123d', sea: '#0b3a7a', ink: '#120626',
+};
+export const C = Object.fromEntries(Object.entries(HEX).map(([k, v]) => [k, new THREE.Color(v)]));
+export const NEON = ['red', 'magenta', 'pink', 'lime', 'amber', 'orange', 'blue'].map(k => HEX[k]);
+export const col = h => new THREE.Color(h);
+// terrain.js
+// Tiny collision world: boxes (floors you stand on, walls you bump), height functions (ramps, halfpipes, hill
+// sample(x,z,y) -> the highest walkable surface at or a little above y.  blocked(x,z,y,r) -> is there wall he
+export const STEP = 0.55;
+export class Terrain {
+  constructor({ base, ceiling = () => 999, extraBlock } = {}) {
+    this.boxes = [];
+    this.fns = [];
+    this.base = base || (() => ({ h: 0, kind: 'floor' }));
+    this.ceilingFn = ceiling;
+    this.extraBlock = extraBlock;
+  }
+  box(minX, maxX, minZ, maxZ, top, o = {}) {
+    const b = { minX, maxX, minZ, maxZ, top, bottom: o.bottom ?? 0, kind: o.kind || 'floor', data: o.data, act
+    this.boxes.push(b);
+    return b;
+  }
+  // wall: a box you cannot stand on (top far above)
+  wall(minX, maxX, minZ, maxZ, top = 40, o = {}) { return this.box(minX, maxX, minZ, maxZ, top, { ...o, wallOn
+  fn(minX, maxX, minZ, maxZ, h, o = {}) {
+    const f = { minX, maxX, minZ, maxZ, h, kind: o.kind || 'floor', data: o.data, active: o.active ?? true };
+    this.fns.push(f);
+    return f;
+  }
+  sample(x, z, y) {
+    let best = this.base(x, z, y);
+    if (best.h > y + STEP) best = { h: -999, kind: 'void' };
+    for (const b of this.boxes) {
+      if (!b.active || b.wallOnly || x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) continue;
+      if (b.top <= y + STEP && b.top > best.h) best = { h: b.top, kind: b.kind, data: b.data };
+    }
+    for (const f of this.fns) {
+      if (!f.active || x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+      const h = f.h(x, z);
+      if (h <= y + STEP && h >= best.h) best = { h, kind: f.kind, data: f.data }; // >= so a ramp's flat part 
+    }
+    return best;
+  }
+  blocked(x, z, y, r = 0.3) {
+    if (this.extraBlock && this.extraBlock(x, z, y)) return true;
+    for (const b of this.boxes) {
+      if (!b.active) continue;
+      if (x < b.minX - r || x > b.maxX + r || z < b.minZ - r || z > b.maxZ + r) continue;
+      if (b.top > y + STEP && b.bottom < y + 1.75) return true;
+    }
+    for (const f of this.fns) {
+      if (!f.active || x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+      if (f.h(x, z) > y + STEP) return true;
+    }
+    return false;
+  }
+  ceiling(x, z, y = 0) {
+    let c = this.ceilingFn(x, z, y);
+    for (const b of this.boxes) {
+      if (!b.active || x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) continue;
+      if (b.bottom > y + 1 && b.bottom < c) c = b.bottom;
+    }
+    return c;
+  }
+}
+// fx.js
+// Juice: particle bursts, confetti, sparks, bubbles, floating pop-text, camera shake.
+import * as THREE from 'three';
+import { label } from './textures.js';
+import { NEON } from './palette.js';
+const MAX = 4000;
+export class FX {
+  constructor(scene) {
+    this.scene = scene;
+    const geo = new THREE.BufferGeometry();
+    this.pos = new Float32Array(MAX * 3);
+    this.col = new Float32Array(MAX * 3);
+    this.size = new Float32Array(MAX);
+    this.vel = new Float32Array(MAX * 3);
+    this.life = new Float32Array(MAX);
+    this.maxLife = new Float32Array(MAX);
+    this.grav = new Float32Array(MAX);
+    this.drag = new Float32Array(MAX);
+    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('size', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uScale: { value: 600 } },
+      vertexShader: `attribute float size; attribute vec3 color; varying vec3 vC; varying float vA;
+        void main(){ vC=color; vA=step(0.001,size); vec4 mv=modelViewMatrix*vec4(position,1.); gl_PointSize=si
+      fragmentShader: `varying vec3 vC; varying float vA; void main(){ vec2 p=gl_PointCoord-0.5; float d=lengt
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+    });
+    this.points = new THREE.Points(geo, mat);
+    this.points.frustumCulled = false;
+    this.geo = geo;
+    this.cursor = 0;
+    this.texts = [];
+    this.shakeAmt = 0;
+  }
+  attach(scene) { scene.add(this.points); this.scene = scene; }
+  spawn(p, v, color, size, life, grav = -9, drag = 0.98) {
+    const i = this.cursor; this.cursor = (this.cursor + 1) % MAX;
+    this.pos.set([p.x, p.y, p.z], i * 3);
+    this.vel.set([v.x, v.y, v.z], i * 3);
+    const c = color instanceof THREE.Color ? color : new THREE.Color(color);
+    this.col.set([c.r, c.g, c.b], i * 3);
+    this.size[i] = size; this.life[i] = life; this.maxLife[i] = life; this.grav[i] = grav; this.drag[i] = drag
+  }
+  burst(p, { n = 40, speed = 6, colors = NEON, size = 0.18, life = 1.2, grav = -9, up = 2, spread = 1 } = {}) 
+    for (let k = 0; k < n; k++) {
+      const d = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5 + up * 0.25, Math.random() - 0.5).n
+      d.x *= spread; d.z *= spread;
+      this.spawn(p, d, colors[k % colors.length], size * (0.6 + Math.random() * 0.8), life * (0.6 + Math.rando
+    }
+  }
+  ring(p, { n = 48, speed = 7, color = '#ff6caf', size = 0.2, life = 0.8 } = {}) {
+    for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2; this.spawn(p, { x: Math.cos(a) * speed, y: 0.
+  }
+  sparks(p, n = 24) { this.burst(p, { n, speed: 5, colors: ['#ffbf00', '#ff8000', '#fff3e0'], size: 0.06, life
+  bubbles(p, n = 6) { for (let k = 0; k < n; k++) this.spawn({ x: p.x + (Math.random() - .5) * 0.6, y: p.y, z:
+  pop(text, p, { color = '#ffbf00', size = 0.5, life = 1.4, font = 'Bungee', rise = 1.4 } = {}) {
+    const m = label(text, size, { color, glow: color, stroke: '#1a0838', font, size: 110 });
+    m.position.copy(p);
+    m.userData = { life, max: life, rise };
+    this.scene.add(m);
+    this.texts.push(m);
+    return m;
+  }
+  shake(a) { this.shakeAmt = Math.min(1.2, this.shakeAmt + a); }
+  update(dt, camera) {
+    for (let i = 0; i < MAX; i++) {
+      if (this.life[i] <= 0) { if (this.size[i]) this.size[i] = 0; continue; }
+      this.life[i] -= dt;
+      const j = i * 3, d = this.drag[i];
+      this.vel[j + 1] += this.grav[i] * dt;
+      this.vel[j] *= d; this.vel[j + 1] *= d; this.vel[j + 2] *= d;
+      this.pos[j] += this.vel[j] * dt; this.pos[j + 1] += this.vel[j + 1] * dt; this.pos[j + 2] += this.vel[j 
+      const k = this.life[i] / this.maxLife[i];
+      if (k < 0.3) this.size[i] *= 0.9;
+      if (this.life[i] <= 0) this.size[i] = 0;
+    }
+    this.geo.attributes.position.needsUpdate = true;
+    this.geo.attributes.color.needsUpdate = true;
+    this.geo.attributes.size.needsUpdate = true;
+    for (let i = this.texts.length - 1; i >= 0; i--) {
+      const t = this.texts[i], u = t.userData;
+      u.life -= dt;
+      const k = 1 - u.life / u.max;
+      t.position.y += dt * u.rise * (1 - k);
+      t.quaternion.copy(camera.quaternion);
+      const s = k < 0.15 ? k / 0.15 * 1.25 : 1.25 - Math.min(0.25, (k - 0.15) * 2);
+      t.scale.setScalar(s);
+      t.material.opacity = u.life < 0.4 ? u.life / 0.4 : 1;
+      if (u.life <= 0) { this.scene.remove(t); t.geometry.dispose(); t.material.map.dispose(); t.material.disp
+    }
+    this.shakeAmt *= Math.pow(0.02, dt);
+  }
+}
+// selftest.js
+// Loaded only with #selftest. Drives the real game loop through each mechanic and reports to the server log.
+import * as THREE from 'three';
+export async function run(api) {
+  const sim = ms => { for (let i = 0; i < ms / 1000 * 60; i++) api.tick(1 / 60, false); };
+  const until = (fn, ms = 8000) => { for (let i = 0; i < ms / 1000 * 60; i++) { api.tick(1 / 60, false); if (f
+  const wait = async ms => sim(ms);
+  const out = [];
+  const ok = (name, pass, extra = '') => { const l = `${pass ? 'PASS' : 'FAIL'} ${name} ${extra}`; out.push(l)
+  const { go, player, hub, street, portals, state, warp } = api;
+  fetch('/api/log', { method: 'POST', body: 'T START' });
+  try {
+    // 1. spin cycle: washer -> slide -> hub
+    await go('spin');
+    until(() => state().mode === 'ride', 4000);
+    for (const f of [0.2, 0.5, 0.8]) {
+      until(() => state().ride && state().ride.t >= f, 6000);
+      const r = state().ride; if (!r) break;
+      const e = r.t * r.t * 0.45 + r.t * 0.55, tg = r.curve.getTangentAt(Math.min(0.999, e));
+      const look = new THREE.Vector3(0, 0, -1).applyQuaternion(api.camera.quaternion);
+      ok(`slide faces forward at ${f}`, look.dot(tg) > 0.3, `dot=${look.dot(tg).toFixed(2)} y=${api.camera.pos
+    }
+    ok('spin starts cinematic', until(() => state().mode === 'cine' || state().mode === 'ride', 3000), state()
+    ok('ride reaches hub', until(() => state().mode === 'world' && state().current === hub, 12000), `${state()
+    ok('landed between portals (no accidental demo)', state().mode === 'world');
+    // 2. trampoline bounce stacking
+    let bounces = 0, maxY = 0; player.on('bounce', () => bounces++);
+    player.place(new THREE.Vector3(25, 3, 2), 0); player.vel.set(0, 0, 0);
+    player.keys.Space = true;
+    for (let i = 0; i < 360; i++) { api.tick(1 / 60, false); maxY = Math.max(maxY, player.pos.y); }
+    player.keys.Space = false;
+    ok('trampoline bounces', bounces >= 3, `bounces=${bounces} maxY=${maxY.toFixed(1)}`);
+    ok('bounces reach mezzanine height', maxY > 7.5);
+    // walk onto a trampoline from the floor
+    bounces = 0; player.place(new THREE.Vector3(18, 0, -7.5), Math.PI); player.grounded = true; player.keys.Ke
+    until(() => bounces > 0, 3000); player.keys.KeyW = false;
+    ok('walk onto trampoline bounces', bounces > 0);
+    // 3. mezzanine slide trigger
+    player.place(new THREE.Vector3(18, 7.6, 18), Math.atan2(1, 1)); player.grounded = false;
+    player.keys.KeyW = true;
+    ok('mezzanine slide starts', until(() => state().mode === 'ride', 4000), state().mode);
+    player.keys.KeyW = false;
+    ok('mezzanine slide ends in plaza', until(() => state().mode === 'world', 6000), player.pos.toArray().map(
+    // 4. trapdoor -> geyser
+    let fell = false; player.on('fellOut', () => fell = true);
+    player.place(new THREE.Vector3(-7, 0, -14.5), 0); player.grounded = true; player.keys.KeyW = true;
+    until(() => player.pos.y < -1, 4000); player.keys.KeyW = false;
+    ok('trapdoor drops you', player.pos.y < -1, `y=${player.pos.y.toFixed(1)}`);
+    ok('geyser relaunch', until(() => fell, 5000));
+    await wait(300);
+    ok('geyser sends you up', player.vel.y > 5 || player.pos.y > 3, `y=${player.pos.y.toFixed(1)} vy=${player.
+    until(() => player.grounded, 6000);
+    // 5. launch pad
+    let launched = false; player.on('launch', () => launched = true);
+    player.place(new THREE.Vector3(11, 0, 18.5), Math.PI); player.grounded = true; player.keys.KeyW = true;
+    until(() => launched, 3000); player.keys.KeyW = false;
+    ok('launch pad fires', launched);
+    ok('launch lands on mezzanine', until(() => player.grounded && player.pos.y > 7, 4000), `y=${player.pos.y.
+    // 6. skate bowl: glide on the flat, ramps throw you
+    player.place(new THREE.Vector3(-21, 0, -11), Math.PI); player.grounded = true; player.keys.KeyW = true; pl
+    sim(700); player.keys.KeyW = false; player.keys.ShiftLeft = false;
+    ok('bowl flat is skate surface', player.groundKind === 'skate', player.groundKind);
+    const sp0 = player.speed; sim(600);
+    ok('keeps gliding on the flat', player.speed > sp0 * 0.5 && player.speed > 2, `speed ${sp0.toFixed(1)} -> 
+    let maxAir = 0; player.on('land', (i, k, air) => { maxAir = Math.max(maxAir, air); });
+    player.place(new THREE.Vector3(-21, 0, 1), -Math.PI / 2); player.grounded = true; player.keys.KeyW = true;
+    sim(3000); player.keys.KeyW = false; player.keys.ShiftLeft = false;
+    ok('halfpipe gives air', maxAir > 0.2, `air=${maxAir.toFixed(2)}`);
+    // 7. prairie: warp, door opens, walk back in
+    warp('field');
+    await wait(400);
+    ok('garage opens from prairie side', hub.garage.target === 1);
+    until(() => hub.garage.open > 0.9, 4000);
+    player.place(new THREE.Vector3(0, 0, -36), Math.PI); player.grounded = true; player.keys.KeyW = true;
+    until(() => player.pos.z > -25, 5000); player.keys.KeyW = false;
+    ok('walk from prairie into hub', player.pos.z > -25 && player.pos.y > -0.2, `z=${player.pos.z.toFixed(1)} 
+    // 7b. walk out through the garage door into the prairie and back, never dropping below the floor
+    hub.garage.target = 1; until(() => hub.garage.open > 0.95, 4000);
+    let minY = 0;
+    for (const xx of [0, -5.5, 5.5]) {
+      player.place(new THREE.Vector3(xx, 0, -26), 0); player.grounded = true; player.keys.KeyW = true;
+      for (let i = 0; i < 150; i++) { api.tick(1 / 60, false); minY = Math.min(minY, player.pos.y); }
+      player.keys.KeyW = false;
+      ok(`walk out the door at x=${xx}`, player.pos.z < -36 && minY > -0.2, `z=${player.pos.z.toFixed(1)} minY
+      player.place(new THREE.Vector3(xx, 0, -40), Math.PI); player.grounded = true; player.keys.KeyW = true; m
+      for (let i = 0; i < 150; i++) { api.tick(1 / 60, false); minY = Math.min(minY, player.pos.y); }
+      player.keys.KeyW = false;
+      ok(`walk back in at x=${xx}`, player.pos.z > -28 && minY > -0.2, `z=${player.pos.z.toFixed(1)} minY=${mi
+    }
+    // 8. portal crossing (stop before the demo opens a real app)
+    const P = portals.portals[0];
+    const f = portals.frontOf(P, 3);
+    let crossed = null;
+    const pr = player.pos.clone();
+    player.place(f.pos, f.yaw);
+    const fwd = player.forward();
+    P.g.updateMatrixWorld(true);
+    crossed = portals.crossing(f.pos, f.pos.clone().addScaledVector(fwd, -3.5));
+    ok('portal crossing detects', crossed === P, P.p.id);
+    player.place(pr, 0);
+    // 9. hub walls hold
+    player.place(new THREE.Vector3(25, 0, 0), -Math.PI / 2); player.grounded = true; player.keys.KeyW = true;
+    await wait(2500); player.keys.KeyW = false;
+    ok('east wall blocks', player.pos.x < 29.7, `x=${player.pos.x.toFixed(2)}`);
+  } catch (e) { fetch('/api/log', { method: 'POST', body: 'T ERROR ' + (e.stack || e) }); }
+  fetch('/api/log', { method: 'POST', body: 'T DONE' });
+}
+// portals.js
+// Portals: one per project. A vortex disc (with the app's own screenshot swirling inside),
+// a curved wall of the app's real source code streaming behind it, its README vocabulary orbiting as relics,
+// and a hum tuned to a chord tone so walking the ring plays a chord.
+import * as THREE from 'three';
+import { label, codeAtlas, loadImage } from './textures.js';
+import { vortexMaterial, codeStreamMaterial, shared } from './shaders.js';
+import { HEX, C } from './palette.js';
+import { glow, mat } from './props.js';
+import { HUB } from './hub.js';
+import { codeUrl } from './api.js';
+export function layoutRing(n) {
+  // first ring up to 16, then an inner ring
+  const out = [];
+  const outer = Math.min(n, 16), inner = n - outer;
+  const R1 = Math.max(9, Math.min(11.4, outer * 5.4 / (2 * Math.PI)));
+  // offset by half a step so there's a gap facing north (where the slide drops you in)
+  for (let i = 0; i < outer; i++) out.push({ R: R1, a: Math.PI / 2 + ((i + 0.5) / outer) * Math.PI * 2 });
+  for (let i = 0; i < inner; i++) out.push({ R: 6.2, a: Math.PI / 2 + ((i + 0.5) / Math.max(inner, 1)) * Math.
+  return out;
+}
+export async function buildPortals(scene, projects, audio) {
+  const group = new THREE.Group();
+  scene.add(group);
+  const portals = [];
+  const slots = layoutRing(projects.length);
+  const center = HUB.plaza;
+  await Promise.all(projects.map(async (p, i) => {
+    const { R, a } = slots[i];
+    const g = new THREE.Group();
+    g.position.set(center.x + Math.cos(a) * R, 0, center.z + Math.sin(a) * R);
+    g.lookAt(center.x, 0, center.z); // +z faces the plaza center
+    const color = new THREE.Color(p.color || HEX.pink);
+    // thumbnail (an artifact from the app itself)
+    let thumb = null;
+    if (p.thumb) {
+      const img = await loadImage(p.thumb);
+      if (img) { thumb = new THREE.Texture(img); thumb.colorSpace = THREE.SRGBColorSpace; thumb.needsUpdate = 
+    }
+    // code stream from the app's actual source
+    let code = '';
+    try { code = await (await fetch(codeUrl(p.id))).text(); } catch { code = `// ${p.title}\n// ${p.tagline ||
+    const atlas = codeAtlas(code, 1024, 2048, 20);
+    // base
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.45, 0.22, 6), mat('#1a0838', { r: 0.4, m: 0.
+    base.position.y = 0.11; g.add(base);
+    const baseRing = new THREE.Mesh(new THREE.TorusGeometry(2.32, 0.05, 4, 6).rotateX(Math.PI / 2), glow(p.col
+    // disc + frame
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.8, 64), vortexMaterial(color, thumb));
+    disc.position.y = 2.6; g.add(disc);
+    const frame = new THREE.Mesh(new THREE.TorusGeometry(1.94, 0.15, 16, 80), mat(p.color, { e: p.color, ei: 1
+    frame.position.y = 2.6; g.add(frame);
+    const orbitA = new THREE.Mesh(new THREE.TorusGeometry(2.22, 0.03, 6, 80, Math.PI * 1.3), glow(HEX.amber, 2
+    const orbitB = new THREE.Mesh(new THREE.TorusGeometry(2.38, 0.022, 6, 80, Math.PI * 0.8), glow(HEX.cream, 
+    // code wall behind (curved)
+    const theta = 5.0 / 6.5;
+    const codeWall = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 6.5, 9.5, 32, 1, true, Math.PI - theta / 2
+      codeStreamMaterial(atlas, { trail: color, hot: C.pink, head: C.amber, speed: 0.8 + Math.random() * 0.6, 
+    codeWall.position.set(0, 4.75, 5.3); g.add(codeWall);
+    // labels
+    const title = label(p.title, 0.62, { font: 'Bungee', color: HEX.cream, glow: p.color, stroke: '#1a0838', s
+    title.position.set(0, 5.1, 0.1);
+    const maxW = 4.8; if (title.geometry.parameters.width > maxW) title.scale.setScalar(maxW / title.geometry.
+    g.add(title);
+    if (p.tagline) {
+      const tl = p.tagline.length > 70 ? p.tagline.slice(0, 68).replace(/\s+\S*$/, '') + '…' : p.tagline;
+      const tag = label(tl, 0.2, { font: 'Fjalla One', color: HEX.cream, size: 64 });
+      if (tag.geometry.parameters.width > 4.6) tag.scale.setScalar(4.6 / tag.geometry.parameters.width);
+      tag.position.set(0, 4.6, 0.1); g.add(tag);
+    }
+    const kindTxt = { local: 'LIVE · LOCAL', start: 'BOOTS ITS SERVER', url: p.github ? 'GITHUB PAGES' : 'DEV 
+    const kind = label(kindTxt, 0.16, { font: 'JetBrains Mono', weight: 800, color: p.color, glow: p.color, si
+    kind.position.set(0, 0.45, 0.6); kind.rotation.x = -0.6; g.add(kind);
+    // relics: the app's own words orbiting
+    const relics = [];
+    (p.words || []).slice(0, 8).forEach((w, k) => {
+      const r = label(w, 0.26, { font: 'Bungee', color: [HEX.amber, HEX.pink, HEX.lime, HEX.cream][k % 4], glo
+      r.userData = { a: k / 8 * Math.PI * 2, y: 1.2 + (k % 4) * 1.0, sp: 0.25 + Math.random() * 0.2 };
+      g.add(r); relics.push(r);
+    });
+    // floating screenshot card
+    let card = null;
+    if (thumb) {
+      card = new THREE.Group();
+      const img = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.19), new THREE.MeshBasicMaterial({ map: thumb,
+      const fr = new THREE.Mesh(new THREE.PlaneGeometry(2.02, 1.31), glow(p.color, 1.8)); fr.position.z = -0.0
+      card.add(fr, img);
+      card.position.set(2.9, 3.3, 0.9); card.rotation.y = -0.45;
+      g.add(card);
+    }
+    group.add(g);
+    const hum = audio.ready ? audio.loop('hum', g.position.clone().setY(2.6), { freq: 87.31 * Math.pow(2, [0, 
+    portals.push({ p, g, disc, frame, orbitA, orbitB, codeWall, title, relics, card, hum, hover: 0, near: 0, i
+  }));
+  return {
+    group, portals,
+    update(dt, t, player, hovered) {
+      for (const P of portals) {
+        const d = P.g.position.distanceTo(player.pos);
+        P.near = THREE.MathUtils.clamp(1 - (d - 3) / 9, 0, 1);
+        const target = Math.max(P.near * 0.6, hovered === P ? 1 : 0);
+        P.hover += (target - P.hover) * Math.min(1, dt * 6);
+        P.disc.material.uniforms.uHover.value = P.hover;
+        P.codeWall.material.uniforms.uBoost.value = P.hover;
+        P.orbitA.rotation.z = t * 0.9 + P.i; P.orbitB.rotation.z = -t * 1.3 + P.i;
+        const s = 1 + P.hover * 0.06 + shared.uBeat.value * 0.03;
+        P.frame.scale.set(s, s, 1);
+        P.frame.material.emissiveIntensity = 1.4 + P.hover * 2 + shared.uBeat.value * 1.5;
+        P.title.position.y = 5.1 + Math.sin(t * 1.5 + P.i) * 0.08;
+        for (const r of P.relics) {
+          const u = r.userData, a = u.a + t * u.sp;
+          r.position.set(Math.cos(a) * 2.9, u.y + Math.sin(t + u.a) * 0.2, Math.sin(a) * 1.4 + 0.4);
+          r.lookAt(player.camera.position);
+        }
+        if (P.card) { P.card.position.y = 3.3 + Math.sin(t * 0.9 + P.i) * 0.15; }
+        if (P.hum) P.hum.setGain(0.08 + P.near * 0.18, 0.2);
+      }
+    },
+    // returns the portal the player just stepped into, if any
+    crossing(prevPos, pos) {
+      for (const P of portals) {
+        const a = P.g.worldToLocal(prevPos.clone().setY(prevPos.y + 1.2));
+        const b = P.g.worldToLocal(pos.clone().setY(pos.y + 1.2));
+        if (a.z > 0.05 && b.z <= 0.05 && Math.abs(b.x) < 1.7 && b.y > 0.3 && b.y < 4.4) return P;
+      }
+      return null;
+    },
+    frontOf(P, dist = 4.2) {
+      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(P.g.quaternion);
+      const pos = P.g.position.clone().addScaledVector(fwd, dist);
+      return { pos, yaw: Math.atan2(-fwd.x, -fwd.z) };
+    },
+  };
+}
+// player.js
+// First-person body: walking, running, skate-glide, jumping, trampolines, launch pads, ramps that throw you.
+// Works with WASD/arrows + Space + mouse, which also means it works with a Makey Makey.
+import * as THREE from 'three';
+const G = -24, STEP = 0.55, EYE = 1.65, RADIUS = 0.32;
+export class Player {
+  constructor(camera, dom) {
+    this.camera = camera;
+    this.dom = dom;
+    this.pos = new THREE.Vector3();
+    this.vel = new THREE.Vector3();
+    this.yaw = 0; this.pitch = 0; this.roll = 0;
+    this.grounded = true;
+    this.groundKind = 'floor';
+    this.groundVel = 0;
+    this.keys = {};
+    this.enabled = false;
+    this.world = null;
+    this.stepAcc = 0;
+    this.bob = 0;
+    this.airTime = 0;
+    this.airFrom = 'floor';
+    this.fovKick = 0;
+    this.baseFov = 72;
+    this.handlers = {};
+    this.lookVel = { x: 0, y: 0 };
+    this.lastTrap = null;
+    this.dragging = false;
+    this.mouse = { x: 0, y: 0, inside: false };
+    addEventListener('mousemove', e => { this.mouse.x = e.clientX / innerWidth * 2 - 1; this.mouse.y = e.clien
+    document.addEventListener('mouseleave', () => { this.mouse.inside = false; });
+    addEventListener('blur', () => { this.mouse.inside = false; });
+    addEventListener('keydown', e => { this.keys[e.code] = true; if ((e.code === 'Space' || e.code.startsWith(
+    addEventListener('keyup', e => { this.keys[e.code] = false; });
+    addEventListener('blur', () => { this.keys = {}; });
+    // Look like the Scratch Portfolio Bedroom: grab the world and drag it. No pointer lock, no "click to look
+    // A press that moves less than 6px is a click (used to pick things); anything more is a look-drag.
+    dom.style.cursor = 'grab';
+    let down = null;
+    dom.addEventListener('pointerdown', e => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      down = { lastX: e.clientX, lastY: e.clientY, moved: 0, id: e.pointerId };
+      dom.setPointerCapture(e.pointerId);
+    });
+    dom.addEventListener('pointermove', e => {
+      if (!down || e.pointerId !== down.id) return;
+      const dx = e.clientX - down.lastX, dy = e.clientY - down.lastY;
+      down.lastX = e.clientX; down.lastY = e.clientY;
+      down.moved += Math.abs(dx) + Math.abs(dy);
+      if (down.moved > 6 && this.enabled) {
+        this.yaw += dx * 0.0042;
+        this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch + dy * 0.0042));
+        this.lookVel.x = -dx;
+        this.dragging = true;
+        dom.style.cursor = 'grabbing';
+      }
+    });
+    const up = e => {
+      if (!down) return;
+      const wasClick = down.moved <= 6;
+      down = null; this.dragging = false; dom.style.cursor = 'grab';
+      if (wasClick) this.emit('click', e);
+    };
+    dom.addEventListener('pointerup', up);
+    dom.addEventListener('pointercancel', () => { down = null; this.dragging = false; dom.style.cursor = 'grab
+    // scroll wheel steps you forward / back
+    dom.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (!this.enabled) return;
+      const f = this.forward().multiplyScalar(-Math.sign(e.deltaY) * Math.min(6, 2 + Math.abs(e.deltaY) * 0.04
+      this.vel.x += f.x; this.vel.z += f.z;
+    }, { passive: false });
+    dom.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  on(ev, fn) { (this.handlers[ev] ||= []).push(fn); }
+  emit(ev, ...a) { (this.handlers[ev] || []).forEach(f => f(...a)); }
+  look(dx, dy) {
+    const s = 0.0022;
+    this.yaw -= dx * s; this.pitch -= dy * s;
+    this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
+    this.lookVel.x = dx;
+  }
+  place(p, yaw = this.yaw, pitch = 0) {
+    this.pos.copy(p); this.vel.set(0, 0, 0); this.yaw = yaw; this.pitch = pitch; this.grounded = false; this.a
+  }
+  forward(out = new THREE.Vector3()) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
+  launchTo(target, T = 1.1) {
+    const d = target.clone().sub(this.pos);
+    this.vel.set(d.x / T, (d.y - 0.5 * G * T * T) / T, d.z / T);
+    this.grounded = false; this.airFrom = 'launch'; this.airTime = 0;
+  }
+  update(dt) {
+    const w = this.world;
+    if (!w) return;
+    const k = this.keys;
+    const f = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0);
+    const r = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
+    // arrows turn (Makey Makey friendly)
+    if (this.enabled) {
+      this.yaw += ((k.ArrowLeft ? 1 : 0) - (k.ArrowRight ? 1 : 0)) * 2.3 * dt;
+    }
+    const run = k.ShiftLeft || k.ShiftRight;
+    const fwd = this.forward(), right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    const wish = fwd.multiplyScalar(f).add(right.multiplyScalar(r));
+    if (wish.lengthSq() > 1) wish.normalize();
+    if (!this.enabled) wish.set(0, 0, 0);
+    const skate = this.groundKind === 'skate';
+    const boost = this.boost > 0 ? 1.4 : 1;   // taco power
+    if (this.boost > 0) this.boost -= dt;
+    const top = (skate ? (run ? 15 : 10) : (run ? 10.5 : 5.6)) * boost;
+    const accel = this.grounded ? (skate ? 4 : 11) : 1.8;
+    const hv = new THREE.Vector3(this.vel.x, 0, this.vel.z);
+    if (wish.lengthSq() > 0 || !skate || !this.grounded) {
+      const target = wish.multiplyScalar(top);
+      if (!this.grounded && wish.lengthSq() === 0) target.copy(hv); // keep momentum in the air
+      hv.lerp(target, Math.min(1, accel * dt));
+    } else hv.multiplyScalar(1 - Math.min(1, 0.35 * dt)); // skate glide
+    // ramps push you downhill when skating
+    if (skate && this.grounded) {
+      const e = 0.3, h0 = w.sample(this.pos.x, this.pos.z, this.pos.y + 1).h;
+      const gx = (w.sample(this.pos.x + e, this.pos.z, this.pos.y + 1).h - h0) / e;
+      const gz = (w.sample(this.pos.x, this.pos.z + e, this.pos.y + 1).h - h0) / e;
+      hv.x -= gx * 6 * dt; hv.z -= gz * 6 * dt;
+    }
+    this.vel.x = hv.x; this.vel.z = hv.z;
+    if (this.enabled && k.Space && this.grounded && !this.jumpLock) {
+      this.vel.y = this.boost > 0 ? 12 : 8.6; this.grounded = false; this.airFrom = this.groundKind; this.airT
+      this.emit('jump');
+    }
+    if (!k.Space) this.jumpLock = false;
+    // horizontal, axis separated
+    const y = this.pos.y;
+    const nx = this.pos.x + this.vel.x * dt;
+    if (!w.blocked(nx, this.pos.z, y, RADIUS)) this.pos.x = nx; else { this.emit('bump', Math.abs(this.vel.x))
+    const nz = this.pos.z + this.vel.z * dt;
+    if (!w.blocked(this.pos.x, nz, y, RADIUS)) this.pos.z = nz; else { this.emit('bump', Math.abs(this.vel.z))
+    // vertical
+    const g = w.sample(this.pos.x, this.pos.z, this.pos.y);
+    if (this.grounded) {
+      if (g.h >= this.pos.y - 0.35 && g.h <= this.pos.y + STEP) {
+        this.groundVel = (g.h - this.pos.y) / Math.max(dt, 1e-4);
+        this.pos.y = g.h; this.vel.y = 0;
+        this.setGround(g);
+        if (g.kind === 'launch') { this.launchTo(g.data.target, g.data.T || 1.1); this.emit('launch', g.data);
+        else if (g.kind === 'tramp') { this.vel.y = 10; this.grounded = false; this.airFrom = 'tramp'; this.ai
+      } else {
+        this.grounded = false; this.airFrom = this.groundKind; this.airTime = 0;
+        this.vel.y = Math.max(0, Math.min(this.groundVel, 14)); // ramps throw you
+      }
+    }
+    if (!this.grounded) {
+      this.airTime += dt;
+      this.vel.y += G * dt;
+      this.pos.y += this.vel.y * dt;
+      const c = w.ceiling(this.pos.x, this.pos.z, this.pos.y);
+      if (this.pos.y + 1.8 > c && this.vel.y > 0) { this.pos.y = c - 1.8; this.vel.y = -2; this.emit('bonk'); 
+      const g2 = w.sample(this.pos.x, this.pos.z, this.pos.y - this.vel.y * dt);
+      if (this.pos.y <= g2.h && this.vel.y <= 0) {
+        const impact = -this.vel.y;
+        this.pos.y = g2.h;
+        if (g2.kind === 'tramp') {
+          this.vel.y = Math.min(24, Math.max(10, impact * 0.93 + 4) + (k.Space ? 5 : 0));
+          this.emit('bounce', g2.data, this.vel.y);
+          this.airFrom = 'tramp'; this.airTime = 0;
+        } else if (g2.kind === 'launch') {
+          this.pos.y = g2.h; this.launchTo(g2.data.target, g2.data.T || 1.1); this.emit('launch', g2.data);
+        } else {
+          this.grounded = true; this.vel.y = 0; this.groundVel = 0;
+          this.emit('land', impact, g2.kind, this.airTime, this.airFrom);
+          this.setGround(g2);
+        }
+      }
+      if (this.pos.y < -18) this.emit('fellOut');
+    }
+    // footsteps
+    const sp = Math.hypot(this.vel.x, this.vel.z);
+    if (this.grounded && sp > 0.8) {
+      this.stepAcc += sp * dt;
+      this.bob += sp * dt * 2.2;
+      const stride = run ? 2.6 : 2.0;
+      if (this.stepAcc > stride && this.groundKind !== 'skate') { this.stepAcc = 0; this.emit('step', this.gro
+    }
+    this.speed = sp;
+    // camera
+    const targetRoll = (skate ? -r * 0.06 : -r * 0.015) - this.lookVel.x * 0.0004;
+    this.roll += (targetRoll - this.roll) * Math.min(1, dt * 6);
+    this.lookVel.x *= 0.8;
+    const bobY = this.grounded && !skate ? Math.sin(this.bob) * 0.05 * Math.min(1, sp / 5) : 0;
+    this.camera.position.set(this.pos.x, this.pos.y + EYE + bobY, this.pos.z);
+    this.camera.rotation.set(this.pitch, this.yaw, this.roll, 'YXZ');
+    const fov = this.baseFov + Math.min(16, Math.max(0, sp - 5) * 1.1) + Math.min(10, Math.abs(this.vel.y) * 0
+    this.fovKick *= Math.pow(0.05, dt);
+    if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt 
+  }
+  setGround(g) {
+    if (g.kind !== this.groundKind) this.emit('surface', g.kind, this.groundKind);
+    this.groundKind = g.kind;
+    if (g.kind === 'trap' && this.lastTrap !== g.data) { this.lastTrap = g.data; this.emit('trap', g.data); }
+    if (g.kind !== 'trap') this.lastTrap = null;
+    if (g.kind === 'trigger') this.emit('trigger', g.data);
+  }
+}
+export { EYE };
+// textures.js
+// Canvas-made textures: neon labels, the JoyLabz circuit-board decoration, code atlases.
+import * as THREE from 'three';
+import { HEX } from './palette.js';
+const rand = (a, b) => a + Math.random() * (b - a);
+export function canvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+export function tex(c, { repeat, srgb = true } = {}) {
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+  return t;
+}
+// Neon text. Returns {texture, aspect}.
+export function textTexture(text, o = {}) {
+  const font = o.font || 'Bungee';
+  const size = o.size || 96;
+  const pad = o.pad ?? size * 0.45;
+  const lines = String(text).split('\n');
+  const m = canvas(8, 8).getContext('2d');
+  m.font = `${o.weight || 400} ${size}px "${font}"`;
+  const lineH = size * (o.lineHeight || 1.15);
+  let w = Math.max(...lines.map(l => m.measureText(l).width)) + pad * 2;
+  const h = lineH * lines.length + pad * 2 - (lineH - size);
+  const c = canvas(Math.ceil(w), Math.ceil(h));
+  const g = c.getContext('2d');
+  if (o.bg) {
+    g.fillStyle = o.bg;
+    roundRect(g, 0, 0, c.width, c.height, o.radius ?? size * 0.3); g.fill();
+    if (o.border) { g.lineWidth = size * 0.08; g.strokeStyle = o.border; roundRect(g, g.lineWidth, g.lineWidth
+  }
+  g.font = m.font;
+  g.textBaseline = 'top';
+  g.textAlign = o.align || 'center';
+  const x = g.textAlign === 'center' ? c.width / 2 : pad;
+  lines.forEach((l, i) => {
+    const y = pad + i * lineH;
+    if (o.glow) { g.shadowColor = o.glow; g.shadowBlur = size * 0.35; }
+    if (o.stroke) { g.lineWidth = size * 0.12; g.strokeStyle = o.stroke; g.lineJoin = 'round'; g.strokeText(l,
+    if (o.gradient) {
+      const gr = g.createLinearGradient(0, y, 0, y + size);
+      o.gradient.forEach((cc, j) => gr.addColorStop(j / (o.gradient.length - 1), cc));
+      g.fillStyle = gr;
+    } else g.fillStyle = o.color || '#fff';
+    g.fillText(l, x, y);
+    if (o.glow) { g.shadowBlur = 0; g.fillText(l, x, y); }
+  });
+  return { texture: tex(c), aspect: c.width / c.height, canvas: c };
+}
+// A flat label mesh `height` world units tall. Unlit so it glows under bloom.
+export function label(text, height, o = {}) {
+  const { texture, aspect } = textTexture(text, o);
+  const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, side: o.side ?
+  if (o.intensity) mat.color.setScalar(o.intensity);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(height * aspect, height), mat);
+  mesh.userData.aspect = aspect;
+  mesh.renderOrder = 2;
+  return mesh;
+}
+export function roundRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+// ---- The deck decoration: circuit traces with pads, vias and game-icon tiles ----
+// Red channel = traces, green channel = icons/pads (so shaders can pulse them separately).
+function drawIcon(g, kind, x, y, s) {
+  g.save(); g.translate(x, y);
+  g.lineWidth = s * 0.07; g.lineCap = 'round'; g.lineJoin = 'round';
+  roundRect(g, -s / 2, -s / 2, s, s, s * 0.18); g.stroke();
+  const k = s * 0.28;
+  g.beginPath();
+  if (kind === 'heart') {
+    g.moveTo(0, k * 0.9);
+    g.bezierCurveTo(-k * 1.6, -k * 0.2, -k * 0.7, -k * 1.3, 0, -k * 0.45);
+    g.bezierCurveTo(k * 0.7, -k * 1.3, k * 1.6, -k * 0.2, 0, k * 0.9); g.fill();
+  } else if (kind === 'star') {
+    for (let i = 0; i < 10; i++) { const r = i % 2 ? k * 0.45 : k * 1.05, a = -Math.PI / 2 + i * Math.PI / 5; 
+    g.closePath(); g.fill();
+  } else if (kind === 'dpad') {
+    const t = k * 0.42;
+    g.rect(-t, -k * 1.1, t * 2, k * 2.2); g.rect(-k * 1.1, -t, k * 2.2, t * 2); g.fill();
+  } else if (kind === 'bolt') {
+    g.moveTo(k * 0.2, -k * 1.1); g.lineTo(-k * 0.6, k * 0.15); g.lineTo(-k * 0.05, k * 0.15);
+    g.lineTo(-k * 0.3, k * 1.1); g.lineTo(k * 0.6, -k * 0.2); g.lineTo(k * 0.05, -k * 0.2); g.closePath(); g.f
+  } else if (kind === 'buttons') {
+    g.arc(-k * 0.55, k * 0.25, k * 0.38, 0, 7); g.fill(); g.beginPath(); g.arc(k * 0.55, -k * 0.25, k * 0.38, 
+  } else if (kind === 'plus') {
+    g.arc(0, 0, k * 0.9, 0, 7); g.stroke(); g.beginPath(); g.moveTo(-k * 0.5, 0); g.lineTo(k * 0.5, 0); g.move
+  }
+  g.restore();
+}
+export function circuitCanvas(size = 1024, o = {}) {
+  const c = canvas(size, size);
+  const g = c.getContext('2d');
+  g.fillStyle = o.bg || '#000'; g.fillRect(0, 0, size, size);
+  const grid = size / 32;
+  const trace = o.trace || '#ff0000';
+  const icon = o.icon || '#00ff00';
+  // draw everything 9 times shifted so the texture tiles
+  const shapes = [];
+  for (let i = 0; i < (o.traces || 46); i++) {
+    let x = Math.floor(rand(0, 32)) * grid, y = Math.floor(rand(0, 32)) * grid;
+    const pts = [[x, y]];
+    let dir = Math.floor(rand(0, 4));
+    const segs = 2 + Math.floor(rand(0, 4));
+    for (let s = 0; s < segs; s++) {
+      const len = Math.floor(rand(2, 7)) * grid;
+      const d = [[1, 0], [0, 1], [-1, 0], [0, -1]][dir];
+      const diag = Math.random() < 0.35;
+      if (diag) { x += (d[0] || (Math.random() < .5 ? 1 : -1)) * len * 0.7; y += (d[1] || (Math.random() < .5 
+      else { x += d[0] * len; y += d[1] * len; }
+      pts.push([x, y]);
+      dir = (dir + (Math.random() < 0.5 ? 1 : 3)) % 4;
+    }
+    shapes.push({ t: 'trace', pts, w: rand(0.12, 0.22) * grid, dots: Math.random() < 0.3 });
+  }
+  const kinds = ['heart', 'star', 'dpad', 'bolt', 'buttons', 'plus'];
+  for (let i = 0; i < (o.icons ?? 9); i++) shapes.push({ t: 'icon', k: kinds[i % kinds.length], x: rand(0, siz
+  for (let i = 0; i < 40; i++) shapes.push({ t: 'via', x: Math.floor(rand(0, 32)) * grid, y: Math.floor(rand(0
+  for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
+    g.save(); g.translate(ox, oy);
+    for (const s of shapes) {
+      if (s.t === 'trace') {
+        g.strokeStyle = trace; g.lineWidth = s.w; g.lineCap = 'round'; g.lineJoin = 'round';
+        g.beginPath(); s.pts.forEach(([x, y], j) => j ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+        const [ex, ey] = s.pts[s.pts.length - 1], [sx, sy] = s.pts[0];
+        g.fillStyle = icon; g.strokeStyle = icon; g.lineWidth = s.w * 0.8;
+        g.beginPath(); g.arc(ex, ey, grid * 0.38, 0, 7); g.stroke();
+        g.beginPath(); g.arc(sx, sy, grid * 0.22, 0, 7); g.fill();
+        if (s.dots) for (let d = 1; d < 4; d++) { g.beginPath(); g.arc(ex + d * grid * 0.6, ey, grid * 0.1, 0,
+      } else if (s.t === 'icon') {
+        g.strokeStyle = icon; g.fillStyle = icon; drawIcon(g, s.k, s.x, s.y, s.s);
+      } else {
+        g.fillStyle = icon; g.beginPath(); g.arc(s.x, s.y, s.r, 0, 7); g.fill();
+      }
+    }
+    g.restore();
+  }
+  return c;
+}
+// Pretty colored circuit art for walls (emissive map).
+export function circuitWall(size = 1024, traceColor = HEX.magenta, iconColor = HEX.pink) {
+  return circuitCanvas(size, { trace: traceColor, icon: iconColor, bg: '#000' });
+}
+// ---- Code atlas: real source code drawn as lines for the code-stream shader ----
+export function codeAtlas(text, w = 1024, h = 2048, fontPx = 22) {
+  const c = canvas(w, h);
+  const g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+  g.font = `500 ${fontPx}px "JetBrains Mono", monospace`;
+  g.textBaseline = 'top';
+  const lineH = fontPx * 1.25;
+  const lines = text.split('\n').filter(l => l.trim());
+  const rows = Math.floor(h / lineH);
+  const cols = Math.floor(w / (fontPx * 0.6));
+  for (let r = 0, i = 0; r < rows; r++, i++) {
+    const l = (lines[i % Math.max(1, lines.length)] || '').replace(/\t/g, '  ');
+    const indent = l.length - l.trimStart().length;
+    const isComment = /^\s*(\/\/|#)/.test(l);
+    g.fillStyle = isComment ? '#ff0000' : '#ffffff'; // red channel marks comments: file names show as bright 
+    g.fillText(l.slice(0, cols), 6 + Math.min(indent, 12) * 2, r * lineH + 2);
+  }
+  const t = tex(c, { srgb: false });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+export function loadImage(url) {
+  return new Promise(res => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => res(img);
+    img.onerror = () => res(null);
+    img.src = url;
+  });
+}
+// Stripes (awnings, hazard tape)
+export function stripes(a, b, n = 8, size = 256, angle = 0) {
+  const c = canvas(size, size), g = c.getContext('2d');
+  g.fillStyle = a; g.fillRect(0, 0, size, size);
+  g.fillStyle = b;
+  g.save(); g.translate(size / 2, size / 2); g.rotate(angle); g.translate(-size, -size);
+  const sw = size / n;
+  for (let i = 0; i < n * 4; i += 2) g.fillRect(i * sw, 0, sw, size * 2);
+  g.restore();
+  return tex(c, { repeat: [1, 1] });
+}
+export function brickTexture(base = '#3a1530', mortar = '#1a0a18') {
+  const c = canvas(512, 512), g = c.getContext('2d');
+  g.fillStyle = mortar; g.fillRect(0, 0, 512, 512);
+  const bh = 32, bw = 96;
+  for (let r = 0; r < 512 / bh; r++) for (let x = -bw; x < 512 + bw; x += bw) {
+    const off = r % 2 ? bw / 2 : 0;
+    const l = 0.75 + Math.random() * 0.35;
+    const cc = new THREE.Color(base).multiplyScalar(l);
+    g.fillStyle = '#' + cc.getHexString();
+    g.fillRect(x + off + 3, r * bh + 3, bw - 6, bh - 6);
+  }
+  return tex(c, { repeat: [4, 2] });
+}
+export function noiseTexture(size = 256) {
+  const c = canvas(size, size), g = c.getContext('2d'), d = g.createImageData(size, size);
+  for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.da
+  g.putImageData(d, 0, 0);
+  const t = tex(c, { srgb: false }); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+// shaders.js
+// Custom materials. All of them take a shared `uTime` and an audio-driven `uBeat` so the whole world pulses t
+import * as THREE from 'three';
+import { C } from './palette.js';
+export const shared = {
+  uTime: { value: 0 },
+  uBeat: { value: 0 },      // spikes on kick, decays
+  uBass: { value: 0 },      // analyser levels
+  uHigh: { value: 0 },
+  uPlayer: { value: new THREE.Vector3() },
+};
+const HASH = /* glsl */`
+float hash(float n){ return fract(sin(n)*43758.5453123); }
+float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(hash2(i),hash2(i+vec2(1,0)),f.x), mix(hash2(i+vec2(0,1)),hash2(i+vec2(1,1)),f.x), f.y); }
+float fbm(vec2 p){ float v=0., a=.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.03; a*=.5; } return v; }
+`;
+// ---------- CODE STREAM ----------
+// Real source code scrolls upward as lines; "rain heads" sweep down each column and set the glyphs on fire.
+// Plum -> magenta -> pink trail, amber/cream heads, occasional GameBender-style glitch bands.
+export function codeStreamMaterial(atlas, o = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      ...shared,
+      map: { value: atlas },
+      cBase: { value: (o.base || C.violet).clone() },
+      cTrail: { value: (o.trail || C.magenta).clone() },
+      cHot: { value: (o.hot || C.pink).clone() },
+      cHead: { value: (o.head || C.amber).clone() },
+      uSpeed: { value: o.speed ?? 1 },
+      uCols: { value: o.cols ?? 48 },
+      uOpacity: { value: o.opacity ?? 1 },
+      uRepeat: { value: new THREE.Vector2(o.repeatX ?? 1, o.repeatY ?? 0.5) },
+      uBoost: { value: 0 },
+    },
+    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(po
+    fragmentShader: HASH + /* glsl */`
+      uniform sampler2D map; uniform vec3 cBase,cTrail,cHot,cHead; uniform float uTime,uSpeed,uCols,uOpacity,u
+      varying vec2 vUv;
+      void main(){
+        vec2 uv = vUv;
+        float band = floor(uv.y*40.0 + floor(uTime*6.0)*3.0);
+        float g = step(0.985 - uBoost*0.05, hash(band + floor(uTime*10.0)));
+        uv.x += g * (hash(band)-0.5) * 0.08;
+        vec2 tuv = vec2(uv.x*uRepeat.x, uv.y*uRepeat.y - uTime*0.018*uSpeed);
+        vec4 tx = texture2D(map, tuv);
+        float glyph = max(tx.r, tx.g);
+        float isComment = clamp(tx.r - tx.g, 0.0, 1.0);
+        float col = floor(vUv.x*uCols);
+        float r = hash(col*1.37);
+        float head = fract(uTime*(0.08+r*0.16)*uSpeed + r*11.0);
+        float y = 1.0 - vUv.y;
+        float d = fract(head - y);
+        float trail = exp(-d*7.0);
+        float spark = smoothstep(0.03, 0.0, d);
+        vec3 c = mix(cBase, cTrail, smoothstep(0.0,0.4,trail));
+        c = mix(c, cHot, smoothstep(0.35,0.9,trail));
+        c = mix(c, cHead*1.6, spark);
+        c = mix(c, cHead, isComment*0.6);
+        float a = glyph * (0.16 + trail*0.95 + uBeat*0.15 + isComment*0.3 + uBoost*0.4);
+        float edge = smoothstep(0.0,0.08,vUv.y)*smoothstep(1.0,0.86,vUv.y)*smoothstep(0.0,0.04,vUv.x)*smoothst
+        a *= edge * uOpacity;
+        c *= 1.0 + g*1.5 + uHigh*0.6;
+        gl_FragColor = vec4(c*a, a);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped
+  });
+}
+// ---------- PORTAL VORTEX ----------
+export function vortexMaterial(color, thumb) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      ...shared,
+      uColor: { value: new THREE.Color(color) },
+      uColor2: { value: C.amber.clone() },
+      uThumb: { value: thumb || null },
+      uHasThumb: { value: thumb ? 1 : 0 },
+      uHover: { value: 0 },
+      uSeed: { value: Math.random() * 100 },
+    },
+    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(po
+    fragmentShader: HASH + /* glsl */`
+      uniform vec3 uColor,uColor2; uniform sampler2D uThumb; uniform float uHasThumb,uHover,uTime,uSeed,uBeat,
+      varying vec2 vUv;
+      void main(){
+        vec2 p = vUv*2.0-1.0;
+        float r = length(p);
+        if (r>1.0) discard;
+        float a = atan(p.y,p.x);
+        float t = uTime*(0.6+uHover*1.2);
+        float swirl = a + 3.0/(r+0.25) - t*2.0;
+        float n = fbm(vec2(swirl*1.3, r*4.0 - t*1.5) + uSeed);
+        float arms = 0.5+0.5*sin(swirl*5.0 + n*6.0);
+        vec3 c = mix(vec3(0.05,0.0,0.12), uColor, smoothstep(0.2,0.9,arms*n*1.6));
+        c = mix(c, uColor2, pow(n,3.0)*1.4);
+        c += uColor * pow(1.0-r, 3.0) * (1.2 + uBass*1.5);
+        if (uHasThumb>0.5) {
+          vec2 tuv = vUv + vec2(sin(swirl)*0.02, cos(swirl)*0.02)*(1.0-uHover);
+          tuv = (tuv-0.5)*vec2(1.0,0.625)/(0.78+uHover*0.12)+0.5;
+          vec3 th = texture2D(uThumb, tuv).rgb;
+          float m = smoothstep(0.82,0.35,r) * (0.35 + uHover*0.6);
+          c = mix(c, th*1.15, m);
+        }
+        float rim = smoothstep(0.8,1.0,r);
+        c += uColor*rim*(1.5+uBeat);
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+    side: THREE.DoubleSide, toneMapped: false,
+  });
+}
+// ---------- FLOOR: glossy dark with circuit traces that ripple out from the player and pulse with the beat -
+export function floorMaterial(circuit, o = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      ...shared,
+      uMap: { value: circuit },
+      uScale: { value: o.scale || 1 / 12 },
+      cA: { value: (o.a || C.magenta).clone() },
+      cB: { value: (o.b || C.pink).clone() },
+      cBase: { value: (o.base || new THREE.Color('#14062e')).clone() },
+      uCenter: { value: o.center || new THREE.Vector2(0, 0) },
+      uLens: { value: 0 },
+    },
+    vertexShader: `varying vec3 vW; void main(){ vec4 w=modelMatrix*ve

@@ -1,0 +1,261 @@
+// index.html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desk Arcade</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#181b24; --line:#2a2f3d; --text:#e8eaf0; --muted:#9097a8; --accent:#f5b83d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-
+  header{display:flex;align-items:baseline;gap:12px;padding:14px 0 10px}
+  h1{margin:0;font-size:22px;letter-spacing:.5px}
+  h1 span{color:var(--accent)}
+  header p{margin:0;color:var(--muted)}
+  main{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+  @media (max-width:900px){main{grid-template-columns:1fr}}
+  .stage{position:relative;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  canvas#view{display:block;width:100%;height:auto;image-rendering:auto}
+  canvas#view.picking{cursor:crosshair}
+  .msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padd
+  .hint{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--accent);color:#111;fon
+  .help{color:var(--muted);margin-top:10px}
+  kbd{background:#262a36;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;
+  aside{display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .card h2{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+  select,button{font:inherit;color:var(--text);background:#232734;border:1px solid var(--line);border-radius:7
+  button{cursor:pointer}
+  button:hover{border-color:#4a5166}
+  button.on,button.primary{background:var(--accent);color:#111;border-color:var(--accent);font-weight:600}
+  select{width:100%}
+  label.chk{display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .row>*{flex:1 1 auto}
+  .seg{display:flex;gap:0}
+  .seg button{flex:1;border-radius:0}
+  .seg button:first-child{border-radius:7px 0 0 7px}
+  .seg button:last-child{border-radius:0 7px 7px 0}
+  #stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:10px;font-variant-numeric:tabular-
+  #stats b{float:right}
+  .rule{display:grid;grid-template-columns:28px 1fr 26px;gap:6px 8px;align-items:center;padding:8px 0;border-t
+  .rule:first-child{border-top:0}
+  .sw{width:28px;height:28px;border-radius:6px;border:2px solid #fff3}
+  .rule input[type=range]{grid-column:2/3;width:100%}
+  .rule .tl{grid-column:1/2;font-size:11px;color:var(--muted);text-align:center}
+  .rule .x{padding:2px 0;background:none;border:0;color:var(--muted);font-size:18px}
+  .tag{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;font-size:12px;color:var(--muted);margin-top
+</style>
+</head>
+<body>
+<header>
+  <h1>Desk <span>Arcade</span></h1>
+  <p>Everything on your desk becomes part of the level.</p>
+</header>
+<main>
+  <section>
+    <div class="stage">
+      <canvas id="view" width="960" height="720"></canvas>
+      <div id="hint" class="hint" hidden></div>
+      <div id="msg" class="msg">Starting camera… allow camera access when your browser asks.</div>
+    </div>
+    <div class="help" id="help"></div>
+  </section>
+  <aside>
+    <div class="card">
+      <h2>Camera</h2>
+      <select id="camSel"></select>
+      <label class="chk"><input type="checkbox" id="mirror"> Mirror left/right</label>
+      <label class="chk"><input type="checkbox" id="rot"> Rotate 180°</label>
+      <label class="chk"><input type="checkbox" id="tint" checked> Show color meanings</label>
+      <label class="chk"><input type="checkbox" id="freeze"> Freeze level (stop re-scanning)</label>
+    </div>
+    <div class="card">
+      <h2>Game</h2>
+      <div class="seg">
+        <button data-mode="runner" class="on">Runner</button>
+        <button data-mode="marbles">Marble Run</button>
+      </div>
+      <div class="row">
+        <button id="spawnBtn">Set start point</button>
+        <button id="resetBtn">Reset score</button>
+      </div>
+      <div id="stats"></div>
+    </div>
+    <div class="card">
+      <h2>Color meanings</h2>
+      <div class="row" style="margin-top:0">
+        <select id="addMeaning" style="flex:1 1 120px"></select>
+        <button id="addBtn" class="primary" style="flex:1 1 120px">+ Pick color</button>
+      </div>
+      <div id="rules" style="margin-top:8px"></div>
+      <div class="row">
+        <button id="presetBtn">Marker preset</button>
+        <button id="clearBtn">Clear all</button>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </aside>
+</main>
+<script>
+"use strict";
+/* ---------------- Meanings ---------------- */
+const MEANINGS = {
+  solid:  {code:1, label:'Solid ground', tint:[59,130,246]},
+  bouncy: {code:2, label:'Bounce pad',   tint:[168,85,247]},
+  hazard: {code:3, label:'Lava (hazard)',tint:[239,68,68]},
+  coin:   {code:4, label:'Coin',         tint:[250,204,21]},
+  goal:   {code:5, label:'Goal',         tint:[34,197,94]},
+};
+const CODE_TINT = [null];
+for (const k in MEANINGS) CODE_TINT[MEANINGS[k].code] = MEANINGS[k].tint;
+const PRESET = [
+  {rgb:[35,35,40],   meaning:'solid',  tol:0.24},
+  {rgb:[200,45,50],  meaning:'hazard', tol:0.26},
+  {rgb:[40,150,80],  meaning:'goal',   tol:0.26},
+  {rgb:[235,200,40], meaning:'coin',   tol:0.24},
+  {rgb:[45,90,200],  meaning:'bouncy', tol:0.26},
+];
+/* ---------------- DOM ---------------- */
+const $ = id => document.getElementById(id);
+const view = $('view'), vctx = view.getContext('2d');
+const msg = $('msg'), hint = $('hint');
+const video = document.createElement('video');
+video.playsInline = true; video.muted = true;
+let DW = 960, DH = 720;
+const GW = 160; let GH = 120; let S = DW / GW;
+const fc = document.createElement('canvas'), fctx = fc.getContext('2d', {willReadFrequently:true});
+const sc = document.createElement('canvas'), sctx = sc.getContext('2d', {willReadFrequently:true});
+const tc = document.createElement('canvas'), tctx = tc.getContext('2d');
+let grid, tmp, collected, tintImg;
+function resize(vw, vh) {
+  DW = 960; DH = Math.round(DW * vh / vw);
+  GH = Math.round(GW * vh / vw); S = DW / GW;
+  view.width = fc.width = DW; view.height = fc.height = DH;
+  sc.width = tc.width = GW; sc.height = tc.height = GH;
+  grid = new Uint8Array(GW * GH); tmp = new Uint8Array(GW * GH); collected = new Uint8Array(GW * GH);
+  tintImg = tctx.createImageData(GW, GH);
+  respawnPlayer(); marbles = [];
+}
+/* ---------------- Settings / rules ---------------- */
+let rules = [];
+let opts = {mirror:false, rot:false, tint:true, freeze:false};
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem('deskArcade') || 'null');
+    if (s) { rules = s.rules || []; Object.assign(opts, s.opts || {}); if (s.spawn) spawn = s.spawn; }
+  } catch (e) {}
+  if (!rules.length) applyPreset();
+}
+function save() {
+  try { localStorage.setItem('deskArcade', JSON.stringify({rules, opts, spawn})); } catch (e) {}
+}
+function makeRule(rgb, meaning, tol) {
+  const [h, s, v] = hsv(rgb[0], rgb[1], rgb[2]);
+  return {rgb, h, s, v, meaning, tol};
+}
+function applyPreset() { rules = PRESET.map(p => makeRule(p.rgb, p.meaning, p.tol)); }
+/* ---------------- Color math ---------------- */
+let _h = 0, _s = 0, _v = 0;
+function hsvFast(r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  _v = mx / 255; _s = mx ? d / mx : 0;
+  if (!d) _h = 0;
+  else if (mx === r) _h = 60 * (((g - b) / d) % 6);
+  else if (mx === g) _h = 60 * ((b - r) / d + 2);
+  else _h = 60 * ((r - g) / d + 4);
+  if (_h < 0) _h += 360;
+}
+function hsv(r, g, b) { hsvFast(r, g, b); return [_h, _s, _v]; }
+function cdist(h, s, v, ru) {
+  let dh = Math.abs(h - ru.h); if (dh > 180) dh = 360 - dh; dh /= 180;
+  const bright = Math.max(v, ru.v);                 // saturation/hue are unreliable in the dark
+  const a = dh * Math.min(s, ru.s) * 2.2 * Math.min(1, bright * 1.4);
+  const b = (s - ru.s) * bright;
+  const c = (v - ru.v) * 0.85;
+  return Math.sqrt(a * a + b * b + c * c);
+}
+/* ---------------- Camera ---------------- */
+let stream = null;
+async function startCamera(deviceId) {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  msg.hidden = false; msg.textContent = 'Starting camera…';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: deviceId ? {deviceId:{exact:deviceId}, width:{ideal:1280}, height:{ideal:720}}
+                      : {width:{ideal:1280}, height:{ideal:720}}, audio:false});
+  } catch (e) {
+    msg.textContent = 'Could not open the camera: ' + e.message + '. Check that the document camera is plugged
+    return;
+  }
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  await new Promise(r => { if (video.videoWidth) r(); else video.onloadedmetadata = r; });
+  resize(video.videoWidth, video.videoHeight);
+  msg.hidden = true;
+  await listCameras(stream.getVideoTracks()[0].getSettings().deviceId);
+}
+async function listCameras(currentId) {
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  const sel = $('camSel'); sel.innerHTML = '';
+  devs.forEach((d, i) => {
+    const o = document.createElement('option');
+    o.value = d.deviceId; o.textContent = d.label || ('Camera ' + (i + 1));
+    sel.appendChild(o);
+  });
+  sel.value = currentId;
+  return devs;
+}
+async function init() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    msg.textContent = 'This browser cannot access cameras here. Open the page through http://localhost in Chro
+    return;
+  }
+  await startCamera();
+  if (!stream) return;
+  // Prefer an external / document camera over the built-in one
+  const devs = await navigator.mediaDevices.enumerateDevices().then(d => d.filter(x => x.kind === 'videoinput'
+  const cur = stream.getVideoTracks()[0].getSettings().deviceId;
+  const docRe = /doc|ipevo|elmo|hovercam|okiocam|aver|ziggi|lumens|visualizer|external|usb/i;
+  const builtIn = /facetime|built-in|integrated|isight/i;
+  const best = devs.find(d => docRe.test(d.label)) || devs.find(d => !builtIn.test(d.label));
+  if (best && best.deviceId !== cur) await startCamera(best.deviceId);
+}
+/* ---------------- Vision ---------------- */
+function grabFrame() {
+  fctx.save();
+  fctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (opts.rot) { fctx.translate(DW, DH); fctx.rotate(Math.PI); }
+  if (opts.mirror) { fctx.translate(DW, 0); fctx.scale(-1, 1); }
+  fctx.drawImage(video, 0, 0, DW, DH);
+  fctx.restore();
+}
+function classify() {
+  sctx.imageSmoothingEnabled = true; sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(fc, 0, 0, GW, GH);
+  const d = sctx.getImageData(0, 0, GW, GH).data;
+  const n = GW * GH, rl = rules.length;
+  const codes = rules.map(r => MEANINGS[r.meaning].code);
+  for (let i = 0; i < n; i++) {
+    const p = i * 4;
+    hsvFast(d[p], d[p + 1], d[p + 2]);
+    let best = 0, bd = 1e9;
+    for (let k = 0; k < rl; k++) {
+      const ru = rules[k], dd = cdist(_h, _s, _v, ru);
+      if (dd < ru.tol && dd < bd) { bd = dd; best = codes[k]; }
+    }
+    tmp[i] = best;
+  }
+  // remove speckle noise: a cell needs at least 2 matching neighbours
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    const i = y * GW + x, c = tmp[i];
+    if (!c) { grid[i] = 0; continue; }
+    let same = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const xx = x + dx, yy = y + dy;
+      if (xx >= 0 && yy >= 0 && xx < GW && yy < GH && tmp[yy * GW + xx] === c) same++;

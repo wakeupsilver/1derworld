@@ -1,0 +1,970 @@
+<title>Mad Libs Piano</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23b0306a'/><path d='M26 14v26.5A8 8 0 1 0 30 47V24l16-4v16.5A8 8 0 1 0 50 43V9z' fill='%23fff'/></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;1,6..96,400;1,6..96,500&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Same music stand as Song Piano: song chips, the sung lyric as the score, the keyboard, the source text below. */
+:root {
+  --paper: #f1efe9;
+  --stage: #e6e2d8;
+  --ink: #1d1a17;
+  --muted: #675f55;
+  --line: #cfc8bb;
+  --brass: #8d6a26;
+  --silly: #b0306a;
+  --ivory: #fbfaf6;
+  --ivory-down: #e6dfcf;
+  --ebony: #15181d;
+  --ebony-down: #3a3f47;
+  --key-ink: #2a2f36;
+  --key-ink-on-ebony: #d8dbe0;
+  --key-silly: #a32a60;
+  --key-silly-on-ebony: #f3a6c8;
+  --chip: #ffffff;
+  --guide: #2a8a74;
+  --key-note: #7b8590;
+  --key-hint: #a3abb4;
+  --display: "Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #110f0d; --stage: #1a1714; --ink: #ece7df; --muted: #a0968a; --line: #322d27;
+    --brass: #d3aa5e; --silly: #f07aac; --ivory: #e8e5dc; --ivory-down: #c9c0ab;
+    --ebony: #050608; --ebony-down: #30353d; --key-ink: #23272d; --key-ink-on-ebony: #c9cdd3;
+    --key-silly: #a32a60; --key-silly-on-ebony: #f3a6c8;
+    --chip: #201c18; --guide: #4fc4a6; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #110f0d; --stage: #1a1714; --ink: #ece7df; --muted: #a0968a; --line: #322d27;
+  --brass: #d3aa5e; --silly: #f07aac; --ivory: #e8e5dc; --ivory-down: #c9c0ab;
+  --ebony: #050608; --ebony-down: #30353d; --key-ink: #23272d; --key-ink-on-ebony: #c9cdd3;
+  --key-silly: #a32a60; --key-silly-on-ebony: #f3a6c8;
+  --chip: #201c18; --guide: #4fc4a6; color-scheme: dark;
+}
+html, body { background: var(--paper); color: var(--ink); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap {
+  max-width: 1080px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+  display: grid; gap: 22px;
+}
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; }
+.bar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; position: relative; }
+.pick { display: grid; gap: 3px; }
+.pick select { font: 500 14px/1.2 var(--body); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 4px; padding: 7px 28px 7px 10px; min-height: 34px; max-width: 64vw; }
+/* the song picker is the main control: big, bold, dark outline, a note and a clear chevron */
+.song-pick { position: relative; }
+.song-pick::before { content: "♪"; position: absolute; left: 13px; top: 50%; transform: translateY(-52%); font-size: 18px; color: var(--silly); pointer-events: none; }
+.song-pick select { appearance: none; -webkit-appearance: none; font: 700 17px/1.2 var(--body); color: var(--ink); background-color: var(--chip);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 12px 8px;
+  border: 2px solid var(--ink); border-radius: 8px; padding: 8px 38px 8px 34px; min-height: 42px; min-width: 17em; cursor: pointer; }
+.song-pick select:hover { background-color: color-mix(in srgb, var(--silly) 6%, var(--chip)); }
+.keys-pick { flex: 0 0 auto; min-width: 0; }
+
+/* the words / syllables menu matches the outlined Start over button, with the song menu's chevron */
+.keys-pick select { appearance: none; -webkit-appearance: none; min-height: 42px; min-width: 0; box-sizing: border-box;
+  font: 600 13px/1 var(--body); color: var(--ink); background-color: var(--chip); border: 1.5px solid var(--ink); border-radius: 4px;
+  padding: 0 32px 0 12px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center; background-size: 11px 7px; }
+.keys-pick select:hover { background-color: color-mix(in srgb, var(--silly) 6%, var(--chip)); }
+.pick select:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.more { position: static; }  /* the menu lines up with the right edge of the whole bar, so it stays on screen */
+.more summary { list-style: none; display: inline-flex; align-items: center; min-height: 34px; box-sizing: border-box; }
+.more summary::-webkit-details-marker { display: none; }
+.opt-short { display: none; font-size: 18px; line-height: 1; }
+.more .menu .pick, .more .menu .pick select { width: 100%; max-width: none; box-sizing: border-box; }
+.more .menu { min-width: 260px; }
+.more summary::after { content: "▾"; margin-left: 6px; font-size: 11px; }
+.more .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 10px; justify-items: start; width: max-content; max-width: min(320px, 90vw); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+.cue { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; align-items: baseline; min-height: 20px; margin-bottom: -12px; }
+.btn { min-height: 34px; box-sizing: border-box; }
+.bar > .btn, .bar .more summary { min-height: 42px; }
+h1 { font-family: var(--display); font-weight: 500; font-size: clamp(34px, 6vw, 52px); line-height: 1; margin: 0; letter-spacing: -0.01em; }
+h1 em { font-style: italic; color: var(--silly); }
+
+.label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+.songs { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font: 500 14px/1 var(--body); color: var(--ink); background: var(--chip);
+  border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px; cursor: pointer;
+}
+.chip:hover { border-color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip:focus-visible, button:focus-visible, .key:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.stage {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: var(--stage); border-radius: 6px; padding: 22px clamp(16px, 3vw, 32px);
+  min-height: 200px; display: grid; gap: 12px; align-content: start;
+}
+.stage-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: center; }
+/* Start over sits on top of the song art, so it gets its own solid background */
+.btn.restart { background: var(--chip); color: var(--ink); border: 1.5px solid var(--ink); }
+.btn.restart span[aria-hidden] { font-size: 16px; line-height: 0; position: relative; top: 1px; }
+#auto .ico { font-size: 11px; display: inline-block; width: 1em; text-align: center; }
+#auto { min-width: 7.6em; }
+.now { font-family: var(--body); font-size: 14px; color: var(--muted); }
+.now b { font-weight: 700; color: var(--ink); }
+.now .pos { font-family: var(--mono); font-style: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--silly); border: 1px solid currentColor; border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
+.sung { font-family: var(--body); font-weight: 500; font-size: clamp(22px, 3.2vw, 30px); line-height: 1.3; max-height: 9.6em; overflow-y: auto; min-width: 0; }
+.sung p { margin: 0 0 .25em; }
+.sung .placeholder { color: var(--muted); font: 400 15px/1.4 var(--body); opacity: .75; }
+.stage.art .sung .placeholder { color: var(--art-sub); }
+.w { display: inline-flex; flex-direction: column; align-items: center; vertical-align: top; margin-right: 0.26em; }
+.w.silly { color: var(--silly); font-weight: 700; }
+.w.silly::after { content: attr(data-pos); font: 400 10px/1.3 var(--mono); font-style: normal; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1px; white-space: nowrap; }
+.w.fresh { animation: sing .5s ease-out; }
+.sung .done { font: 500 13px/1.6 var(--body); color: var(--guide); }
+/* Start over: dim before you play, quiet while you play, filled in once the song is done */
+#clear[data-state="idle"] { opacity: .45; cursor: default; }
+
+@keyframes nudge { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--silly) 55%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
+.end-strip[hidden] { display: none; }
+.end-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; background: var(--stage); border-radius: 6px; padding: 10px 14px; font: 600 16px/1.3 var(--body); color: var(--ink); animation: sing .5s ease-out; }
+.end-strip .btn { font-size: 13px; }
+.end-strip [data-act="restart"] span[aria-hidden] { font-size: 16px; line-height: 0; position: relative; top: 1px; }
+.end-strip .btn:first-of-type { animation: nudge 1.4s ease-out 1; }
+@keyframes sing { from { transform: translateY(-0.18em); opacity: .2; } to { transform: none; opacity: 1; } }
+/* Art: a picture behind the lyric, with lyric colours chosen per picture */
+.art-layer { position: absolute; inset: 0; z-index: -1; display: none; }
+.art-layer svg { display: block; width: 100%; height: 100%; }
+.art-layer::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, var(--art-scrim) 0%, var(--art-scrim) 30%, transparent 70%); }
+.stage.art { background: transparent; color: var(--art-ink); min-height: 240px; }
+.stage.art .art-layer { display: block; }
+.stage.art .label, .stage.art .now, .stage.art .legend, .stage.art .sung .placeholder { color: var(--art-sub); }
+.stage.art .now b { color: var(--art-ink); }
+.stage.art .now .pos { color: var(--art-silly); }
+.stage.art .sung { text-shadow: 0 0 14px var(--art-glow), 0 1px 2px var(--art-glow); }
+.stage.art .w.silly { color: var(--art-silly); }
+.stage.art .w.silly::after { color: var(--art-sub); border-top-color: currentColor; }
+.stage.art .sung .done { color: var(--art-ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: -14px; }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: var(--ink); vertical-align: 0; }
+.legend .l-guide::before { background: var(--guide); }
+.legend .l-silly::before { background: var(--silly); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls .spacer { flex: 1; }
+.toggle { font: 500 13px/1 var(--body); background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 8px 11px; cursor: pointer; }
+.toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+.toggle[aria-pressed="true"]::before { content: "● "; color: var(--brass); }
+.toggle[aria-pressed="false"]::before { content: "○ "; }
+.seg { display: flex; align-items: center; gap: 6px; margin-right: 10px; }
+.seg .label { margin-right: 2px; }
+.toggle.mode::before { content: none !important; }
+.toggle.mode[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn { font: 600 13px/1 var(--body); background: var(--ink); color: var(--paper); border: 0; border-radius: 4px; padding: 9px 13px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn.silly { background: var(--silly); color: #fff; }
+.status { font-size: 13px; color: var(--muted); }
+
+.kb-wrap { overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 6px; }
+.kb { --kbh: 250px; position: relative; height: var(--kbh); min-width: 700px; display: flex; user-select: none; -webkit-user-select: none; touch-action: none; }
+.key { position: relative; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.key.white { flex: 1; background: var(--ivory); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 5px 5px; margin-right: -1px; padding-bottom: 8px; box-shadow: inset 0 -6px 0 rgba(0,0,0,0.06); }
+.key.white.down { background: var(--ivory-down); box-shadow: inset 0 -2px 0 rgba(0,0,0,0.06); }
+.key.black { position: absolute; top: 0; height: 60%; background: var(--ebony); border-radius: 0 0 4px 4px; z-index: 2; padding-bottom: 8px; box-shadow: 0 3px 0 rgba(0,0,0,0.25); }
+.key.black.down { background: var(--ebony-down); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+.kw { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--body); font-weight: 600; letter-spacing: .01em; font-size: 17px; white-space: nowrap; max-height: calc(var(--kbh) * 0.6); overflow: hidden; text-overflow: ellipsis; color: var(--key-ink); }
+.black .kw { font-size: 13px; max-height: calc(var(--kbh) * 0.6 - 56px); color: var(--key-ink-on-ebony); }
+.key.white .kw.silly { color: var(--key-silly); }
+.key.black .kw.silly { color: var(--key-silly-on-ebony); }
+.key.white.guide { background: color-mix(in srgb, var(--guide) 30%, var(--ivory)); }
+.key.black.guide { background: color-mix(in srgb, var(--guide) 75%, var(--ebony)); }
+.key.guide::after { content: ""; position: absolute; left: 50%; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--guide); box-shadow: 0 0 0 3px color-mix(in srgb, var(--guide) 30%, transparent); }
+.key.white.guide::after { top: 14px; } /* words on white keys can be tall, so the dot sits at the top, between the black keys */
+.key.black.guide::after { top: 10px; background: var(--ivory); }
+.key.white.guide.down { background: color-mix(in srgb, var(--guide) 45%, var(--ivory-down)); }
+.key.guide .kw { color: var(--key-ink); font-weight: 800; }
+.key.black.guide .kw { color: #fff; }
+/* Song art on the keys: the song's colours, a faint pattern, and a little picture at the top of each white key */
+.ki { display: none; position: absolute; left: 50%; top: 10px; width: 22px; height: 22px; margin-left: -11px; pointer-events: none; }
+.ki svg { width: 100%; height: 100%; display: block; }
+.kb.art .key.white { background-color: var(--k-white); background-image: var(--k-pattern); background-size: 34px 34px; border-color: var(--k-line); }
+.kb.art .key.white.down { background-color: var(--k-white-down); }
+.kb.art .key.black { background-color: var(--k-black); background-image: var(--k-pattern-dark); background-size: 26px 26px; }
+.kb.art .key.black.down { background-color: var(--k-black-down); }
+.kb.art .key.white .kw { color: var(--k-ink); }
+.kb.art .key.black .kw { color: var(--k-ink-dark); }
+.kb.art .key.white .kw.silly { color: var(--k-silly); }
+.kb.art .key.black .kw.silly { color: var(--k-silly-dark); }
+.kb.art .key.white .ki { display: block; }
+.kb.art .key.white.guide { background-color: color-mix(in srgb, var(--guide) 34%, var(--k-white)); }
+.kb.art .key.black.guide { background-color: color-mix(in srgb, var(--guide) 70%, var(--k-black)); }
+.kb.art .key.guide .kw { color: var(--k-ink); }
+.kb.art .key.black.guide .kw { color: #fff; }
+.kb.art .key.guide .ki { display: none; }
+.kb.art .kn, .kb.art .kn i { color: var(--k-note); }
+.kb.art .black .kn { color: var(--k-ink-dark); }
+/* every word runs up the key; a lone letter ("I", the E-I-E-I-O letters) stands upright so it doesn't look like a dash */
+.kw.letter { transform: none; text-orientation: upright; }
+/* the Auto play hand: its fingertip sits on the point it presses */
+.hand { position: absolute; z-index: 5; width: 34px; height: 44px; margin: -42px 0 0 -19px; pointer-events: none; transition: left .18s ease-out, top .18s ease-out; filter: drop-shadow(0 3px 4px rgba(0,0,0,.3)); }
+.hand[hidden] { display: none; }
+.hand svg { width: 100%; height: 100%; display: block; }
+.hand .ripple { position: absolute; left: 10px; top: 33px; width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--silly); opacity: 0; }
+.hand.tap svg { animation: press .3s ease-out; }
+.hand.tap .ripple { animation: ripple .5s ease-out; }
+@keyframes press { 0% { transform: none; } 35% { transform: translateY(4px) scale(.92); } 100% { transform: none; } }
+@keyframes ripple { 0% { opacity: .9; transform: scale(.4); } 100% { opacity: 0; transform: scale(2.2); } }
+@media (max-width: 640px) { .hand { width: 28px; height: 36px; margin: -34px 0 0 -15px; } .hand .ripple { left: 6px; top: 25px; } }
+.kw.changed { animation: deal .35s ease-out; }
+@keyframes deal { from { opacity: 0; } to { opacity: 1; } }
+.kn { font-family: var(--mono); font-size: 10px; color: var(--key-note); margin-top: 6px; text-align: center; line-height: 1.25; }
+.black .kn { color: var(--key-ink-on-ebony); opacity: .7; }
+.kn i { font-style: normal; display: block; color: var(--key-hint); }
+
+.lower { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 28px; }
+@media (max-width: 760px) { .lower { grid-template-columns: minmax(0, 1fr); } }
+.source { min-width: 0; }
+.source h2, .how h2 { font-family: var(--display); font-weight: 500; font-size: 22px; margin: 4px 0 10px; text-wrap: balance; }
+.credit { font-size: 13px; color: var(--muted); margin: -6px 0 10px; }
+.src { font-family: var(--display); font-size: 17px; line-height: 1.55; }
+.src p { margin: 0; }
+.src span { border-radius: 2px; padding: 0 1px; }
+.src span.past { color: var(--muted); }
+.src span.cur { outline: 1.5px solid var(--guide); outline-offset: 1px; background: color-mix(in srgb, var(--guide) 14%, transparent); }
+.how { font-size: 14px; color: var(--ink); min-width: 0; }
+.how p { margin: 0 0 10px; max-width: 60ch; }
+.how b { font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .w.fresh, .kw.changed, .end-strip, .end-strip .btn, .hand svg, .hand .ripple { animation: none !important; } .hand { transition: none; } }
+
+/* Phones held upright: everything about 20% smaller so more of the piano fits */
+@media (max-width: 640px) {
+  body { font-size: 13px; }
+  .wrap { padding-block: 14px 32px; gap: 14px; }
+  h1 { font-size: 30px; }
+  .pick select { font-size: 13px; }
+  .bar { gap: 6px; }
+  .song-pick { flex: 1 1 100%; }
+  .keys-pick { flex: 1 1 auto; }
+  .keys-pick select { width: 100%; }
+  .song-pick select { width: 100%; max-width: none; }
+  .more .menu { left: 0; right: auto; width: calc(100vw - 32px); max-width: 360px; min-width: 0; box-sizing: border-box; }
+  .opt-long { display: none; }
+  .opt-short { display: inline; }
+  .more summary::after { content: none; }
+  .label { font-size: 10px; }
+  .chip { font-size: 12px; padding: 7px 11px; }
+  .songs { gap: 6px; }
+  .stage { padding: 12px 14px; min-height: 0; gap: 6px; }
+  .stage.art { min-height: 200px; }
+  .now { font-size: 13px; }
+  .sung { font-size: 19px; max-height: 7.5em; }
+  .legend { font-size: 11px; gap: 4px 12px; }
+  .controls { gap: 6px; }
+  .toggle, .btn { font-size: 12px; padding: 7px 9px; }
+  .seg { margin-right: 4px; }
+  .status { font-size: 12px; }
+  .kb { --kbh: 200px; min-width: 560px; }
+  .kw { font-size: 14px; }
+  .black .kw { font-size: 11px; max-height: calc(var(--kbh) * 0.6 - 48px); }
+  .kn { font-size: 9px; margin-top: 4px; }
+  .ki { width: 18px; height: 18px; margin-left: -9px; top: 8px; }
+  .key.white, .key.black { padding-bottom: 6px; }
+  .key.guide::after { width: 8px; height: 8px; margin-left: -4px; }
+  .lower { gap: 20px; }
+  .source h2, .how h2 { font-size: 18px; }
+  .src { font-size: 14px; }
+  .how { font-size: 13px; }
+}
+/* Phones turned sideways: the screen is short, so the keys take about half its height
+   and the rest of the page scrolls normally above and below them. */
+@media (orientation: landscape) and (max-height: 540px) {
+  body { font-size: 13px; }
+  .wrap { padding-block: 10px 28px; gap: 10px; }
+  header { align-items: center; }
+  h1 { font-size: 26px; }
+  h1 { font-size: 22px; }
+  .wrap { gap: 8px; }
+  .song-pick select { min-width: 12em; max-width: 16em; font-size: 15px; }
+  .bar { flex: 1 1 100%; }
+  .cue { margin-bottom: -4px; }
+  .legend { margin-top: -6px; }
+  .chip { font-size: 12px; padding: 6px 10px; }
+  .songs { gap: 5px; }
+  .stage { padding: 8px 14px; min-height: 0; gap: 4px; }
+  .stage.art { min-height: 0; }
+  .now { font-size: 13px; }
+  .sung { font-size: 18px; max-height: 4.6em; }
+  .w.silly::after { font-size: 9px; }
+  .legend { display: none; }
+  .controls { gap: 5px; }
+  .toggle, .btn { font-size: 12px; padding: 6px 9px; }
+  .status { font-size: 12px; }
+  .kb { --kbh: clamp(130px, 48vh, 190px); min-width: 640px; }
+  .kw { font-size: 13px; }
+  .black .kw { font-size: 10px; max-height: calc(var(--kbh) * 0.6 - 40px); }
+  .kn { font-size: 9px; margin-top: 3px; }
+  .kn i { display: none; }
+  .ki { width: 16px; height: 16px; margin-left: -8px; top: 6px; }
+  .key.white, .key.black { padding-bottom: 5px; }
+  .key.guide::after { width: 8px; height: 8px; margin-left: -4px; }
+  .key.black.guide::after { top: 6px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Mad Libs <em>Piano</em></h1>
+    <div class="bar">
+      <label class="pick song-pick"><select id="song" aria-label="Song"></select></label>
+      <button class="btn silly" id="auto"><span class="ico" aria-hidden="true">▶</span> <span class="lbl">Auto play</span></button>
+      <button class="btn restart" id="clear" data-state="idle" disabled aria-label="Start over"><span aria-hidden="true">↺</span> <span class="opt-long">Start over</span></button>
+      <label class="pick keys-pick"><select id="stretch" aria-label="Each key sings" title="What each key sings: a whole word, or one syllable">
+        <option value="0">Whole words</option>
+        <option value="1">Syllables (beta)</option>
+      </select></label>
+    </div>
+  </header>
+
+  <div class="cue"><span class="now" id="now">Press any key to begin</span><span class="status" id="status"></span></div>
+  <div class="kb-wrap"><div class="kb" id="kb" aria-label="Piano keyboard"></div></div>
+  <div class="legend">
+    <span class="l-guide">the real word</span>
+    <span class="l-silly">a silly word</span>
+  </div>
+
+  <div class="end-strip" id="end-strip" hidden>
+    <span>That's the whole song!</span>
+    <button class="btn" data-act="restart"><span aria-hidden="true">↺</span> Start over</button>
+    <button class="btn ghost" data-act="next">Next song →</button>
+  </div>
+
+  <section class="stage" id="stage" aria-live="polite">
+    <div class="art-layer" id="art-layer"></div>
+    <span class="label">Your song</span>
+    <div class="sung" id="sung"></div>
+  </section>
+
+  <div class="lower">
+    <section class="source">
+      <span class="label">The real lyrics</span>
+      <h2 id="src-title"></h2>
+      <p class="credit" id="src-credit"></p>
+      <div class="src" id="src"></div>
+    </section>
+    <section class="how">
+      <span class="label">How it works</span>
+      <h2>How to play</h2>
+      <p>Pick a song, then press the <b>green key</b>. It sings the next word of the song. Keep pressing the green key and you'll play the whole song.</p>
+      <p>Press <b>any other key</b> and it sings a silly word instead, like "Twinkle, twinkle, little meatball."</p>
+      <p>Your song shows up under the piano as you play. When it's done, start over or try the next song.</p>
+      <p>Don't want to play? Press <b>Auto play</b> and watch it go.</p>
+      <p>On a computer, the letter keys play the piano too.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+/*DATA*/
+/*ALTS*/
+/*ART*/
+/*GRAMMAR*/
+const VOICE_BANK = { sr: 16000, words: {} };
+
+// ---------- Keyboard layout ----------
+const LOW = 48, HIGH = 72; // C3 .. C5, 25 keys
+const NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+const BLACK = new Set([1, 3, 6, 8, 10]);
+const PC_KEYS = { z:48, s:49, x:50, d:51, c:52, v:53, g:54, b:55, h:56, n:57, j:58, m:59, ",":60,
+  q:60, "2":61, w:62, "3":63, e:64, r:65, "5":66, t:67, "6":68, y:69, "7":70, u:71, i:72 };
+const MIDI_TO_PC = {}; for (const [k, v] of Object.entries(PC_KEYS)) if (!(v in MIDI_TO_PC) && k !== ",") MIDI_TO_PC[v] = k.toUpperCase();
+const KEYS = []; for (let m = LOW; m <= HIGH; m++) KEYS.push(m);
+const NK = KEYS.length;
+
+// ---------- Words ----------
+const keyOf = w => w.toLowerCase().replace(/[’]/g, "'").replace(/[^a-zñé' \-]/g, "").replace(/[\s'\-]+$/, "").replace(/^[\s\-]+/, "");
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+function syllables(w) {
+  return w.toLowerCase().split(/[\s\-]+/).reduce((n, p) => {
+    const s = p.replace(/[^a-z]/g, "").replace(/e$/, "").replace(/(?:[^laeiouy]es|ed)$/, "");
+    return n + Math.max(1, (s.match(/[aeiouy]+/g) || []).length);
+  }, 0);
+}
+const splitList = s => s.split(",").map(x => x.trim()).filter(Boolean);
+function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+// ---------- Song engine ----------
+const S = { song: null, tokens: [], lines: [], pos: 0, assign: [], sung: [[]], guide: true, guideNote: null, laps: 0 };
+
+function parse(song) {
+  const tokens = [], lines = [];
+  song.lyrics.split("\n").forEach((ln, li) => {
+    const parts = ln.trim().split(/\s+/);
+    lines.push(parts.map(p => p.split("|")[0]));
+    parts.forEach((p, wi) => {
+      const [raw, tag] = p.split("|");
+      const disp = raw.replace(/[.,;:!?]+$/, "").replace(/’/g, "'");
+      const m = song.melody[li][wi], notes = Array.isArray(m) ? m : [m];
+      tokens.push({ disp, key: keyOf(disp), tag, line: li, end: wi === parts.length - 1, note: notes[0], notes });
+    });
+  });
+  return { tokens: GRAMMAR.markAgreement(tokens), lines };
+}
+
+// Silly words for this spot in the song, best first: the ones written for this exact word,
+// then ones written for other words of the same kind in this song (so they still fit the
+// song's world), then the general list for that part of speech.
+function sillyWords(tok) {
+  const alts = ALTS[S.song.id] || {};
+  const own = splitList(alts[tok.key + "|" + tok.tag] || alts[tok.key] || "");
+  const kin = [];
+  for (const t of S.tokens) if (t.tag === tok.tag && t.key !== tok.key) kin.push(...splitList(alts[t.key + "|" + t.tag] || alts[t.key] || ""));
+  const seen = new Set([tok.key]), out = [];
+  for (const group of [shuffle(own), shuffle(kin), shuffle(SILLY[tok.tag].slice())])
+    for (const w of group) { const k = keyOf(w); if (!seen.has(k)) { seen.add(k); out.push(w); } }
+  return out;
+}
+
+// Stretch words: a word sung over several notes of the tune. After its first note every key
+// sings the next piece of the word you picked, and the green key is the tune's next note.
+function syllableText(word, n) {
+  // split between vowel groups: one consonant goes with the next syllable, a cluster is shared ("twin|kle", "lit|tle", "dia|mond")
+  // a final "e" after a consonant is silent ("ice", "where"), except in "-le" ("twinkle")
+  const v = [...word.matchAll(/[aeiouy]+/gi)].filter(m => !(/^e$/i.test(m[0]) && /[^aeiouyl]$/i.test(word.slice(0, m.index)) && !/[a-z]/i.test(word[m.index + 1] || "") && /[aeiouy]/i.test(word.slice(Math.max(0, word.lastIndexOf(" ", m.index) + 1), m.index)))), parts = [];
+  let start = 0;
+  for (let g = 0; g + 1 < v.length; g++) {
+    const e1 = v[g].index + v[g][0].length, s2 = v[g + 1].index, cl = word.slice(e1, s2), brk = cl.search(/[\s\-]/);
+    // a space or hyphen is always the break; otherwise a consonant pair that can start a syllable moves on together
+    const cut = brk >= 0 ? e1 + brk + 1 : cl.length <= 1 ? e1 : /^(bl|br|cl|cr|dr|fl|fr|gl|gr|kl|pl|pr|sc|sk|sl|sm|sn|sp|st|sw|tr|tw|ch|sh|th|wh|ph|tl|dl|ck)$/i.test(cl.slice(-2)) ? s2 - 2 : s2 - 1;
+    parts.push(word.slice(start, cut)); start = cut;
+  }
+  parts.push(word.slice(start));
+  let P = parts.filter(p => p.trim());
+  if (!P.length) P = [word];
+  while (P.length > n) { const b = P.pop(); P[P.length - 1] += b; }
+  P = P.map(p => p.trim().replace(/-$/, ""));
+  const last = P[P.length - 1].replace(/([^aeiouyl])e$/i, "$1"), hold = "~" + ((last.match(/[aeiouy]+[^aeiouy]*$/i) || [last])[0]);
+  while (P.length < n) P.push(hold);
+  return P.map((p, i) => i === 0 || p.startsWith("~") ? p : "-" + p);
+}
+function deal() {
+  const t = S.tokens[S.pos];
+  if (S.cont) {
+    // the green key finishes the word on the tune's next note; every other key is a new silly word
+    // short words first, since each one has to fit on a single note: "birth-cat"
+    const fit = w => t.agree && S.subj ? GRAMMAR.inflect(w, S.subj, t.tag) : w;
+    const c = S.cont, silly = sillyWords(t).map(fit).filter(w => keyOf(w) !== keyOf(c.word)).map((w, i) => [w, i])
+      .sort((a, b) => Math.min(syllables(a[0]), 3) - Math.min(syllables(b[0]), 3) || a[1] - b[1]).map(x => x[0]);
+    S.guideNote = t.notes[c.i];
+    const order = KEYS.map((m, k) => k).filter(k => KEYS[k] !== S.guideNote)
+      .sort((a, b) => Math.abs(KEYS[a] - S.guideNote) - Math.abs(KEYS[b] - S.guideNote) || Math.random() - 0.5);
+    S.assign = KEYS.map(m => m === S.guideNote ? { word: c.parts[c.i], kind: c.kind, cont: true } : null);
+    order.forEach((k, i) => S.assign[k] = { word: silly[i % silly.length], kind: "silly" });
+    return;
+  }
+  S.guideNote = t.note;
+  const fit = w => t.agree && S.subj ? GRAMMAR.inflect(w, S.subj, t.tag) : w;
+  const silly = sillyWords(t).map(fit).filter((w, i, a) => a.indexOf(w) === i && keyOf(w) !== keyOf(fit(t.disp)));
+  // the keys closest to the green one get the best words, since that's where your hand is
+  const order = KEYS.map((m, k) => k).filter(k => KEYS[k] !== t.note)
+    .sort((a, b) => Math.abs(KEYS[a] - t.note) - Math.abs(KEYS[b] - t.note) || Math.random() - 0.5);
+  S.assign = KEYS.map(m => m === t.note ? { word: fit(t.disp), kind: "real" } : null);
+  order.forEach((k, i) => S.assign[k] = { word: silly[i % silly.length], kind: "silly" });
+}
+
+function sing(k) {
+  const a = S.assign[k], t = S.tokens[S.pos];
+  if (!a) return null;
+  const n = opts.stretch ? t.notes.length : 1;
+  if (S.cont && !a.cont) { // a new word finishes the stretched one: "birth" + "cat" = "birth-cat"
+    const c = S.cont, line = S.sung[S.sung.length - 1], last = line[line.length - 1];
+    const sungSoFar = c.parts.slice(0, c.i).map(p => p.replace(/^[-~]/, "")).join("");
+    if (last) { last.word = (line.length === 1 ? cap(sungSoFar) : sungSoFar) + "-" + a.word; last.kind = "silly"; }
+    S.cont = null;
+    return finishWord(t, a.word, "silly", { part: 0, of: 1 });
+  }
+  if (S.cont) { // the next piece of a stretched word
+    const c = S.cont, i = c.i;
+    c.i++;
+    if (c.i >= n) { S.cont = null; return finishWord(t, c.word, c.kind, { part: i, of: n }); }
+    deal();
+    return { word: c.word, shown: a.word, kind: c.kind, part: i, of: n };
+  }
+  if (n > 1) {
+    S.cont = { word: a.word, kind: a.kind, i: 1, parts: syllableText(a.word, n) };
+    const line = S.sung[S.sung.length - 1];
+    line.push({ word: line.length === 0 ? cap(a.word) : a.word, kind: a.kind, pos: POS_NAMES[t.tag] });
+    deal();
+    return { word: a.word, shown: S.cont.parts[0], kind: a.kind, part: 0, of: n };
+  }
+  const line = S.sung[S.sung.length - 1];
+  line.push({ word: line.length === 0 ? cap(a.word) : a.word, kind: a.kind, pos: POS_NAMES[t.tag] });
+  return finishWord(t, a.word, a.kind, { part: 0, of: 1 });
+}
+function finishWord(t, word, kind, piece) {
+  const line = S.sung[S.sung.length - 1];
+  if (t.subject) S.subj = GRAMMAR.subjectClass(word);
+  if (t.end) S.subj = null;
+  S.pos++;
+  let finished = false;
+  if (S.pos >= S.tokens.length) { S.pos = 0; S.laps++; finished = true; }
+  if (t.end || line.length >= 14) S.sung.push([]);
+  if (finished) S.sung.push({ done: true }, []);
+  if (S.sung.length > 60) S.sung.splice(0, S.sung.length - 60);
+  deal();
+  return { word, shown: word, kind, finished, ...piece };
+}
+
+// Each song's recorded words live in their own file next to the page, fetched when the song is picked.
+const voiceLoads = {};
+function loadVoice(id) {
+  if (!voiceLoads[id]) voiceLoads[id] = fetch(`voice/${id}.json`).then(r => { if (!r.ok) throw 0; return r.json(); })
+    .then(b => { Object.assign(VOICE_BANK.words, b.words); })
+    .catch(() => { delete voiceLoads[id]; if (S.song && S.song.id === id) setStatus("Couldn't load the voice for this song. Check your connection and pick the song again."); });
+  return voiceLoads[id];
+}
+// Start over changes with the moment: nothing to undo yet, playing, or the song just ended.
+function setRestart(state) {
+  const b = $("clear");
+  if (b.dataset.state === state) return;
+  b.dataset.state = state; b.disabled = state === "idle";
+  $("end-strip").hidden = state !== "done";
+}
+function loadSong(song) {
+  S.song = song;
+  setRestart("idle");
+  loadVoice(song.id);
+  Object.assign(S, parse(song), { pos: 0, sung: [[]], laps: 0, cont: null, subj: null });
+  deal();
+  renderAll();
+}
+
+// ---------- Audio ----------
+let ctx = null, master = null, voiceBus = null, pianoBus = null;
+const opts = { voice: "sing", piano: true, stretch: false };
+function audio() {
+  if (!ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+    const comp = ctx.createDynamicsCompressor();
+    master = ctx.createGain(); master.gain.value = 0.7;
+    master.connect(comp); comp.connect(ctx.destination);
+    // Voice: trim rumble, ease a little mud, lift the consonant range so words are easy to make out.
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 120;
+    const mud = ctx.createBiquadFilter(); mud.type = "peaking"; mud.frequency.value = 280; mud.Q.value = 1; mud.gain.value = -2.5;
+    const pres = ctx.createBiquadFilter(); pres.type = "peaking"; pres.frequency.value = 3200; pres.Q.value = 0.9; pres.gain.value = 4;
+    voiceBus = ctx.createGain(); voiceBus.gain.value = 1.1;
+    voiceBus.connect(hp); hp.connect(mud); mud.connect(pres); pres.connect(master);
+    // Piano: soft and dark, kept out of the voice's range, and it dips whenever a word starts.
+    const plp = ctx.createBiquadFilter(); plp.type = "lowpass"; plp.frequency.value = 1400; plp.Q.value = 0.5;
+    pianoBus = ctx.createGain(); pianoBus.gain.value = 1;
+    pianoBus.connect(plp); plp.connect(master);
+  }
+  if (ctx.state === "suspended") ctx.resume();
+  return ctx;
+}
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+// A soft, felt-like piano an octave below the voice: rounder tone, gentler attack, no bright overtones.
+function piano(f, vol) {
+  f = f / 2;
+  const t = ctx.currentTime, g = ctx.createGain(), lp = ctx.createBiquadFilter();
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0008, t + 2.2);
+  lp.type = "lowpass"; lp.frequency.setValueAtTime(Math.min(f * 5, 2400), t); lp.frequency.exponentialRampToValueAtTime(f * 1.6, t + 0.9);
+  [[1, "triangle", 1], [2, "sine", 0.22], [1.002, "sine", 0.3]].forEach(([mul, type, v]) => {
+    const o = ctx.createOscillator(), og = ctx.createGain();
+    o.type = type; o.frequency.value = f * mul; og.gain.value = v;
+    o.connect(og); og.connect(lp); o.start(t); o.stop(t + 2.3);
+  });
+  lp.connect(g); g.connect(pianoBus);
+}
+
+// ---------- Voice: recorded words, re-pitched with TD-PSOLA ----------
+// Each word was recorded once with the Kokoro neural voice (16 kHz), with a pitch mark on
+// every glottal pulse. To sing it, we place one grain per pulse at the key's period instead
+// of the original one, so the pitch changes while the vowels and consonants stay put.
+const IMA_STEPS = [7,8,9,10,11,12,13,14,16,17,19,21,23,25,28,31,34,37,41,45,50,55,60,66,73,80,88,97,107,118,130,143,157,173,190,209,230,253,279,307,337,371,408,449,494,544,598,658,724,796,876,963,1060,1166,1282,1411,1552,1707,1878,2066,2272,2499,2749,3024,3327,3660,4026,4428,4871,5358,5894,6484,7132,7845,8630,9493,10442,11487,12635,13899,15289,16818,18500,20350,22385,24623,27086,29794,32767];
+const IMA_IDX = [-1, -1, -1, -1, 2, 4, 6, 8];
+const VSR = VOICE_BANK.sr, VHOP = 80;
+const decoded = new Map();
+function b64(s) { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+function wordData(word) {
+  const key = keyOf(word);
+  if (decoded.has(key)) return decoded.get(key);
+  const e = VOICE_BANK.words[key];
+  if (!e) return null;
+  const [n, a, m] = e, bytes = b64(a), x = new Float32Array(n);
+  let pred = 0, idx = 0;
+  for (let i = 0; i < n; i++) {
+    const code = i & 1 ? bytes[i >> 1] >> 4 : bytes[i >> 1] & 15;
+    let step = IMA_STEPS[idx], vp = step >> 3;
+    if (code & 4) vp += step; if (code & 2) vp += step >> 1; if (code & 1) vp += step >> 2;
+    pred += code & 8 ? -vp : vp; pred = pred < -32768 ? -32768 : pred > 32767 ? 32767 : pred;
+    idx += IMA_IDX[code & 7]; idx = idx < 0 ? 0 : idx > 88 ? 88 : idx;
+    x[i] = pred / 32768;
+  }
+  const mb = b64(m), marks = [];
+  let t = 0;
+  for (let i = 0; i + 2 < mb.length; i += 3) { t += mb[i] | (mb[i + 1] << 8); marks.push({ t, P: mb[i + 2] }); }
+  const d = { x, marks };
+  decoded.set(key, d);
+  return d;
+}
+function psola(d, f0) {
+  const { x, marks: M } = d;
+  if (!M.length) return x;
+  let voicedLen = 0; for (const m of M) if (m.P) voicedLen += m.P;
+  // stretch the voiced part so short words still last long enough to be heard as a sung note
+  const want = (x.length < 0.3 * VSR ? 0.4 : 0.55) * VSR, other = x.length - voicedLen;
+  const s = voicedLen > 0 ? Math.max(1, Math.min(2.4, (want - other) / voicedLen)) : 1;
+  const out = new Float32Array(Math.ceil(x.length * s) + 1200);
+  const tEnd = M[M.length - 1].t + VHOP;
+  let ta = M[0].t, ts = ta, i = 0;
+  while (ta <= tEnd && ts < out.length - 600) {
+    while (i + 1 < M.length && Math.abs(M[i + 1].t - ta) <= Math.abs(M[i].t - ta)) i++;
+    const m = M[i], voiced = m.P > 0, Pin = voiced ? m.P : VHOP;
+    let Pout = Pin;
+    if (voiced) {
+      const sec = ts / VSR, depth = sec > 0.22 ? 0.012 * Math.min(1, (sec - 0.22) / 0.25) : 0;
+      Pout = VSR / (f0 * (1 + depth * Math.sin(2 * Math.PI * 5.3 * sec)));
+    }
+    const gain = voiced ? Math.min(2.2, Pout / Pin) : 1, c = Math.round(ts);
+    for (let k = -Pin + 1; k < Pin; k++) {
+      const j = m.t + k, o = c + k;
+      if (j < 0 || j >= x.length || o < 0) continue;
+      out[o] += x[j] * gain * 0.5 * (1 + Math.cos(Math.PI * k / Pin));
+    }
+    ts += Pout; ta += voiced ? Pout / s : Pout;
+  }
+  const len = Math.min(out.length, Math.ceil(ts) + 200);
+  const y = out.subarray(0, len), f = Math.min(320, len);
+  for (let k = 0; k < f; k++) y[len - 1 - k] *= k / f;
+  return y;
+}
+function toBuffer(y) {
+  // upsample 2x so every browser accepts the buffer's sample rate
+  const buf = ctx.createBuffer(1, y.length * 2, VSR * 2), ch = buf.getChannelData(0);
+  for (let i = 0; i < y.length; i++) { const a = y[i], b = i + 1 < y.length ? y[i + 1] : 0; ch[2 * i] = a; ch[2 * i + 1] = (a + b) / 2; }
+  return buf;
+}
+const voiceCache = new Map();
+// Cut a recorded word into n pieces for a stretched word: aim for even spacing across the
+// sounding part, then slide each cut to the quietest moment nearby (usually a syllable break).
+// A short word sung over more notes than it has syllables just gets its vowel shared out.
+function wordPiece(d, i, n) {
+  if (n === 1) return d;
+  d.cuts = d.cuts || {};
+  if (!d.cuts[n]) {
+    const { x } = d, H = 160, E = [];
+    for (let a = 0; a < x.length; a += H) { let e = 0; for (let j = a; j < Math.min(x.length, a + H); j++) e += x[j] * x[j]; E.push(e); }
+    const peak = Math.max(...E), on = E.findIndex(e => e > peak * 0.02), off = E.length - 1 - [...E].reverse().findIndex(e => e > peak * 0.02);
+    const span = Math.max(1, off - on), cuts = [0];
+    for (let k = 1; k < n; k++) {
+      const target = on + span * k / n, w = Math.max(1, Math.floor(span / n * 0.35));
+      let best = Math.round(target), be = Infinity;
+      for (let f = Math.round(target - w); f <= Math.round(target + w); f++) if (f > cuts[cuts.length - 1] / H + 1 && f < off && E[f] < be) { be = E[f]; best = f; }
+      cuts.push(best * H);
+    }
+    cuts.push(x.length);
+    d.cuts[n] = cuts;
+  }
+  const a = d.cuts[n][i], b = d.cuts[n][i + 1], x = d.x.slice(a, b), f = Math.min(80, x.length >> 2);
+  for (let k = 0; k < f; k++) { x[k] *= k / f; x[x.length - 1 - k] *= k / f; }
+  return { x, marks: d.marks.filter(m => m.t >= a && m.t < b).map(m => ({ t: m.t - a, P: m.P })) };
+}
+function voiceBuffer(word, midi, style, part = 0, of = 1) {
+  const key = keyOf(word) + "|" + (style === "sing" ? midi : "spoken") + "|" + part + "/" + of;
+  if (voiceCache.has(key)) return voiceCache.get(key);
+  const whole = wordData(word);
+  if (!whole) return null;
+  const d = wordPiece(whole, part, of);
+  const buf = toBuffer(style === "sing" ? psola(d, hz(midi)) : d.x);
+  if (voiceCache.size > 400) voiceCache.delete(voiceCache.keys().next().value);
+  voiceCache.set(key, buf);
+  return buf;
+}
+// Words ring out: a new word doesn't cut off the last one. Earlier words keep going a little
+// quieter, and once three are sounding the oldest fades away so fast playing stays clear.
+const voices = [];
+function speak(word, midi, part = 0, of = 1) {
+  if (opts.voice === "off" || !ctx) return;
+  const buf = voiceBuffer(word, midi, opts.voice, part, of);
+  if (!buf) return;
+  const t = ctx.currentTime;
+  while (voices.length >= 3) {
+    const { g, src } = voices.shift();
+    g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + 0.08);
+    try { src.stop(t + 0.09); } catch (_) {}
+  }
+  voices.forEach(({ g }) => { g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(g.gain.value * 0.55, t + 0.06); });
+  const src = ctx.createBufferSource(), g = ctx.createGain();
+  src.buffer = buf; g.gain.value = 0.9;
+  // Speak: plays the recording as spoken; keys above middle C only nudge it a little higher.
+  if (opts.voice === "speak") src.playbackRate.value = Math.pow(2, Math.max(0, midi - 60) / 48);
+  src.connect(g); g.connect(voiceBus); src.start();
+  // the piano steps back while the word is heard
+  const pg = pianoBus.gain; pg.cancelScheduledValues(t); pg.setValueAtTime(pg.value, t); pg.linearRampToValueAtTime(0.45, t + 0.03); pg.linearRampToValueAtTime(1, t + 0.55);
+  const v = { g, src };
+  voices.push(v);
+  src.onended = () => { const i = voices.indexOf(v); if (i >= 0) voices.splice(i, 1); };
+}
+
+// ---------- Mobile audio unlock ----------
+// Phones only start audio inside a tap, and iPhones mute Web Audio when the silent switch
+// is on unless the page is playing media. A silent looping <audio> puts the page in
+// media playback mode so the piano is heard with the switch on.
+function silentWav() {
+  const n = 800, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+  const str = (o, s) => [...s].forEach((c, i) => (b[o + i] = c.charCodeAt(0)));
+  str(0, "RIFF"); v.setUint32(4, 36 + n, true); str(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); str(36, "data"); v.setUint32(40, n, true);
+  b.fill(128, 44);
+  let s = ""; b.forEach(c => (s += String.fromCharCode(c)));
+  return "data:audio/wav;base64," + btoa(s);
+}
+let unlocked = false, mediaEl = null;
+function unlock() {
+  const c = audio();
+  if (!c) return;
+  if (!unlocked) {
+    unlocked = true;
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (_) {}
+    try { mediaEl = new Audio(silentWav()); mediaEl.loop = true; mediaEl.setAttribute("playsinline", ""); mediaEl.play().catch(() => {}); } catch (_) {}
+    const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0);
+  }
+  if (c.state !== "running") c.resume();
+}
+["pointerdown", "touchstart", "touchend", "click", "keydown"].forEach(ev => window.addEventListener(ev, unlock, { capture: true, passive: true }));
+
+// ---------- Playing ----------
+const held = new Set();
+function noteOn(midi) {
+  const k = midi - LOW;
+  if (k < 0 || k >= NK || held.has(midi)) return;
+  const res = sing(k);
+  if (!res) return;
+  const c = audio();
+  if (c && opts.piano) piano(hz(midi), 0.26);
+  speak(res.word, midi, res.part, res.of);
+  held.add(midi);
+  keyEls[k].classList.add("down");
+  const next = S.tokens[S.pos], nextLabel = S.cont ? `${S.cont.parts[S.cont.i]} or a new ${POS_NAMES[next.tag]}` : POS_NAMES[next.tag];
+  nowEl.innerHTML = `<b>${esc(res.shown)}</b> on ${NAMES[midi % 12]}${Math.floor(midi / 12) - 1} · next: <span class="pos">${esc(nextLabel)}</span>`;
+  setRestart(res.finished ? "done" : "playing");
+  setStatus("");
+  renderSung(); renderKeys(true); renderSource();
+}
+function noteOff(midi) {
+  held.delete(midi);
+  const el = keyEls[midi - LOW]; if (el) el.classList.remove("down");
+}
+
+// ---------- Rendering ----------
+const $ = id => document.getElementById(id);
+const kb = $("kb"), sungEl = $("sung"), nowEl = $("now"), srcEl = $("src"), statusEl = $("status");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const keyEls = [];
+function buildKeyboard() {
+  const whites = KEYS.filter(m => !BLACK.has(m % 12)).length;
+  let wi = 0;
+  KEYS.forEach((m, k) => {
+    const el = document.createElement("div");
+    const black = BLACK.has(m % 12);
+    el.className = "key " + (black ? "black" : "white");
+    el.setAttribute("role", "button"); el.tabIndex = -1;
+    if (black) { const w = 100 / whites; el.style.left = `calc(${wi * w}% - ${w * 0.31}%)`; el.style.width = `${w * 0.62}%`; }
+    else wi++;
+    el.innerHTML = `<span class="ki" aria-hidden="true"></span><span class="kw"></span><span class="kn">${NAMES[m % 12]}${Math.floor(m / 12) - 1}${MIDI_TO_PC[m] ? `<i>${MIDI_TO_PC[m]}</i>` : ""}</span>`;
+    el.addEventListener("pointerdown", e => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (_) {} noteOn(m); });
+    const up = () => noteOff(m);
+    el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("lostpointercapture", up);
+    kb.appendChild(el); keyEls.push(el);
+  });
+  const hand = document.createElement("div");
+  hand.className = "hand"; hand.id = "hand"; hand.hidden = true; hand.setAttribute("aria-hidden", "true");
+  hand.innerHTML = `<span class="ripple"></span><svg viewBox="0 0 40 52"><g transform="rotate(180 20 26)"><path d="M14 6a4 4 0 018 0v16l1-.4a4 4 0 015 2.6l.3.9a4 4 0 015.5 2.9 4 4 0 015 3.5V40c0 7-5 11-12 11h-4c-5 0-8-2-10.5-6L3 33.5a4 4 0 016.3-4.9L14 33z" fill="#fff" stroke="#1d1a17" stroke-width="2.4" stroke-linejoin="round"/><path d="M22 22v9M28.3 25v7M33.8 28.4V34" stroke="#1d1a17" stroke-width="2" stroke-linecap="round"/></g></svg>`;
+  kb.appendChild(hand);
+}
+// During Auto play, a hand moves to each key and taps it.
+// First the hand glides over the key (the words stay put), then it taps, then the note plays.
+function moveHand(midi) {
+  const el = keyEls[midi - LOW], hand = $("hand"); if (!el || !hand) return;
+  // the fingertip rests just above the word, so the whole word stays readable
+  const kw = el.querySelector(".kw"), kbBox = kb.getBoundingClientRect(), wBox = kw.getBoundingClientRect();
+  const top = Math.max(hand.offsetHeight - 4, wBox.top - kbBox.top - 10);
+  if (hand.hidden) { hand.style.transition = "none"; }
+  hand.style.left = (el.offsetLeft + el.offsetWidth / 2) + "px";
+  hand.style.top = top + "px";
+  if (hand.hidden) { hand.hidden = false; void hand.offsetWidth; hand.style.transition = ""; }
+  hand.classList.remove("tap");
+}
+function tapHand() {
+  const hand = $("hand"); if (!hand) return;
+  void hand.offsetWidth; hand.classList.add("tap");
+}
+function renderKeys(animate) {
+  KEYS.forEach((m, k) => {
+    const a = S.assign[k], span = keyEls[k].querySelector(".kw");
+    const word = a ? a.word.replace(/^([A-Za-z])-$/, "$1") : "";
+    const changed = span.textContent !== word;
+    span.textContent = word;
+    span.className = "kw " + (a ? a.kind : "") + (word.replace(/[^A-Za-z]/g, "").length === 1 ? " letter" : "");
+    keyEls[k].classList.toggle("guide", S.guide && S.guideNote === m);
+    keyEls[k].setAttribute("aria-label", `${NAMES[m % 12]}${Math.floor(m / 12) - 1}: ${word}`);
+    if (animate && changed) { span.classList.remove("changed"); void span.offsetWidth; span.classList.add("changed"); }
+  });
+  keepGuideInView();
+}
+// On narrow screens the keyboard scrolls sideways; slide it so the green key stays visible.
+function keepGuideInView() {
+  const wrap = kb.parentElement;
+  if (!S.guide || S.guideNote === null || wrap.scrollWidth <= wrap.clientWidth + 1) return;
+  const el = keyEls[S.guideNote - LOW]; if (!el) return;
+  const left = el.offsetLeft, right = left + el.offsetWidth, pad = el.offsetWidth * 1.5;
+  let target = null;
+  if (left - pad < wrap.scrollLeft) target = left - pad;
+  else if (right + pad > wrap.scrollLeft + wrap.clientWidth) target = right + pad - wrap.clientWidth;
+  if (target === null) return;
+  const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  wrap.scrollTo({ left: Math.max(0, target), behavior: smooth ? "smooth" : "auto" });
+}
+function renderSung() {
+  const lines = S.sung.filter(l => l.done || l.length);
+  if (!lines.length) { sungEl.innerHTML = `<p class="placeholder">Your song appears here, one word per note.</p>`; return; }
+  const last = lines.length - 1 - [...lines].reverse().findIndex(l => !l.done);
+  sungEl.innerHTML = lines.map((l, li) => l.done ? `<p class="done">— the end —</p>` : `<p>${l.map((w, wi) =>
+    `<span class="w ${w.kind}${li === last && wi === l.length - 1 ? " fresh" : ""}"${w.kind === "silly" ? ` data-pos="${esc(w.pos)}"` : ""}>${esc(w.word)}</span>`).join("")}</p>`).join("");
+  sungEl.scrollTop = sungEl.scrollHeight;
+}
+function renderSource() {
+  $("src-title").textContent = S.song.title;
+  $("src-credit").textContent = S.song.credit;
+  let i = 0;
+  srcEl.innerHTML = S.lines.map(words => `<p>${words.map(raw => {
+    const cls = i === S.pos ? "cur" : i < S.pos ? "past" : ""; i++;
+    return `<span class="${cls}">${esc(raw)}</span>`;
+  }).join(" ")}</p>`).join("");
+}
+function renderSongs() {
+  const sel = $("song");
+  if (!sel.options.length) sel.innerHTML = SONGS.map(s => `<option value="${s.id}">${esc(s.title)}</option>`).join("");
+  sel.value = S.song.id;
+}
+function renderAll() {
+  renderSongs(); renderKeys(false); renderSung(); renderSource(); renderArt();
+  nowEl.innerHTML = `Press any key to begin · first word: <span class="pos">${esc(POS_NAMES[S.tokens[0].tag])}</span>`;
+}
+function setStatus(t) { statusEl.textContent = t; }
+// Song art: an illustrated scene behind your song, and the song's colours and pictures on the keys.
+const artOn = true;
+function renderArt() {
+  const stage = $("stage"), layer = $("art-layer"), a = artOn && S.song && ART[S.song.id];
+  stage.classList.toggle("art", !!a);
+  kb.classList.toggle("art", !!(a && a.keys));
+  if (!a) { layer.innerHTML = ""; delete layer.dataset.song; delete kb.dataset.song; keyEls.forEach(el => el.querySelector(".ki").innerHTML = ""); return; }
+  if (a.keys && kb.dataset.song !== S.song.id) {
+    const k = a.keys, svgURL = (fill, op) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='${fill}' opacity='${op}' transform='translate(6 6) scale(.5)'>${k.motif}</g></svg>`)}")`;
+    const vars = { "--k-white": k.white, "--k-white-down": k.whiteDown, "--k-black": k.black, "--k-black-down": k.blackDown, "--k-line": k.line,
+      "--k-ink": k.ink, "--k-ink-dark": k.inkDark, "--k-silly": k.silly, "--k-silly-dark": k.sillyDark, "--k-note": k.note,
+      "--k-pattern": svgURL(k.motifColor, .16), "--k-pattern-dark": svgURL(k.motifDark, .22) };
+    for (const [n, v] of Object.entries(vars)) kb.style.setProperty(n, v);
+    const icon = `<svg viewBox="0 0 24 24"><g fill="${k.motifColor}">${k.motif}</g></svg>`;
+    keyEls.forEach(el => el.querySelector(".ki").innerHTML = icon);
+    kb.dataset.song = S.song.id;
+  }
+  if (layer.dataset.song !== S.song.id) { layer.innerHTML = a.svg(); layer.dataset.song = S.song.id; }
+  stage.style.setProperty("--art-ink", a.ink); stage.style.setProperty("--art-sub", a.sub);
+  stage.style.setProperty("--art-silly", a.silly); stage.style.setProperty("--art-glow", a.glow);
+  stage.style.setProperty("--art-scrim", a.glow.replace(/[\d.]+\)$/, m => (parseFloat(m) * 0.6).toFixed(2) + ")"));
+}
+
+
+// ---------- Auto play ----------
+// Plays the tune by itself: a few real words, then a detour onto a silly key or two, and back,
+// the way the piano is most fun to play.
+let autoTimer = null;
+function stopAuto() {
+  if (!autoTimer) return;
+  clearTimeout(autoTimer); autoTimer = null;
+  [...held].forEach(noteOff);
+  $("hand").hidden = true;
+  $("auto").querySelector(".ico").textContent = "▶"; $("auto").querySelector(".lbl").textContent = "Auto play";
+}
+function startAuto() {
+  if (autoTimer) { stopAuto(); return; }
+  if (S.pos !== 0 || S.cont) loadSong(S.song);
+  $("auto").querySelector(".ico").textContent = "■"; $("auto").querySelector(".lbl").textContent = "Stop";
+  let prev = null, silly = false, run = 2 + Math.floor(Math.random() * 2);
+  const choose = () => {
+    const target = S.guideNote, starting = !S.cont;
+    if (starting) {
+      if (run <= 0) { silly = !silly; run = silly ? 1 + Math.floor(Math.random() * 2) : 2 + Math.floor(Math.random() * 3); }
+      run--;
+    }
+    if (silly && starting) { // a key a step or two from the real note, so the tune stays recognisable
+      const near = [-2, -1, 1, 2].map(d => target + d).filter(x => x >= LOW && x <= HIGH);
+      return pick(near);
+    }
+    return target;
+  };
+  // each note: the hand is already resting above the next word, holds there so you can read it, then taps
+  const step = () => {
+    const m = choose(), t = S.tokens[S.pos];
+    moveHand(m);
+    autoTimer = setTimeout(() => {
+      if (prev !== null) noteOff(prev);
+      tapHand(); noteOn(m); prev = m;
+      if (S.pos === 0 && !S.cont) { autoTimer = setTimeout(() => { noteOff(prev); autoTimer = 1; stopAuto(); }, 900); return; }
+      const lineEnd = !S.cont && t.end && S.tokens[S.pos] !== t;
+      autoTimer = setTimeout(step, lineEnd ? 420 : 140); // the keys change, then the hand heads for the next word
+    }, S.cont ? 380 : 560);
+  };
+  step();
+}
+$("auto").addEventListener("click", startAuto);
+
+// ---------- Wiring ----------
+$("song").addEventListener("change", e => {
+  stopAuto();
+  loadSong(SONGS.find(x => x.id === e.target.value)); setStatus("");
+});
+
+function setStretch(on) {
+  opts.stretch = on;
+  $("stretch").value = on ? "1" : "0";
+}
+$("stretch").addEventListener("change", e => {
+  if ((e.target.value === "1") === opts.stretch) return;
+  setStretch(e.target.value === "1");
+  try { localStorage.setItem("madlibs-stretch", opts.stretch ? "1" : "0"); } catch (_) {}
+  if (S.cont) { S.cont = null; S.pos = (S.pos + 1) % S.tokens.length; } // finish a half-sung word
+  deal(); renderKeys(true);
+  setStatus(opts.stretch ? "Each key now sings one syllable. This is a beta: some songs only split some words." : "Each key sings a whole word again.");
+});
+try { if (localStorage.getItem("madlibs-stretch") === "1") setStretch(true); } catch (_) {}
+$("clear").addEventListener("click", () => { stopAuto(); loadSong(S.song); setStatus(""); });
+$("end-strip").addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  stopAuto();
+  if (b.dataset.act === "next") loadSong(SONGS[(SONGS.indexOf(S.song) + 1) % SONGS.length]);
+  else loadSong(S.song);
+  setStatus("");
+});
+
+window.addEventListener("keydown", e => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  const m = PC_KEYS[e.key.toLowerCase()];
+  if (m !== undefined) { e.preventDefault(); noteOn(m); }
+});
+window.addEventListener("keyup", e => { const m = PC_KEYS[e.key.toLowerCase()]; if (m !== undefined) noteOff(m); });
+window.addEventListener("blur", () => [...held].forEach(noteOff));
+
+
+window.MadLibsPianoDebug = { S, loadVoice, wordPiece, syllableText, wordData, psola, sillyWords, syllables, keyOf };
+buildKeyboard();
+loadSong(SONGS[0]);
+})();
+</script>

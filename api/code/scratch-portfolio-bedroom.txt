@@ -1,0 +1,1149 @@
+// atlas.js
+// One big texture holding every project's thumbnail, filled in as images arrive.
+// All thumbnail surfaces (floor, disco ball, quilt, dream) sample this with per-instance UVs.
+import * as THREE from 'three';
+import { BUNDLE, canvas, drawCover, isPlaceholder, loadImage, pool, projectImage } from './util.js';
+const CELL_W = 120;
+const CELL_H = 90;
+export class Atlas {
+  constructor(projects) {
+    this.projects = projects;
+    const size = projects.length * CELL_W * CELL_H > 2048 * 2048 * 0.85 ? 4096 : 2048;
+    [this.canvas, this.g] = canvas(size, size);
+    this.size = size;
+    this.cols = Math.floor(size / CELL_W);
+    this.rows = Math.floor(size / CELL_H);
+    this.images = new Array(projects.length).fill(null);   // real thumbnails only
+    this.texture = new THREE.CanvasTexture(this.canvas);
+    this.texture.colorSpace = THREE.SRGBColorSpace;
+    this.texture.anisotropy = 8;
+    this.dirty = false;
+    this.lastFlush = 0;
+    this.loaded = 0;
+    this.listeners = [];
+    // Draw covers straight away so nothing is ever blank while the real images load.
+    // In the static edition real images arrive at once, so only the ones without an image need one.
+    projects.forEach((p, i) => { if (!BUNDLE || !projectImage(p.id)) drawCover(this.g, ...this.cell(i), CELL_W
+    this.texture.needsUpdate = true;
+  }
+  cell(i) {
+    return [(i % this.cols) * CELL_W, Math.floor(i / this.cols) * CELL_H];
+  }
+  /** [u, v, width, height] of a thumbnail, inset to stop mipmap bleed between neighbours. */
+  rect(i) {
+    const [x, y] = this.cell(i);
+    const inset = 2;
+    return [
+      (x + inset) / this.size,
+      1 - (y + CELL_H - inset) / this.size,
+      (CELL_W - inset * 2) / this.size,
+      (CELL_H - inset * 2) / this.size,
+    ];
+  }
+  onChange(fn) { this.listeners.push(fn); }
+  async load(onProgress) {
+    const order = [...this.projects].sort((a, b) => b.loves - a.loves);
+    await pool(order, 6, async (p) => {
+      const img = await loadImage(projectImage(p.id));
+      if (img && !isPlaceholder(img)) {
+        this.images[p.index] = img;
+        const [x, y] = this.cell(p.index);
+        this.g.drawImage(img, x, y, CELL_W, CELL_H);
+        this.dirty = true;
+      }
+      this.loaded++;
+      onProgress?.(this.loaded, this.projects.length);
+    });
+    this.dirty = true;
+  }
+  /** Called every frame. Re-uploading a big texture is costly, so it's throttled. */
+  flush() {
+    const now = performance.now() / 1000;
+    if (!this.dirty || now - this.lastFlush < (this.size > 2048 ? 2 : 0.8)) return;
+    this.dirty = false;
+    this.lastFlush = now;
+    this.texture.needsUpdate = true;
+    for (const fn of this.listeners) fn();
+  }
+  /** Draw project i into any canvas, real thumbnail or generated cover. */
+  draw(g, i, x, y, w, h) {
+    const img = this.images[i];
+    if (img) g.drawImage(img, x, y, w, h);
+    else drawCover(g, x, y, w, h, this.projects[i]);
+  }
+  /** InstancedMesh whose instances each show one thumbnail. */
+  instances(geometry, count, indexOf, materialOpts = {}) {
+    const geo = geometry.clone();
+    const auv = new Float32Array(count * 4);
+    for (let k = 0; k < count; k++) auv.set(this.rect(indexOf(k)), k * 4);
+    geo.setAttribute('auv', new THREE.InstancedBufferAttribute(auv, 4));
+    const mat = new THREE.MeshBasicMaterial({ map: this.texture, toneMapped: false, ...materialOpts });
+    mat.onBeforeCompile = (shader) => {
+      shader.vertexShader = 'attribute vec4 auv;\n' + shader.vertexShader.replace(
+        '#include <uv_vertex>',
+        '#include <uv_vertex>\n  vMapUv = auv.xy + uv * auv.zw;',
+      );
+    };
+    mat.customProgramCacheKey = () => 'atlas-thumb';
+    return new THREE.InstancedMesh(geo, mat, count);
+  }
+}
+// disco.js
+// The globe, reimagined: a disco ball is already a sphere of little square tiles,
+// so every facet is a project thumbnail. Hover one and it pops out. It also throws
+// coloured light around the room.
+import * as THREE from 'three';
+import { canvas, canvasTexture, reducedMotion, seeded } from './util.js';
+const ROWS = 15;
+export function buildDisco(ctx, center, radius) {
+  const { data, atlas, ui, scene } = ctx;
+  const n = data.projects.length;
+  const group = new THREE.Group();
+  group.position.copy(center);
+  scene.add(group);
+  const spinner = new THREE.Group();
+  group.add(spinner);
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius * 0.975, 4), new THREE.MeshStandardMaterial
+  core.castShadow = true;
+  spinner.add(core);
+  const ceilingY = ctx.room.height;
+  const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1, 6), new THREE.MeshStandardMaterial(
+  chain.raycast = () => {};
+  scene.add(chain);
+  // Rows of upright tiles from pole to pole, exactly how a mirror ball is built.
+  const dummy = new THREE.Object3D();
+  const placed = [];
+  const rowHeight = (Math.PI * radius) / (ROWS + 1);
+  for (let row = 0; row < ROWS; row++) {
+    const lat = -Math.PI / 2 + ((row + 1) / (ROWS + 1)) * Math.PI;
+    const ringR = Math.cos(lat) * radius;
+    const count = Math.max(4, Math.round((2 * Math.PI * ringR) / (rowHeight * 4 / 3)));
+    for (let i = 0; i < count; i++) {
+      const a = ((i + (row % 2) * 0.5) / count) * Math.PI * 2;
+      placed.push({
+        dir: new THREE.Vector3(Math.cos(a) * Math.cos(lat), Math.sin(lat), Math.sin(a) * Math.cos(lat)),
+        w: ((2 * Math.PI * ringR) / count) * 0.93,
+        h: rowHeight * 0.93,
+      });
+    }
+  }
+  const FACETS = placed.length;
+  // Shuffle which project sits where, so neighbours on the ball aren't all the same year.
+  const rnd = seeded(data.seed);
+  const order = data.projects.map((p) => p.index).sort(() => rnd() - 0.5);
+  const facets = n ? atlas.instances(new THREE.PlaneGeometry(1, 1), FACETS, (k) => order[k % n]) : null;
+  if (facets) {
+    const setFacet = (k, scale) => {
+      const f = placed[k];
+      dummy.position.copy(f.dir).multiplyScalar(radius * (scale > 1 ? 1.12 : 1));
+      dummy.lookAt(f.dir.clone().multiplyScalar(radius * 3));
+      dummy.scale.set(f.w * scale, f.h * scale, 1);
+      dummy.updateMatrix();
+      facets.setMatrixAt(k, dummy.matrix);
+    };
+    placed.forEach((_, k) => setFacet(k, 1));
+    spinner.add(facets);
+    let hovered = -1;
+    const setHovered = (k) => {
+      if (k === hovered) return;
+      if (hovered >= 0) setFacet(hovered, 1);
+      hovered = k;
+      if (k >= 0) setFacet(k, 2.2);
+      facets.instanceMatrix.needsUpdate = true;
+    };
+    const pick = {
+      hover(hit) {
+        if (hit.instanceId === undefined || hit.object !== facets) { setHovered(-1); return { title: 'Disco ba
+        setHovered(hit.instanceId);
+        return { project: data.projects[order[hit.instanceId % n]] };
+      },
+      leave() { setHovered(-1); },
+      click(hit) {
+        if (hit.instanceId !== undefined && hit.object === facets) ui.openProject(data.projects[order[hit.inst
+      },
+    };
+    group.userData.pick = pick;
+    group.isHovered = () => hovered >= 0;
+    facets.computeBoundingSphere();
+  }
+  ctx.pickables.push(group);
+  // Light spots: an inside-out sphere of soft dots drawn over everything at low strength.
+  const [c, g] = canvas(2048, 1024);
+  const colors = ['#ff5a3c', '#ffc531', '#12bfa0', '#3aa0ff', '#ff6fb5', '#8a5cf6', '#ffffff'];
+  for (let i = 0; i < 120; i++) {
+    const x = rnd() * 2048, lat = Math.acos(rnd() * 2 - 1);
+    const y = (lat / Math.PI) * 1024;
+    const r = 6 + rnd() * 8;
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    const col = colors[Math.floor(rnd() * colors.length)];
+    grad.addColorStop(0, col); grad.addColorStop(0.65, col); grad.addColorStop(1, col + '00');
+    g.fillStyle = grad;
+    // Stretch near the poles to cancel the equirectangular squeeze.
+    g.save();
+    g.translate(x, y);
+    g.scale(1 / Math.max(0.25, Math.sin(lat)), 1);
+    g.translate(-x, -y);
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    g.restore();
+  }
+  const dots = new THREE.Mesh(new THREE.SphereGeometry(30, 32, 20), new THREE.MeshBasicMaterial({
+    map: canvasTexture(c), side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending,
+    depthTest: false, depthWrite: false, opacity: 0.11, toneMapped: false,
+  }));
+  dots.renderOrder = 1;
+  dots.raycast = () => {};
+  group.add(dots);
+  const spin = reducedMotion ? 0.03 : 0.16;
+  const eyeRest = center.y;
+  return {
+    group,
+    update(dt, t, camera) {
+      if (!group.isHovered?.()) {
+        spinner.rotation.y += spin * dt;
+        dots.rotation.y -= spin * dt * 0.7;
+      }
+      spinner.rotation.z = Math.sin(t * 0.25) * 0.05;
+      // The ball lowers to meet you when you walk up to it.
+      const d = Math.hypot(camera.position.x - center.x, camera.position.z - center.z);
+      const want = eyeRest - THREE.MathUtils.smoothstep(4.2 - d, 0, 2.2) * 0.85;
+      group.position.y += (want - group.position.y) * (1 - Math.exp(-dt * 2));
+      const len = ceilingY - group.position.y - radius;
+      chain.scale.y = Math.max(0.01, len);
+      chain.position.set(center.x, group.position.y + radius + len / 2, center.z);
+    },
+  };
+}
+// audio.js
+// All sound is made here: floor notes, clicks, and the dream's ambient mix.
+import { assetURL } from './util.js';
+const SCALE = [0, 2, 4, 7, 9];  // major pentatonic: any order of tiles sounds pleasant
+export class Sound {
+  constructor() {
+    this.ctx = null;
+    this.muted = false;
+    this.dream = null;
+  }
+  /** Browsers only allow audio after a user gesture, so call this from one. */
+  unlock() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.muted ? 0 : 1;
+      this.master.connect(this.ctx.destination);
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  }
+  setMuted(m) {
+    this.muted = m;
+    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 1, this.ctx.currentTime, 0.02);
+  }
+  tone(freq, { type = 'triangle', dur = 0.25, vol = 0.12, slide = 0, delay = 0 } = {}) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime + delay;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+  /** Tile step: pitch climbs through the portfolio, oldest low, newest high. */
+  step(fraction) {
+    const n = Math.floor(fraction * 15);
+    const semis = SCALE[n % 5] + 12 * Math.floor(n / 5);
+    this.tone(196 * Math.pow(2, semis / 12), { dur: 0.32, vol: 0.09 });
+  }
+  click() { this.tone(520, { type: 'square', dur: 0.07, vol: 0.05 }); }
+  press() { this.tone(180, { type: 'square', dur: 0.09, vol: 0.08 }); this.tone(660, { dur: 0.2, vol: 0.08, de
+  whoosh() { this.tone(180, { type: 'sawtooth', dur: 0.7, vol: 0.05, slide: 1100 }); }
+  chime() { [0, 4, 7].forEach((s, i) => this.tone(523 * Math.pow(2, s / 12), { dur: 0.5, vol: 0.05, delay: i *
+  /** Soft pad plus the project's own sounds, drifting through a long echo. */
+  startDream() {
+    this.unlock();
+    if (!this.ctx || this.dream) return;
+    const ctx = this.ctx;
+    const bus = ctx.createGain();
+    bus.gain.value = 0;
+    bus.gain.linearRampToValueAtTime(1, ctx.currentTime + 2.5);
+    bus.connect(this.master);
+    const seconds = 3.5;
+    const impulse = ctx.createBuffer(2, ctx.sampleRate * seconds, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = impulse.getChannelData(ch);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.6);
+    }
+    const reverb = ctx.createConvolver();
+    reverb.buffer = impulse;
+    reverb.connect(bus);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 600;
+    filter.connect(reverb);
+    const padGain = ctx.createGain();
+    padGain.gain.value = 0.05;
+    padGain.connect(filter);
+    const oscillators = [];
+    [0, 7, 12, 16].forEach((semi, i) => {
+      for (const detune of [-6, 6]) {
+        const o = ctx.createOscillator();
+        o.type = i % 2 ? 'triangle' : 'sine';
+        o.frequency.value = 110 * Math.pow(2, semi / 12);
+        o.detune.value = detune;
+        o.connect(padGain);
+        o.start();
+        oscillators.push({ o, semi });
+      }
+    });
+    const chords = [0, -3, 5, 2];
+    let chord = 0;
+    const chordTimer = setInterval(() => {
+      chord = (chord + 1) % chords.length;
+      for (const { o, semi } of oscillators) {
+        o.frequency.setTargetAtTime(110 * Math.pow(2, (semi + chords[chord]) / 12), ctx.currentTime, 1.4);
+      }
+      filter.frequency.setTargetAtTime(400 + Math.random() * 700, ctx.currentTime, 2);
+    }, 7000);
+    this.dreamBuffers ||= [];
+    const state = { bus, oscillators, chordTimer, sampleTimer: null, stopped: false };
+    this.dream = state;
+    const rates = [0.5, 0.75, 1, 1.125, 1.5];
+    state.sampleTimer = setInterval(() => {
+      if (!this.dreamBuffers.length || state.stopped) return;
+      const src = ctx.createBufferSource();
+      src.buffer = this.dreamBuffers[Math.floor(Math.random() * this.dreamBuffers.length)];
+      src.playbackRate.value = rates[Math.floor(Math.random() * rates.length)];
+      const g = ctx.createGain();
+      g.gain.value = 0.32;
+      const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; src.connect(g).connect(pan).connect(reverb); } els
+      src.start();
+      src.stop(ctx.currentTime + 8);
+    }, 3200);
+  }
+  /** Decode a project's sounds into the running dream. Fetched once, then kept for later naps. */
+  async addDreamSounds(sounds) {
+    this.dreamBuffers ||= [];
+    // Old Scratch sounds use a compressed WAV type browsers can't decode, so skip those up front.
+    const usable = sounds.filter((s) => !s.adpcm && s.secs > 0 && s.secs < 25).slice(0, 10);
+    await Promise.all(usable.map(async (s) => {
+      try {
+        const buf = await (await fetch(assetURL(s.md5))).arrayBuffer();
+        this.dreamBuffers.push(await this.ctx.decodeAudioData(buf));
+      } catch { /* a sound that won't decode just doesn't join the mix */ }
+    }));
+  }
+  stopDream() {
+    const d = this.dream;
+    if (!d) return;
+    this.dream = null;
+    d.stopped = true;
+    clearInterval(d.chordTimer);
+    clearInterval(d.sampleTimer);
+    const ctx = this.ctx;
+    d.bus.gain.cancelScheduledValues(ctx.currentTime);
+    d.bus.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
+    setTimeout(() => {
+      for (const { o } of d.oscillators) { try { o.stop(); } catch { /* already stopped */ } }
+      d.bus.disconnect();
+    }, 2000);
+  }
+}
+// outside.js
+// The yard beyond the window. Friends hang out here, and you can visit their rooms.
+import * as THREE from 'three';
+import { avatarImage, BUNDLE, canvas, canvasTexture, hashString, initialAvatar, isPlaceholder, labelSprite, lo
+const MAX_SHOWN = 22;
+function sky(hour) {
+  if (hour >= 7 && hour < 17) return { top: '#3aa0ff', bottom: '#d9f4ff', ground: '#6fd36a', sun: '#fff6c9', s
+  if (hour >= 17 && hour < 20) return { top: '#5b4bd6', bottom: '#ffb37a', ground: '#7fb65c', sun: '#ffd28a', 
+  if (hour >= 5 && hour < 7) return { top: '#5a8fe6', bottom: '#ffd0c0', ground: '#6fbf73', sun: '#ffe4c0', st
+  return { top: '#0c1140', bottom: '#2c3a7a', ground: '#2f6b57', sun: '#dfe8ff', stars: 1, name: 'night' };
+}
+export function buildOutside(ctx, windowZ) {
+  const { data, scene, ui } = ctx;
+  const look = sky(new Date().getHours());
+  const rnd = seeded(data.seed + 7);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(140, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    uniforms: { top: { value: new THREE.Color(look.top) }, bottom: { value: new THREE.Color(look.bottom) }, st
+    vertexShader: 'varying vec3 d; void main(){ d = normalize(position); gl_Position = projectionMatrix * mode
+    fragmentShader: `varying vec3 d; uniform vec3 top; uniform vec3 bottom; uniform float stars;
+      float h(vec3 p){ return fract(sin(dot(p, vec3(12.9,78.2,37.7))) * 43758.5); }
+      void main(){ float k = smoothstep(-0.02, 0.55, d.y); vec3 c = mix(bottom, top, k);
+        vec3 q = floor(d * 170.0); float s = step(0.994, h(q)) * stars * step(0.02, d.y); gl_FragColor = vec4(
+  }));
+  dome.raycast = () => {};
+  scene.add(dome);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(135, 48).rotateX(-Math.PI / 2), new THREE.MeshStandar
+  ground.position.y = -0.3;
+  ground.raycast = () => {};
+  scene.add(ground);
+  const addHill = (x, z, r, tint) => {
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 12), new THREE.MeshStandardMaterial({ color: n
+    hill.scale.y = 0.35;
+    hill.position.set(x, -0.3, z);
+    hill.raycast = () => {};
+    scene.add(hill);
+  };
+  addHill(-26, -62, 30, 0.9); addHill(24, -70, 36, 0.82); addHill(0, -92, 44, 0.74);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: '#8a5a33' });
+  const leaves = ['#2fae62', '#3cc46e', '#1f9a78', '#7ccc4a'].map((c) => new THREE.MeshStandardMaterial({ colo
+  for (let i = 0; i < 16; i++) {
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.24, 1.4, 7), trunkMat);
+    trunk.position.y = 0.4;
+    const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.15 + rnd() * 0.5, 0), leaves[i % 4]);
+    crown.position.y = 1.8;
+    tree.add(trunk, crown);
+    const side = i % 2 ? 1 : -1;
+    tree.position.set(side * (9 + rnd() * 18), -0.3, windowZ - 12 - rnd() * 28);
+    tree.traverse((o) => { o.raycast = () => {}; });
+    scene.add(tree);
+  }
+  const clouds = [];
+  const cloudMat = new THREE.MeshStandardMaterial({ color: look.name === 'night' ? '#55609a' : '#ffffff', roug
+  for (let i = 0; i < 7; i++) {
+    const cloud = new THREE.Group();
+    for (let b = 0; b < 4; b++) {
+      const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(1 + rnd() * 1.2, 1), cloudMat);
+      puff.position.set((b - 1.5) * 1.6, rnd() * 0.5, rnd());
+      puff.raycast = () => {};
+      cloud.add(puff);
+    }
+    cloud.position.set(-40 + rnd() * 80, 13 + rnd() * 9, windowZ - 34 - rnd() * 22);
+    cloud.speed = 0.25 + rnd() * 0.3;
+    clouds.push(cloud);
+    scene.add(cloud);
+  }
+  // Friends: mutuals come closest to the window.
+  const friends = data.friends.slice(0, MAX_SHOWN);
+  const crowd = new THREE.Group();
+  scene.add(crowd);
+  ctx.pickables.push(crowd);
+  const actors = [];
+  friends.forEach((f, i) => {
+    const r = seeded(hashString(f.username));
+    const hue = r();
+    const actor = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.62, 4, 12), new THREE.MeshStandardMaterial({
+    body.position.y = 0.72;
+    actor.add(body);
+    const armMat = body.material;
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.42, 3, 8), armMat);
+      arm.position.set(side * 0.52, 0.85, 0);
+      arm.rotation.z = side * 0.5;
+      actor.add(arm);
+      actor[side < 0 ? 'armL' : 'armR'] = arm;
+    }
+    const [c, g] = canvas(200, 200);
+    const tex = canvasTexture(c);
+    const paintHead = (img) => {
+      g.clearRect(0, 0, 200, 200);
+      g.save();
+      g.beginPath(); g.arc(100, 100, 92, 0, 7); g.clip();
+      g.drawImage(img, 8, 8, 184, 184);
+      g.restore();
+      g.lineWidth = 12; g.strokeStyle = '#fff';
+      g.beginPath(); g.arc(100, 100, 92, 0, 7); g.stroke();
+      tex.needsUpdate = true;
+    };
+    paintHead(initialAvatar(f.username));
+    const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, toneMapped: false })
+    head.scale.set(1.08, 1.08, 1);
+    head.position.y = 1.72;
+    actor.add(head);
+    const tag = labelSprite(f.username, { height: 0.3, bg: f.mutual ? '#ff5a3c' : '#1d2145' });
+    tag.position.y = 2.5;
+    actor.add(tag);
+    // Rows fan out wider with distance, so everyone stays in view from the window.
+    const row = i < 5 ? 0 : i < 11 ? 1 : i < 17 ? 2 : 3;
+    const inRow = [5, 6, 6, 6][row];
+    const slot = row === 0 ? i : row === 1 ? i - 5 : row === 2 ? i - 11 : i - 17;
+    const z = windowZ - 5 - row * 3.2;
+    const spread = 5.5 + row * 2.6;
+    const x = -spread + (slot + 0.5) * (spread * 2 / inRow) + (r() - 0.5) * 0.7;
+    actor.position.set(x, -0.3, z + (r() - 0.5));
+    actor.home = actor.position.clone();
+    actor.phase = r() * 10;
+    actor.mode = Math.floor(r() * 3);
+    actor.friend = f;
+    actor.userData.pick = {
+      hover: () => ({ title: f.username, sub: f.neighbor ? 'Another room on this street. Click to visit.' : BU
+      click: () => ui.openFriend(f),
+    };
+    crowd.add(actor);
+    actors.push({ actor, paintHead, f });
+  });
+  pool(actors, 4, async ({ paintHead, f }) => {
+    const img = await loadImage(avatarImage(f.id));
+    if (img && !isPlaceholder(img)) paintHead(img);
+  });
+  return {
+    count: friends.length,
+    update(dt, t) {
+      for (const c of clouds) {
+        c.position.x += c.speed * dt;
+        if (c.position.x > 50) c.position.x = -50;
+      }
+      for (const { actor } of actors) {
+        const p = t * 2.2 + actor.phase;
+        if (actor.mode === 0) {          // hopping
+          actor.position.y = actor.home.y + Math.abs(Math.sin(p)) * 0.42;
+        } else if (actor.mode === 1) {   // waving
+          actor.position.y = actor.home.y;
+          actor.armR.rotation.z = -2.3 + Math.sin(p * 2.4) * 0.5;
+          actor.armR.position.y = 1.32;
+        } else {                         // strolling
+          actor.position.x = actor.home.x + Math.sin(p * 0.2) * 0.8;
+          actor.position.y = actor.home.y + Math.abs(Math.sin(p * 1.4)) * 0.07;
+        }
+      }
+    },
+  };
+}
+// dream.js
+// Falling asleep: a kaleidoscope sky that morphs between project thumbnails, real costumes
+// drifting past, and the projects' own sounds mixed into a slow ambient wash.
+import * as THREE from 'three';
+import { Rig } from './engine.js';
+import { api, assetURL, canvas, canvasTexture, el, loadImage, pool, seeded } from './util.js';
+const SKY_FRAG = `
+  uniform sampler2D map; uniform float time; uniform float blend;
+  uniform vec4 rectA; uniform vec4 rectB;
+  varying vec3 vDir;
+  float hash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+  float noise(vec2 p){
+    vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+    return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
+  }
+  float fbm(vec2 p){ float a=.5, s=0.; for(int i=0;i<4;i++){ s+=a*noise(p); p*=2.03; a*=.5; } return s; }
+  vec3 sampleCell(vec4 r, vec2 uv){
+    vec2 m = abs(fract(uv*0.5)*2.0-1.0);   // mirror-repeat stays inside the cell
+    return texture2D(map, r.xy + m*r.zw).rgb;
+  }
+  void main(){
+    vec3 d = normalize(vDir);
+    float ang = atan(d.z, d.x), lat = acos(clamp(d.y,-1.,1.));
+    float seg = 6.2831853/6.0;                     // six-fold kaleidoscope
+    float a = mod(ang + time*0.02, seg); a = abs(a - seg*0.5);
+    vec2 p = vec2(a*1.15, lat*0.8 - time*0.012);
+    vec2 flow = vec2(fbm(p*2.0 + time*0.04), fbm(p*2.0 - time*0.03 + 7.3)) - 0.5;
+    vec2 uv = p + flow*0.14;                       // gentle wobble, pictures stay readable
+    vec3 ca = sampleCell(rectA, uv);
+    vec3 cb = sampleCell(rectB, uv + 0.2);
+    float mask = smoothstep(-0.2, 0.2, blend*1.4 - 0.7 + (fbm(p*2.6 + time*0.03) - 0.5)*0.9);
+    vec3 col = mix(ca, cb, mask);
+    // Night-sky wash: dusky at the top and bottom, pastel through the middle.
+    vec3 wash = mix(vec3(0.20,0.16,0.52), vec3(0.98,0.62,0.78), sin(lat)*sin(lat));
+    wash = mix(wash, vec3(0.45,0.75,0.95), 0.5 + 0.5*sin(time*0.05 + lat*2.0));
+    col = mix(col, wash, 0.5);
+    float clouds = smoothstep(0.42, 0.72, fbm(vec2(ang*1.5, lat*3.0) + time*0.015));
+    col = mix(col, vec3(1.0,0.96,0.98), clouds*0.32);
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+export class Dream {
+  constructor(ctx, handlers) {
+    this.ctx = ctx;
+    this.handlers = handlers;
+    this.name = 'dream';
+    this.scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 200);
+    camera.baseFov = 72;
+    this.rig = new Rig(camera, { fly: true, speed: 0 });
+    this.pickables = [];
+    this.floaters = [];
+    const { atlas, data } = ctx;
+    this.rnd = seeded(data.seed + (Date.now() & 0xffff));
+    this.uniforms = {
+      map: { value: atlas.texture }, time: { value: 0 }, blend: { value: 0 },
+      rectA: { value: new THREE.Vector4() }, rectB: { value: new THREE.Vector4() },
+    };
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(90, 48, 32), new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, uniforms: this.uniforms, fragmentShader: SKY_FRAG,
+      vertexShader: 'varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelVi
+    }));
+    sky.raycast = () => {};
+    this.scene.add(sky);
+    this.pickRects();
+    this.morphT = 0;
+    this.morphing = false;
+    this.pending = true;
+  }
+  pickProject() {
+    const { data, atlas } = this.ctx;
+    const withThumbs = data.projects.filter((p) => atlas.images[p.index]);
+    const from = withThumbs.length ? withThumbs : data.projects;
+    return from.length ? from[Math.floor(this.rnd() * from.length)] : null;
+  }
+  pickRects() {
+    const set = (u) => {
+      const p = this.pickProject();
+      if (p) u.value.set(...this.ctx.atlas.rect(p.index));
+    };
+    if (this.uniforms.rectA.value.z === 0) set(this.uniforms.rectA);
+    else this.uniforms.rectA.value.copy(this.uniforms.rectB.value);
+    set(this.uniforms.rectB);
+    this.uniforms.blend.value = 0;
+  }
+  addFloater(canvasEl, project, kind) {
+    const tex = canvasTexture(canvasEl);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, toneMapped: false, dept
+    const r = this.rnd;
+    const big = kind === 'thumb';
+    const size = big ? 2.3 + r() * 1.4 : 1.1 + r() * 1.4;
+    const aspect = canvasEl.width / canvasEl.height;
+    s.scale.set(aspect >= 1 ? size : size * aspect, aspect >= 1 ? size / aspect : size, 1);   // longest side 
+    const f = { s, a: r() * 6.28, rad: 8 + r() * 12, y: -5 + r() * 12, va: (r() < 0.5 ? -1 : 1) * (0.03 + r() 
+    this.floaters.push(f);
+    if (project) {
+      s.userData.pick = {
+        hover: () => ({ project }),
+        click: () => { this.ctx.sound.chime(); this.ctx.ui.openProject(project); },
+      };
+      this.pickables.push(s);
+    }
+    this.scene.add(s);
+  }
+  async gather() {
+    if (this.gathered) return;
+    this.gathered = true;
+    const { data, atlas } = this.ctx;
+    // Thumbnails first: rounded cards cut from the images we already have.
+    const thumbs = [...data.projects].sort(() => this.rnd() - 0.5).slice(0, 26);
+    for (const p of thumbs) {
+      const [c, g] = canvas(240, 180);
+      g.beginPath(); g.roundRect(0, 0, 240, 180, 26); g.clip();
+      atlas.draw(g, p.index, 0, 0, 240, 180);
+      this.addFloater(c, p, 'thumb');
+    }
+    // Then costumes and sounds from up to 10 projects with readable files.
+    const source = data.byLoves.filter((p) => p.year >= 2013 && api.hasCode(p.id)).slice(0, 14).sort(() => thi
+    const sounds = [];
+    const costumes = [];
+    await pool(source, 3, async (p) => {
+      const code = await api.code(p.id);
+      for (const s of code.sprites) {
+        sounds.push(...s.sounds);
+        if (!s.isStage) costumes.push(...s.costumes.slice(0, 3).map((c) => ({ ...c, project: p })));
+      }
+    });
+    this.ctx.sound.addDreamSounds(sounds.sort(() => this.rnd() - 0.5));
+    const unique = [...new Map(costumes.map((c) => [c.md5, c])).values()].sort(() => this.rnd() - 0.5).slice(0
+    this.costumeCount = unique.length;
+    await pool(unique, 4, async (c) => {
+      const img = await loadImage(assetURL(c.md5));
+      if (!img || !img.naturalWidth) return;
+      const k = 220 / Math.max(img.naturalWidth, img.naturalHeight, 1);
+      const [cv, g] = canvas(Math.max(8, Math.round(img.naturalWidth * k)), Math.max(8, Math.round(img.natural
+      g.drawImage(img, 0, 0, cv.width, cv.height);
+      this.addFloater(cv, c.project, 'costume');   // an unreadable image throws, and pool() skips it
+    });
+  }
+  onEnter() {
+    const { ui, sound } = this.ctx;
+    ui.clearHud();
+    ui.hud.append(
+      el('div', { class: 'tools' }, ui.muteChip()),
+      el('div', { class: 'dock' }, el('button', { class: 'chip', text: 'Wake up', style: { fontSize: '19px', p
+      el('div', { class: 'help', style: { background: '#0d0e2bbb' }, text: 'Sweet dreams. Drag to look around.
+    );
+    this.rig.place({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0.05 });
+    sound.startDream();
+    this.gather();
+  }
+  onExit() { this.ctx.sound.stopDream(); }
+  update(dt, t) {
+    this.t = t;
+    this.ctx.atlas.flush(t);
+    const u = this.uniforms;
+    u.time.value = t;
+    this.morphT += dt;
+    if (this.morphT > 9) {
+      this.morphT = 0;
+      this.pickRects();
+    }
+    u.blend.value = THREE.MathUtils.smoothstep(this.morphT, 3, 8);
+    for (const f of this.floaters) {
+      f.a += f.va * dt;
+      f.s.position.set(Math.cos(f.a) * f.rad, f.y + Math.sin(t * 0.3 + f.bob) * 1.3, Math.sin(f.a) * f.rad);
+      f.s.material.rotation = Math.sin(t * 0.25 + f.bob) * f.spinAmt;
+      f.s.material.opacity = Math.min(1, (t - f.born) / 2.5);
+    }
+  }
+}
+// engine.js
+// Renderer, camera rig, input and picking. A "world" (room, code land, dream) plugs into this.
+import * as THREE from 'three';
+import { clamp, ease } from './util.js';
+export class Rig {
+  constructor(camera, opts = {}) {
+    this.camera = camera;
+    camera.rotation.order = 'YXZ';
+    this.yaw = 0;
+    this.pitch = 0;
+    this.eye = opts.eye ?? 1.55;
+    this.fly = !!opts.fly;
+    this.speed = opts.speed ?? 3.6;
+    this.limit = opts.limit ?? ((p) => p);
+    this.vel = new THREE.Vector3();
+    this.glideState = null;
+    this.locked = false;
+  }
+  place({ x, y, z, yaw = 0, pitch = 0 }) {
+    this.camera.position.set(x, y, z);
+    this.yaw = yaw; this.pitch = pitch;
+    this.apply();
+  }
+  apply() {
+    this.camera.rotation.set(this.pitch, this.yaw, 0);
+  }
+  /** Glide smoothly to a pose. Takes the short way round when turning. */
+  glide(to, dur = 1.1, done) {
+    const from = { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z, yaw: this.
+    let dy = (to.yaw ?? this.yaw) - this.yaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    this.glideState = { from, to: { ...from, ...to, yaw: this.yaw + dy }, t: 0, dur, done };
+  }
+  update(dt, move) {
+    const moving = move.x !== 0 || move.z !== 0 || move.y !== 0;
+    if (this.glideState && moving && !this.locked) this.glideState = null;
+    if (this.glideState) {
+      const g = this.glideState;
+      g.t = Math.min(1, g.t + dt / g.dur);
+      const k = ease(g.t);
+      const lerp = (a, b) => a + (b - a) * k;
+      this.camera.position.set(lerp(g.from.x, g.to.x), lerp(g.from.y, g.to.y), lerp(g.from.z, g.to.z));
+      this.yaw = lerp(g.from.yaw, g.to.yaw);
+      this.pitch = lerp(g.from.pitch, g.to.pitch);
+      this.apply();
+      if (g.t >= 1) { this.glideState = null; g.done && g.done(); }
+      return;
+    }
+    if (this.locked) return;
+    const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
+    const speed = this.speed * (move.run ? 1.8 : 1);
+    const want = new THREE.Vector3(
+      (move.x * cos + move.z * sin) * speed,
+      0,
+      (-move.x * sin + move.z * cos) * speed,
+    );
+    if (this.fly) {
+      const cp = Math.cos(this.pitch);
+      want.set((move.x * cos - move.z * -sin * cp) * speed, (-move.z * Math.sin(this.pitch) + move.y) * speed,
+    }
+    this.vel.lerp(want, 1 - Math.exp(-dt * 12));
+    const p = this.camera.position;
+    p.addScaledVector(this.vel, dt);
+    if (!this.fly && this.vel.lengthSq() > 0.01) p.y += (this.eye - p.y) * (1 - Math.exp(-dt * 4));
+    this.limit(p);
+    this.apply();
+  }
+}
+export class Engine {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.raycaster = new THREE.Raycaster();
+    this.world = null;
+    this.keys = new Set();
+    this.stick = { x: 0, z: 0 };
+    this.mouse = new THREE.Vector2();
+    this.mouseFresh = false;
+    this.hoverPick = null;
+    this.onHover = () => {};
+    this.paused = () => false;
+    this.last = 0;
+    this.time = 0;
+    this.frames = 0;
+    this.bind();
+    this.resize();
+  }
+  bind() {
+    addEventListener('resize', () => this.resize());
+    addEventListener('keydown', (e) => {
+      if (e.target.matches?.('input,textarea') || this.paused()) return;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+      this.keys.add(e.code);
+    });
+    addEventListener('keyup', (e) => this.keys.delete(e.code));
+    addEventListener('blur', () => this.keys.clear());
+    const c = this.canvas;
+    let down = null;
+    c.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      down = { x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: 0, id: e.pointerId };
+      c.setPointerCapture(e.pointerId);
+    });
+    c.addEventListener('pointermove', (e) => {
+      this.pointerType = e.pointerType;
+      this.mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      this.mouseXY = [e.clientX, e.clientY];
+      this.mouseFresh = true;
+      if (down && e.pointerId === down.id) {
+        const dx = e.clientX - down.lastX, dy = e.clientY - down.lastY;
+        down.lastX = e.clientX; down.lastY = e.clientY;
+        down.moved += Math.abs(dx) + Math.abs(dy);
+        const rig = this.world?.rig;
+        if (down.moved > 6 && rig && !rig.locked && !rig.glideState && !this.paused()) {
+          rig.yaw += dx * 0.0042;
+          rig.pitch = clamp(rig.pitch + dy * 0.0042, -1.45, 1.45);
+          rig.apply();
+          c.style.cursor = 'grabbing';
+        }
+      }
+    });
+    c.addEventListener('pointerup', (e) => {
+      c.style.cursor = '';
+      const wasClick = down && down.moved <= 6;
+      down = null;
+      if (!wasClick || this.paused()) return;
+      this.mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      this.mouseXY = [e.clientX, e.clientY];
+      const hit = this.pick();
+      this.world?.onAnyClick?.();
+      if (hit?.pick?.click) hit.pick.click(hit.hit);
+      else this.world?.onEmptyClick?.(hit?.hit);
+    });
+    c.addEventListener('pointerleave', () => { this.mouseFresh = false; this.setHover(null); });
+    c.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const rig = this.world?.rig;
+      if (!rig || rig.locked || this.paused()) return;
+      rig.glideState = null;
+      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(rig.camera.quaternion);
+      if (!rig.fly) dir.y = 0;
+      rig.camera.position.addScaledVector(dir.normalize(), clamp(-e.deltaY * 0.004, -0.8, 0.8));
+      rig.limit(rig.camera.position);
+    }, { passive: false });
+  }
+  resize() {
+    this.renderer.setSize(innerWidth, innerHeight, false);
+    if (this.world) this.fitCamera(this.world.rig.camera);
+  }
+  fitCamera(camera) {
+    camera.aspect = innerWidth / innerHeight;
+    // Keep a sensible horizontal view on phones held upright.
+    camera.fov = camera.aspect < 1 ? 82 : (camera.baseFov ?? 66);
+    camera.updateProjectionMatrix();
+  }
+  setWorld(world) {
+    this.world?.onExit?.();
+    this.setHover(null);
+    this.world = world;
+    this.fitCamera(world.rig.camera);
+    world.onEnter?.();
+  }
+  pick() {
+    const w = this.world;
+    if (!w) return null;
+    this.raycaster.setFromCamera(this.mouse, w.rig.camera);
+    const hits = this.raycaster.intersectObjects(w.pickables, true);
+    if (!hits.length) return null;
+    const hit = hits[0];
+    let o = hit.object;
+    while (o) {
+      if (o.userData.pick) return { pick: o.userData.pick, hit };
+      o = o.parent;
+    }
+    return { pick: null, hit };
+  }
+  setHover(info) {
+    this.onHover(info, this.mouseXY);
+  }
+  updateHover() {
+    if (!this.mouseFresh || this.paused() || this.world?.rig.locked) {
+      if (this.hoverPick) { this.hoverPick.leave?.(); this.hoverPick = null; this.setHover(null); this.canvas.
+      return;
+    }
+    const found = this.pick();
+    const pick = found?.pick || null;
+    if (this.hoverPick && this.hoverPick !== pick) this.hoverPick.leave?.();
+    this.hoverPick = pick;
+    const info = pick?.hover ? pick.hover(found.hit) : null;
+    this.setHover(info);
+    this.canvas.style.cursor = pick?.click && info !== null ? 'pointer' : '';
+  }
+  input() {
+    const k = this.keys;
+    const paused = this.paused();
+    const on = (...codes) => !paused && codes.some((c) => k.has(c));
+    return {
+      x: (on('KeyD', 'ArrowRight') ? 1 : 0) - (on('KeyA', 'ArrowLeft') ? 1 : 0) + this.stick.x,
+      z: (on('KeyS', 'ArrowDown') ? 1 : 0) - (on('KeyW', 'ArrowUp') ? 1 : 0) + this.stick.z,
+      y: (on('KeyE', 'Space') ? 1 : 0) - (on('KeyQ') ? 1 : 0),
+      run: on('ShiftLeft', 'ShiftRight'),
+    };
+  }
+  start() {
+    const tick = (now) => {
+      requestAnimationFrame(tick);
+      const dt = Math.min(0.05, (now - this.last) / 1000 || 0);
+      this.last = now;
+      this.time += dt;
+      this.frames++;
+      const w = this.world;
+      if (!w) return;
+      w.rig.update(dt, this.input());
+      w.update?.(dt, this.time);
+      this.updateHover();
+      this.renderer.render(w.scene, w.rig.camera);
+    };
+    requestAnimationFrame(tick);
+  }
+}
+/** Yaw and pitch that make a camera at `from` look at `to`. */
+export function lookAngles(from, to) {
+  const dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2];
+  return { yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(dy, Math.hypot(dx, dz)) };
+}
+/** One clean pose object for a station. */
+export function pose(pos, target) {
+  return { x: pos[0], y: pos[1], z: pos[2], ...lookAngles(pos, target) };
+}
+// floor.js
+// The contribution floor. One tile per project, laid oldest to newest in a snake so
+// consecutive projects always touch: you can literally walk your own history.
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { labelSprite, yearColor } from './util.js';
+const TILE_THICK = 0.1;
+const THUMB_FRACTION = 0.74;
+/** Largest tile size that still leaves a free cell for every project (furniture covers some). */
+function layout(n, room, blocked) {
+  const goal = Math.ceil(n * 1.04);
+  let size = 1.3;
+  for (;;) {
+    const cols = Math.floor(room.width / size);
+    const rows = Math.floor(room.depth / size);
+    const stepX = room.width / cols;
+    const stepZ = room.depth / rows;
+    const free = [];
+    // Row 0 is by the door, where you start, so walking forward is walking forward in time.
+    for (let r = 0; r < rows; r++) {
+      const line = [];
+      for (let c = 0; c < cols; c++) {
+        const x = -room.width / 2 + stepX * (c + 0.5);
+        const z = room.depth / 2 - stepZ * (r + 0.5);
+        const covered = blocked.some((b) => x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1);
+        line.push({ c, r, x, z, covered });
+      }
+      if (r % 2) line.reverse();
+      free.push(...line);
+    }
+    if (free.filter((t) => !t.covered).length >= goal || size < 0.1) return { cells: free, stepX, stepZ, cols,
+    size *= 0.97;
+  }
+}
+export function buildFloor(ctx, room, blocked) {
+  const { data, atlas, scene, ui, sound } = ctx;
+  const projects = data.projects;
+  const { cells, stepX, stepZ, cols, rows } = layout(projects.length, room, blocked);
+  const count = cells.length;
+  const firstYear = projects[0]?.year ?? 2007;
+  const lastYear = projects[projects.length - 1]?.year ?? firstYear;
+  let next = 0;
+  for (const cell of cells) cell.project = !cell.covered && next < projects.length ? projects[next++] : null;
+  const grid = new Array(cols * rows);
+  cells.forEach((cell) => { grid[cell.r * cols + cell.c] = cell; });
+  const withProject = cells.filter((c) => c.project);
+  const gap = 0.94;
+  const tileGeo = new RoundedBoxGeometry(1, TILE_THICK, 1, 2, 0.035);
+  const tiles = new THREE.InstancedMesh(tileGeo, new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 
+  tiles.receiveShadow = true;
+  tiles.raycast = () => {};
+  const blank = new THREE.Color(data.paint.spot).lerp(new THREE.Color('#ffffff'), 0.25);
+  const blank2 = blank.clone().multiplyScalar(0.93);
+  const color = new THREE.Color();
+  const baseColors = [];
+  cells.forEach((cell, i) => {
+    if (cell.project) color.copy(yearColor(cell.project.year, firstYear, lastYear));
+    else color.copy((cell.c + cell.r) % 2 ? blank : blank2);
+    baseColors.push(color.clone());
+    tiles.setColorAt(i, color);
+  });
+  const plane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  const thumbs = atlas.instances(plane, withProject.length, (k) => withProject[k].project.index);
+  thumbs.raycast = () => {};
+  thumbs.frustumCulled = false;
+  scene.add(tiles, thumbs);
+  // Decorations: gems for the most-loved projects, rings for remixes.
+  const gemCells = withProject.filter((c) => c.project.tier > 0).slice(0, 400);
+  const gems = gemCells.length ? new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshSta
+  if (gems) {
+    gemCells.forEach((c, i) => gems.setColorAt(i, color.set(c.project.tier === 3 ? '#ffc531' : '#ff5fa8')));
+    gems.raycast = () => {};
+    gems.frustumCulled = false;
+    gems.castShadow = true;
+    scene.add(gems);
+  }
+  const ringCells = withProject.filter((c) => c.project.isRemix);
+  const rings = ringCells.length ? new THREE.InstancedMesh(new THREE.TorusGeometry(1, 0.3, 8, 18).rotateX(Math
+  if (rings) { rings.raycast = () => {}; rings.frustumCulled = false; scene.add(rings); }
+  // A little flag on the first tile of each year.
+  const flags = [];
+  let flagYear = null;
+  const tileMin = Math.min(stepX, stepZ);
+  for (const cell of withProject) {
+    if (cell.project.year !== flagYear) {
+      flagYear = cell.project.year;
+      const s = labelSprite(String(flagYear), { bg: '#' + yearColor(flagYear, firstYear, lastYear).multiplySca
+      s.position.set(cell.x, 0.26, cell.z);
+      flags.push({ s, cell });
+      scene.add(s);
+    }
+  }
+  // Heights animate between 0 and each tile's tower height (see setHeights).
+  cells.forEach((cell) => { cell.h = 0; cell.target = 0; });
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const pos = new THREE.Vector3();
+  const scl = new THREE.Vector3();
+  const writeTile = (i) => {
+    const c = cells[i];
+    const press = c.press || 0;
+    const top = c.h - press;
+    const height = TILE_THICK + c.h;
+    pos.set(c.x, top - height / 2, c.z);
+    scl.set(stepX * gap, height / TILE_THICK, stepZ * gap);
+    m.compose(pos, q.identity(), scl);
+    tiles.setMatrixAt(i, m);
+  };
+  const writeThumb = (k) => {
+    const c = withProject[k];
+    pos.set(c.x, c.h - (c.press || 0) + 0.003, c.z);
+    scl.set(stepX * gap * THUMB_FRACTION, 1, stepZ * gap * THUMB_FRACTION);
+    m.compose(pos, q.identity(), scl);
+    thumbs.setMatrixAt(k, m);
+  };
+  const writeRing = (k) => {
+    const c = ringCells[k];
+    const r = tileMin * 0.05;
+    pos.set(c.x - stepX * 0.385, c.h + r * 0.3, c.z - stepZ * 0.385);
+    scl.setScalar(r);
+    m.compose(pos, q.identity(), scl);
+    rings.setMatrixAt(k, m);
+  };
+  const writeGem = (k, t) => {
+    const c = gemCells[k];
+    const r = tileMin * (c.project.tier === 3 ? 0.13 : 0.085);
+    pos.set(c.x + stepX * 0.37, c.h + r * 1.5 + Math.sin(t * 2 + k) * r * 0.25, c.z - stepZ * 0.37);
+    q.setFromAxisAngle(up, t * 1.2 + k);
+    scl.set(r, r * 1.35, r);
+    m.compose(pos, q, scl);
+    gems.setMatrixAt(k, m);
+    q.identity();
+  };
+  const writeAll = () => {
+    cells.forEach((_, i) => writeTile(i));
+    withProject.forEach((_, k) => writeThumb(k));
+    ringCells.forEach((_, k) => writeRing(k));
+    tiles.instanceMatrix.needsUpdate = true;
+    thumbs.instanceMatrix.needsUpdate = true;
+    if (rings) rings.instanceMatrix.needsUpdate = true;
+  };
+  writeAll();
+  const cellAt = (x, z) => {
+    const c = Math.floor((x + room.width / 2) / stepX);
+    const r = Math.floor((room.depth / 2 - z) / stepZ);
+    return c >= 0 && c < cols && r >= 0 && r < rows ? grid[r * cols + c] : null;
+  };
+  const indexOfCell = new Map(cells.map((c, i) => [c, i]));
+  let hover = null;
+  const tint = (cell, amount) => {
+    const i = indexOfCell.get(cell);
+    tiles.setColorAt(i, color.copy(baseColors[i]).lerp(new THREE.Color('#ffffff'), amount));
+    tiles.instanceColor.needsUpdate = true;
+  };
+  const setHoverCell = (cell) => {
+    if (hover === cell) return;
+    if (hover) tint(hover, 0);
+    hover = cell;
+    if (hover) tint(hover, 0.55);
+  };
+  // Invisible plane: cheaper to pick against than 1000+ instanced boxes.
+  const proxy = new THREE.Mesh(new THREE.PlaneGeometry(room.width, room.depth).rotateX(-Math.PI / 2), new THRE
+  proxy.visible = false;
+  proxy.userData.pick = {
+    hover(hit) {
+      const cell = cellAt(hit.point.x, hit.point.z);
+      setHoverCell(cell?.project ? cell : null);
+      return cell?.project ? { project: cell.project } : null;
+    },
+    leave() { setHoverCell(null); },
+    click(hit) {
+      const cell = cellAt(hit.point.x, hit.point.z);
+      if (cell?.project) ui.openProject(cell.project);
+    },
+  };
+  scene.add(proxy);
+  let underfoot = null;
+  let animating = false;
+  const pressed = new Set();
+  return {
+    proxy,
+    cellAt,
+    cells,
+    /** Raise tiles by value (0..1 of the tallest), or flatten with null. */
+    setHeights(valueOf) {
+      for (const c of cells) c.target = c.project && valueOf ? valueOf(c.project) * 1.35 : 0;
+      animating = true;
+    },
+    update(dt, t, camera) {
+      if (gems) {
+        gemCells.forEach((_, k) => writeGem(k, t));
+        gems.instanceMatrix.needsUpdate = true;
+      }
+      const cell = camera.position.y < 2.2 ? cellAt(camera.position.x, camera.position.z) : null;
+      if (cell !== underfoot) {
+        underfoot = cell;
+        if (cell?.project) {
+          sound.step(cell.project.index / Math.max(1, projects.length - 1));
+          cell.press = 0.035;
+          pressed.add(cell);
+          tint(cell, 0.4);
+          ctx.onStep?.(cell.project);
+        }
+      }
+      for (const c of pressed) {
+        if (c === underfoot) continue;
+        c.press = Math.max(0, c.press - dt * 0.12);
+        if (c.press === 0) { pressed.delete(c); if (c !== hover) tint(c, 0); }
+      }
+      let changed = pressed.size > 0;
+      if (animating) {
+        let still = false;
+        for (const c of cells) {
+          const d = c.target - c.h;
+          if (Math.abs(d) > 0.002) { c.h += d * (1 - Math.exp(-dt * 5)); still = true; } else c.h = c.target;
+        }
+        animating = still;
+        changed = true;
+        for (const f of flags) f.s.position.y = f.cell.h + 0.26;
+      }
+      if (changed) writeAll();
+    },
+  };
+}
+// ui.js
+// Everything that's HTML rather than 3D: hover card, project sheet, lists, HUD.
+import { api, assetURL, avatarImage, BUNDLE, el, initialAvatar, isPlaceholder, longDate, num, plural, setThumb
+const $ = (id) => document.getElementById(id);
+function statRow(p) {
+  return el('div', { class: 'stats' },
+    el('span', { style: { '--c': '#3aa0ff' }, text: `${num(p.views)} views` }),
+    el('span', { style: { '--c': '#

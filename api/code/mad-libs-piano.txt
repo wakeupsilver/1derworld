@@ -1,0 +1,689 @@
+// build.js
+// Builds the page: index.html (template + song data + silly words) and voice/<song>.json,
+// one file of recorded words per song, which the page fetches when that song is picked.
+// Usage: node build.js voice_bank.json   (voice_bank.json comes from build_voice.py)
+const fs = require("fs"), path = require("path");
+const { songWords } = require("./vocab.js"); // also checks the song data
+const dir = __dirname;
+const strip = f => fs.readFileSync(path.join(dir, f), "utf8").replace(/\nif \(typeof module[^\n]*\n?/, "\n");
+const bank = JSON.parse(fs.readFileSync(process.argv[2] || path.join(dir, "voice_bank.json"), "utf8"));
+const html = fs.readFileSync(path.join(dir, "template.html"), "utf8")
+  .replace("/*DATA*/", () => strip("data.js"))
+  .replace("/*ALTS*/", () => strip("alts.js"))
+  .replace("/*ART*/", () => strip("art.js"))
+  .replace("/*GRAMMAR*/", () => strip("grammar.js"));
+fs.writeFileSync(path.join(dir, "index.html"), html);
+console.log("index.html", (html.length / 1e3).toFixed(0), "kB");
+fs.mkdirSync(path.join(dir, "voice"), { recursive: true });
+for (const [id, keys] of Object.entries(songWords)) {
+  const words = {}, missing = [];
+  for (const k of keys) bank.words[k] ? (words[k] = bank.words[k]) : missing.push(k);
+  if (missing.length) { console.error(id, "not recorded:", missing.join(", ")); process.exitCode = 1; }
+  const json = JSON.stringify({ sr: bank.sr, words });
+  fs.writeFileSync(path.join(dir, "voice", id + ".json"), json);
+  console.log(`voice/${id}.json`, keys.length, "words", (json.length / 1e6).toFixed(2), "MB");
+}
+// vocab.js
+// Checks the song data and lists every word each song can sing.
+// node vocab.js        -> JSON {key: textToSpeak} for build_voice.py (every word of every song)
+// require("./vocab.js") -> { keyOf, songWords } for build.js
+const { SONGS, SILLY } = require("./data.js");
+const { ALTS } = require("./alts.js");
+const { GRAMMAR } = require("./grammar.js");
+const keyOf = w => w.toLowerCase().replace(/[’]/g, "'").replace(/[^a-zñé' \-]/g, "").replace(/[\s'\-]+$/, "").
+const LETTERS = { r: "are", b: "bee", d: "dee", e: "ee", g: "gee", i: "eye", n: "en", o: "oh", p: "pee", q: "c
+const spoken = k => LETTERS[k] || k.replace(/^'/, "").replace(/-/g, " ");
+const split = s => s.split(",").map(x => x.trim()).filter(Boolean);
+let bad = 0;
+const songWords = {};
+for (const s of SONGS) {
+  const words = new Set(), tags = new Set(), seen = new Set();
+  const lines = s.lyrics.split("\n");
+  if (lines.length !== s.melody.length) { console.error(s.id, "line count", lines.length, s.melody.length); ba
+  lines.forEach((ln, i) => {
+    const toks = ln.trim().split(/\s+/);
+    if (s.melody[i] && toks.length !== s.melody[i].length) { console.error(s.id, "line", i + 1, toks.length, "
+    for (const t of toks) {
+      const [w, tag] = t.split("|");
+      if (!SILLY[tag]) { console.error("bad tag", t); bad++; continue; }
+      const k = keyOf(w); words.add(k); tags.add(tag);
+      const alt = (ALTS[s.id] || {})[k + "|" + tag] || (ALTS[s.id] || {})[k];
+      if (!alt) { console.error(s.id, "no silly words for", k, tag); bad++; }
+      else { seen.add(alt === ALTS[s.id][k] ? k : k + "|" + tag); split(alt).forEach(x => words.add(keyOf(x)))
+    }
+  });
+  for (const k of Object.keys(ALTS[s.id] || {})) if (!seen.has(k)) { console.error(s.id, "unused silly list", 
+  for (const tag of tags) SILLY[tag].forEach(x => words.add(keyOf(x)));
+  // verb forms that change to match a swapped subject ("Bigfoot wonders", "my socks were")
+  const toks = [];
+  lines.forEach((ln, li) => ln.trim().split(/\s+/).forEach((t, wi, arr) => { const [w, tag] = t.split("|"); co
+  GRAMMAR.markAgreement(toks);
+  const altsOf = t => split((ALTS[s.id] || {})[t.key + "|" + t.tag] || (ALTS[s.id] || {})[t.key] || "");
+  for (const t of toks.filter(t => t.agree)) {
+    const cands = [t.disp, ...altsOf(t), ...toks.filter(u => u.tag === t.tag && u.key !== t.key).flatMap(altsO
+    for (const c of cands) for (const cls of ["I", "pl", "3s"]) words.add(keyOf(GRAMMAR.inflect(c, cls, t.tag)
+  }
+  songWords[s.id] = [...words].filter(Boolean);
+}
+if (bad) process.exit(1);
+if (require.main === module) {
+  const out = {};
+  for (const ws of Object.values(songWords)) ws.forEach(k => out[k] = spoken(k));
+  process.stdout.write(JSON.stringify(out));
+}
+module.exports = { keyOf, songWords };
+// grammar.js
+// Grammar for Mad Libs Piano: when you swap the subject of a line ("I" → "Bigfoot"),
+// the verb that goes with it changes to match ("wonder" → "wonders", "am" → "is").
+// Used by the page while you play, and by vocab.js to list the verb forms to record.
+const GRAMMAR = (() => {
+  // the real words that start a clause as its subject
+  const SUBJECTS = new Set(["i", "you", "we", "they", "he", "she", "it", "ye"]);
+  const VERB_TAGS = new Set(["V", "LINK", "LINKPAST", "VS"]);
+  const lower = w => w.toLowerCase();
+  const keepCase = (from, to) => from[0] && from[0] === from[0].toUpperCase() && from[0] !== from[0].toLowerCa
+  // Who is the subject? "I", a group ("you", "the elves", "my socks"), or one other thing ("Bigfoot", "the do
+  function subjectClass(word) {
+    const w = lower(word).trim();
+    if (w === "i") return "I";
+    if (["you", "we", "they", "ye"].includes(w)) return "pl";
+    if (["he", "she", "it"].includes(w)) return "3s";
+    const last = w.split(/\s+/).pop();
+    if (/^(everybody|everyone|nobody|somebody|someone|anybody)$/.test(last)) return "3s";
+    if (/^(people|children|mice|geese|police|elves|reindeer|deer|sheep|fish|feet|teeth|men|women)$/.test(last)
+    if (/[^s'u]s$/.test(last)) return "pl";
+    return "3s";
+  }
+  // Mark which words of a song agree with a subject: the verbs after a subject pronoun in the same line.
+  function markAgreement(tokens) {
+    let line = -1, subject = false;
+    tokens.forEach((t, i) => {
+      if (t.line !== line) { line = t.line; subject = false; }
+      if (t.tag === "PRON" && SUBJECTS.has(t.key)) { subject = true; t.subject = true; return; }
+      const prev = tokens[i - 1];
+      const verb = VERB_TAGS.has(t.tag) || (t.tag === "MODAL" && t.key === "have");
+      const helped = prev && prev.line === t.line && (prev.tag === "TO" || (prev.tag === "MODAL" && prev.key !
+      // a question puts the verb before its own subject ("are you sleeping"), so it isn't about the subject b
+      const next = tokens[i + 1], asks = next && next.line === t.line && next.tag === "PRON" && SUBJECTS.has(n
+      if (subject && verb && !helped && !asks) t.agree = true;
+    });
+    return tokens;
+  }
+  function thirdPerson(v) {
+    const w = lower(v);
+    if (w === "have") return "has";
+    if (w === "do") return "does";
+    if (w === "go") return "goes";
+    if (/[^aeiou]y$/.test(w)) return v.slice(0, -1) + "ies";
+    if (/(s|sh|ch|x|z|o)$/.test(w)) return v + "es";
+    return v + "s";
+  }
+  // Change a verb (or a short verb phrase) to fit the subject class. A past-tense word only
+  // changes between "was" and "were".
+  function inflect(word, cls, tag) {
+    if (!cls) return word;
+    const w = lower(word);
+    if (tag === "LINKPAST" || tag === "VED") return ["was", "were"].includes(w) ? keepCase(word, cls === "pl" 
+    if (["am", "is", "are"].includes(w)) return keepCase(word, cls === "I" ? "am" : cls === "3s" ? "is" : "are
+    if (["was", "were"].includes(w)) return keepCase(word, cls === "pl" ? "were" : "was");
+    if (["have", "has"].includes(w)) return keepCase(word, cls === "3s" ? "has" : "have");
+    if (["aren't", "isn't"].includes(w)) return keepCase(word, cls === "3s" ? "isn't" : "aren't");
+    if (["weren't", "wasn't"].includes(w)) return keepCase(word, cls === "pl" ? "weren't" : "wasn't");
+    if (/'/.test(w) || w === "ain't") return word; // other short forms ("can't", "won't") stay as they are
+    if (cls !== "3s") return word;
+    const parts = word.split(" ");
+    // "sneeze on" → "sneezes on", "belly flop" → "belly flops", "high-five" → "high-fives"
+    const particle = parts.length > 1 && /^(on|at|to|up|down|out|in|off|about|over)$/i.test(parts[1]);
+    const i = particle ? 0 : parts.length - 1;
+    parts[i] = thirdPerson(parts[i]);
+    return parts.join(" ");
+  }
+  return { subjectClass, markAgreement, inflect };
+})();
+if (typeof module !== "undefined") module.exports = { GRAMMAR };
+// build_voice.py
+"""Record every word of Mad Libs Piano with the Kokoro neural voice and pack it for the page.
+Usage: node vocab.js > vocab.json
+       python3 build_voice.py vocab.json kokoro-v1.0.int8.onnx voices-v1.0.bin voice_bank.json [cache_dir]
+Model files: https://github.com/thewh1teagle/kokoro-onnx/releases (model-files-v1.0)
+Needs: pip install kokoro-onnx soundfile praat-parselmouth
+Each word is stored as 16 kHz IMA ADPCM plus a pitch mark on every glottal pulse, so the
+page can re-pitch it to any key with TD-PSOLA (the same format Song Piano uses).
+"""
+import base64, json, os, sys
+import numpy as np
+import parselmouth
+from parselmouth.praat import call
+VOICE = "af_heart"   # Kokoro's most natural American English voice
+SPEED = 0.88
+SR = 16000
+HOP = 80
+STEPS = [7,8,9,10,11,12,13,14,16,17,19,21,23,25,28,31,34,37,41,45,50,55,60,66,73,80,88,97,107,118,130,143,157,
+IDX = [-1, -1, -1, -1, 2, 4, 6, 8]
+def adpcm(x):
+    """Encode float samples to IMA ADPCM, mirroring the page's decoder exactly."""
+    s = np.clip(np.round(x * 32767), -32768, 32767).astype(int)
+    pred, idx = 0, 0
+    codes = []
+    for v in s:
+        step = STEPS[idx]
+        diff = int(v) - pred
+        code = 0
+        if diff < 0:
+            code = 8
+            diff = -diff
+        vp = step >> 3
+        if diff >= step:
+            code |= 4; diff -= step; vp += step
+        if diff >= step >> 1:
+            code |= 2; diff -= step >> 1; vp += step >> 1
+        if diff >= step >> 2:
+            code |= 1; vp += step >> 2
+        pred += -vp if code & 8 else vp
+        pred = max(-32768, min(32767, pred))
+        idx = max(0, min(88, idx + IDX[code & 7]))
+        codes.append(code)
+    if len(codes) % 2:
+        codes.append(0)
+    b = bytes(codes[i] | (codes[i + 1] << 4) for i in range(0, len(codes), 2))
+    return base64.b64encode(b).decode()
+def marks_for(x):
+    """Glottal pulses (Praat) for voiced stretches, a fixed hop with P=0 elsewhere."""
+    snd = parselmouth.Sound(x.astype(np.float64), SR)
+    pp = call(snd, "To PointProcess (periodic, cc)", 75, 500)
+    n = call(pp, "Get number of points")
+    pulses = [round(call(pp, "Get time from index", i + 1) * SR) for i in range(n)]
+    groups, cur = [], []
+    for p in pulses:
+        if cur and p - cur[-1] > 0.016 * SR:
+            groups.append(cur); cur = []
+        cur.append(p)
+    if cur:
+        groups.append(cur)
+    groups = [g for g in groups if len(g) >= 3]
+    marks = []
+    t = 0
+    for g in groups:
+        while t < g[0] - HOP // 2:
+            marks.append((t, 0)); t += HOP
+        for i, p in enumerate(g):
+            a = g[i] - g[i - 1] if i > 0 else g[1] - g[0]
+            b = g[i + 1] - g[i] if i + 1 < len(g) else a
+            marks.append((p, int(max(24, min(255, round((a + b) / 2))))))
+        t = g[-1] + HOP
+    while t < len(x):
+        marks.append((t, 0)); t += HOP
+    out = bytearray()
+    last = 0
+    for t, P in marks:
+        d = t - last
+        if d < 0:
+            continue
+        while d > 65535:
+            out += bytes([255, 255, 0]); d -= 65535
+        out += bytes([d & 255, d >> 8, P])
+        last = t
+    return base64.b64encode(bytes(out)).decode()
+def clean(a, sr):
+    snd = parselmouth.Sound(a.astype(np.float64), sr).resample(SR)
+    x = snd.values[0].astype(np.float32)
+    env = np.abs(x)
+    thr = env.max() * 0.02
+    on = np.nonzero(env > thr)[0]
+    if len(on):
+        x = x[max(0, on[0] - 160): min(len(x), on[-1] + 320)]
+    # loudness: match RMS of the loud part, cap the peak
+    loud = x[np.abs(x) > np.abs(x).max() * 0.1]
+    rms = np.sqrt(np.mean(loud ** 2)) if len(loud) else 1e-3
+    x = x * min(0.16 / rms, 0.92 / np.abs(x).max())
+    f = min(80, len(x) // 4)
+    x[:f] *= np.linspace(0, 1, f)
+    x[-f:] *= np.linspace(1, 0, f)
+    return x
+def main():
+    vocab_path, model, voices, out_path = sys.argv[1:5]
+    cache = sys.argv[5] if len(sys.argv) > 5 else None
+    from kokoro_onnx import Kokoro
+    import soundfile as sf
+    k = Kokoro(model, voices)
+    vocab = json.load(open(vocab_path))
+    words = {}
+    for i, (key, text) in enumerate(sorted(vocab.items())):
+        wav = os.path.join(cache, key.replace("'", "_").replace(" ", "+") + ".wav") if cache else None
+        if wav and os.path.exists(wav):
+            a, sr = sf.read(wav, dtype="float32")
+        else:
+            a, sr = k.create(text, voice=VOICE, speed=SPEED, lang="en-us")
+            if wav:
+                sf.write(wav, a, sr)
+        x = clean(np.asarray(a), sr)
+        words[key] = [len(x), adpcm(x), marks_for(x)]
+        if i % 25 == 0:
+            print(i, key, len(x) / SR, flush=True)
+    json.dump({"sr": SR, "voice": "Kokoro " + VOICE, "words": words}, open(out_path, "w"), separators=(",", ":
+    print("wrote", out_path, os.path.getsize(out_path))
+if __name__ == "__main__":
+    main()
+// data.js
+// Song and word data for Mad Libs Piano. All song lyrics are in the public domain.
+// Each lyric word is written "word|TAG", where TAG is its part of speech.
+// The green key always sings the real word; every other key sings a silly word with the same TAG.
+// build.js inlines this file into the page and lists every word for build_voice.py to record.
+const POS_NAMES = {
+  N: "noun", NS: "plural noun", NAME: "name", PRON: "person", POSS: "whose",
+  V: "verb", VING: "verb ending in -ing", VED: "past-tense verb", LINK: "linking verb", LINKPAST: "linking ver
+  MODAL: "helping verb", ADJ: "adjective", ADV: "adverb", PREP: "preposition", DET: "determiner",
+  CONJ: "conjunction", WH: "question word", INTJ: "exclamation", NUM: "number", TO: "to + adverb",
+  ITIS: "it is", ITWAS: "it was", IM: "I am", ID: "I would", VS: "verb ending in -s"
+};
+// Silly words, by part of speech. Kept kid-friendly.
+const SILLY = {
+  N: ["pickle", "noodle", "walrus", "burrito", "kazoo", "potato", "llama", "sock", "toaster", "banana", "armpi
+    "pancake", "hamster", "meatball", "unicorn", "sandwich", "penguin", "waffle", "cactus", "trombone", "gobli
+    "nugget", "spatula", "donut", "octopus", "pudding", "broccoli", "poodle", "eyebrow", "marshmallow", "tuba"
+    "chicken", "bathtub", "giraffe", "muffin", "weasel", "platypus", "jellybean", "nostril", "cupcake", "racco
+    "slipper", "moose", "taco", "pretzel", "toenail", "noggin", "burp", "tutu", "lasagna", "porcupine", "womba
+  NS: ["pickles", "noodles", "walruses", "socks", "toasters", "bananas", "pancakes", "hamsters", "meatballs",
+    "unicorns", "penguins", "waffles", "kazoos", "armpits", "goblins", "nuggets", "donuts", "potatoes", "llama
+    "burritos", "chickens", "muffins", "cupcakes", "raccoons", "slippers", "eyebrows", "marshmallows", "jellyb
+    "nostrils", "weasels", "tacos", "pretzels", "gerbils", "toenails", "bubbles", "dinosaurs", "sneakers", "ro
+    "grandmas", "underpants", "meatloaves", "noodle-heads", "pigeons", "wombats"],
+  NAME: ["Gertrude", "Kevin", "Mildred", "Waldo", "Bartholomew", "Doris", "Gus", "Bernadette", "Rumpelstiltski
+    "Nebraska", "Albuquerque", "Timbuktu", "Cleveland", "Toledo", "Kalamazoo", "Mississippi", "Wisconsin",
+    "Humperdinck", "Ethel", "Fernando", "Agnes", "Barnaby", "Winnifred", "Poughkeepsie", "Tallahassee", "Ziggy
+  PRON: ["Grandma", "Grandpa", "Santa", "Bigfoot", "Dracula", "nobody", "everybody", "somebody", "Mom", "Dad",
+    "Kevin", "Gertrude", "the dog", "my uncle", "a pirate", "the mailman", "a wizard", "the baby", "a robot",
+    "the teacher", "a ninja", "Aunt Mildred", "the goldfish", "a cowboy"],
+  POSS: ["Grandma's", "Grandpa's", "Santa's", "Bigfoot's", "Dracula's", "somebody's", "nobody's", "everybody's
+    "Kevin's", "Mildred's", "the dog's", "a pirate's", "the mailman's", "a wizard's", "the baby's", "a robot's
+    "the teacher's", "a ninja's", "my uncle's", "a cowboy's"],
+  V: ["wiggle", "sneeze", "burp", "tickle", "juggle", "waddle", "hiccup", "slurp", "boogie", "yodel", "giggle"
+    "scoot", "gobble", "smooch", "wobble", "sniff", "bounce", "squish", "nibble", "moonwalk", "tiptoe", "honk"
+    "quack", "munch", "flap", "twirl", "squeak", "lick", "poke", "splash", "gargle", "cartwheel", "shimmy", "s
+    "toot", "hug", "pounce", "belly flop"],
+  VING: ["wiggling", "sneezing", "burping", "tickling", "juggling", "waddling", "slurping", "yodeling", "giggl
+    "gobbling", "wobbling", "bouncing", "squishing", "nibbling", "snoring", "honking", "twirling", "splashing"
+    "gargling", "tiptoeing", "moonwalking", "munching", "flapping", "sniffing", "scooting", "hopping", "quacki
+    "smooching", "shimmying", "tooting"],
+  VED: ["wiggled", "sneezed", "burped", "tickled", "juggled", "waddled", "slurped", "yodeled", "giggled", "gob
+    "wobbled", "bounced", "squished", "nibbled", "snored", "honked", "twirled", "splashed", "licked", "poked",
+    "smooched", "tooted", "flopped", "sniffed", "munched", "hiccupped", "gargled", "tiptoed", "moonwalked",
+    "scooted", "plopped", "quacked", "shimmied"],
+  LINK: ["smell", "look", "feel", "seem", "taste", "sound", "stay", "get", "turn", "act", "grow", "go"],
+  LINKPAST: ["smelled", "looked", "felt", "seemed", "tasted", "sounded", "stayed", "got", "turned", "acted",
+    "grew", "went", "became"],
+  MODAL: ["might", "could", "should", "would", "must", "shall", "may", "can", "won't", "can't", "will", "did",
+  ADJ: ["squishy", "stinky", "wobbly", "soggy", "fluffy", "sparkly", "greasy", "crunchy", "bouncy", "slimy",
+    "grumpy", "sticky", "ticklish", "lumpy", "gigantic", "teeny", "purple", "bald", "spicy", "smelly", "jiggly
+    "cranky", "hairy", "moldy", "gooey", "fuzzy", "noisy", "sweaty", "cheesy", "dizzy", "nutty", "wacky", "goo
+    "fancy", "rubbery", "sneaky", "puffy", "crusty", "chunky", "frumpy", "lopsided", "itchy", "bossy", "toasty
+  ADV: ["wildly", "sloppily", "loudly", "sneakily", "grumpily", "backwards", "sideways", "clumsily", "noisily"
+    "dizzily", "secretly", "awkwardly", "bravely", "lazily", "suddenly", "politely", "rudely", "barefoot", "tw
+    "upside down", "extremely", "totally", "barely", "kinda", "sorta", "squishily", "gently", "never", "nearly
+    "almost", "accidentally"],
+  PREP: ["under", "behind", "inside", "beside", "around", "between", "beneath", "upon", "toward", "against",
+    "past", "beyond", "near", "without", "among", "onto", "outside", "underneath", "across", "over", "within"]
+  DET: ["one", "some", "this", "that", "every", "no", "each", "my", "your", "our", "any", "another", "a", "the
+    "a big", "a tiny", "a smelly", "a soggy", "a purple", "an extra", "your mom's", "the whole"],
+  CONJ: ["and", "but", "or", "yet", "so", "plus", "because", "although", "unless", "while", "and then", "but a
+  WH: ["who", "why", "when", "where", "which", "whatever", "whoever", "wherever", "whenever", "how come", "wha
+  INTJ: ["whoa", "yikes", "gosh", "golly", "phooey", "yippee", "whoopsie", "hooray", "hey", "wowza", "oops", "
+    "egad", "yahoo", "boing", "ta-da", "uh-oh", "jeepers", "zoinks", "bleh"],
+  NUM: ["seven", "eleven", "twelve", "a zillion", "twenty", "sixty", "ninety", "thirteen", "eighty", "a millio
+    "four", "a hundred", "a gazillion", "three"],
+  TO: ["not to", "to never", "to sorta", "to secretly", "to kinda", "to sneakily", "to almost", "to loudly"],
+  ITIS: ["it's", "that's", "here's", "there's", "what's", "Grandma's", "who's"],
+  ITWAS: ["there was", "here came", "it smelled", "it seemed", "Grandma said", "it was", "then came", "it tast
+  IM: ["I'm", "you're", "we're", "he's", "she's", "Grandma's", "Santa's", "Bigfoot's", "the dog's", "they're"]
+  VS: ["wiggles", "sneezes", "burps", "tickles", "juggles", "waddles", "hiccups", "slurps", "boogies", "yodels
+    "scoots", "gobbles", "wobbles", "sniffs", "bounces", "squishes", "nibbles", "moonwalks", "tiptoes", "honks
+    "munches", "twirls", "squeaks", "splashes", "gargles", "shimmies", "snores", "toots"],
+  ID: ["I'd", "you'd", "we'd", "he'd", "she'd", "they'd", "Grandma'd", "nobody'd"]
+};
+// Melodies: one MIDI note per word, line by line (same tunes as Song Piano).
+const SONGS = [
+  { id: "twinkle", title: "Twinkle, Twinkle, Little Star", credit: "Words by Jane Taylor, 1806",
+    melody: [[[60, 60], [67, 67], [69, 69], 67], [65, 65, [64, 64], 62, 62, 60], [67, [67, 65], 65, 64, 64, 62
+    lyrics: `Twinkle,|V twinkle,|V little|ADJ star,|N
+How|WH I|PRON wonder|V what|WH you|PRON are!|LINK
+Up|ADV above|PREP the|DET world|N so|ADV high,|ADJ
+Like|PREP a|DET diamond|N in|PREP the|DET sky.|N
+Twinkle,|V twinkle,|V little|ADJ star,|N
+How|WH I|PRON wonder|V what|WH you|PRON are!|LINK` },
+  { id: "row", title: "Row, Row, Row Your Boat", credit: "Traditional, first printed 1852",
+    melody: [[60, 60, 60, 62, 64], [[64, 62], 64, 65, 67], [[72, 72, 72], [67, 67, 67], [64, 64, 64], [60, 60,
+    lyrics: `Row,|V row,|V row|V your|POSS boat,|N
+Gently|ADV down|PREP the|DET stream.|N
+Merrily,|ADV merrily,|ADV merrily,|ADV merrily,|ADV
+Life|N is|LINK but|ADV a|DET dream.|N` },
+  { id: "grace", title: "Amazing Grace", credit: "Words by John Newton, 1779",
+    melody: [[[60, 65, 69], 69, 67, 65, 62, 60], [60, 65, 69, 69, 67, 72], [69, 72, 69, 69, 67, 65, 62, 60], [
+    lyrics: `Amazing|ADJ grace!|N How|WH sweet|ADJ the|DET sound|N
+That|WH saved|VED a|DET wretch|N like|PREP me!|PRON
+I|PRON once|ADV was|LINKPAST lost,|ADJ but|CONJ now|ADV am|LINK found;|ADJ
+Was|LINKPAST blind,|ADJ but|CONJ now|ADV I|PRON see.|V
+'Twas|ITWAS grace|N that|WH taught|VED my|POSS heart|N to|TO fear,|V
+And|CONJ grace|N my|POSS fears|NS relieved;|VED
+How|WH precious|ADJ did|MODAL that|DET grace|N appear|V
+The|DET hour|N I|PRON first|ADV believed!|VED
+Through|PREP many|DET dangers,|NS toils|NS and|CONJ snares,|NS
+I|PRON have|MODAL already|ADV come;|VED
+'Tis|ITIS grace|N hath|MODAL brought|VED me|PRON safe|ADJ thus|ADV far,|ADV
+And|CONJ grace|N will|MODAL lead|V me|PRON home.|N` },
+  { id: "clementine", title: "Oh My Darling, Clementine", credit: "Words by Percy Montrose, 1884",
+    melody: [[60, 60, [60, 55], 64, 64, [64, 60]], [[60, 64, 67, 67], 65, 64, 62], [62, 64, [65, 65], [64, 62,
+    lyrics: `In|PREP a|DET cavern,|N in|PREP a|DET canyon,|N
+Excavating|VING for|PREP a|DET mine,|N
+Dwelt|VED a|DET miner|N forty-niner,|N
+And|CONJ his|POSS daughter|N Clementine.|NAME
+Oh|INTJ my|POSS darling,|N oh|INTJ my|POSS darling,|N
+Oh|INTJ my|POSS darling,|N Clementine!|NAME
+You|PRON are|LINK lost|ADJ and|CONJ gone|ADJ forever,|ADV
+Dreadful|ADJ sorry,|ADJ Clementine.|NAME
+Light|ADJ she|PRON was|LINKPAST and|CONJ like|PREP a|DET fairy,|N
+And|CONJ her|POSS shoes|NS were|LINKPAST number|N nine,|NUM
+Herring|N boxes|NS without|PREP topses,|NS
+Sandals|NS were|LINKPAST for|PREP Clementine.|NAME` },
+  { id: "range", title: "Home on the Range", credit: "Words by Brewster Higley, 1870s",
+    melody: [[55, 55, 60, 62, 64, 60, 59, [57, 65, 65], 65], [64, 65, 67, 64, 64, 64, 62], [55, 55, 62, 64, 60
+    lyrics: `Oh,|INTJ give|V me|PRON a|DET home|N where|WH the|DET buffalo|NS roam,|V
+Where|WH the|DET deer|NS and|CONJ the|DET antelope|NS play,|V
+Where|WH seldom|ADV is|LINK heard|VED a|DET discouraging|ADJ word,|N
+And|CONJ the|DET skies|NS are|LINK not|ADV cloudy|ADJ all|DET day.|N
+Home,|N home|N on|PREP the|DET range,|N
+Where|WH the|DET deer|NS and|CONJ the|DET antelope|NS play;|V
+Where|WH seldom|ADV is|LINK heard|VED a|DET discouraging|ADJ word,|N
+And|CONJ the|DET skies|NS are|LINK not|ADV cloudy|ADJ all|DET day.|N` },
+  { id: "shenandoah", title: "Shenandoah", credit: "Traditional sea shanty, 1800s",
+    melody: [[55, 60, 69, 67, 65, 72, 69], [67, 67, 69, 64], [55, 60, 69, 67, 65, 72, 69], [62, 64, 60, 64], [
+    lyrics: `Oh|INTJ Shenandoah,|NAME I|PRON long|V to|TO see|V you,|PRON
+Away,|ADV you|PRON rolling|ADJ river.|N
+Oh|INTJ Shenandoah,|NAME I|PRON long|V to|TO see|V you,|PRON
+Away,|ADV I'm|IM bound|ADJ away|ADV
+'Cross|PREP the|DET wide|ADJ Missouri.|NAME
+Oh|INTJ Shenandoah,|NAME I|PRON love|V your|POSS daughter,|N
+Away,|ADV you|PRON rolling|ADJ river.|N
+For|PREP her|PRON I'd|ID cross|V your|POSS roaming|ADJ waters,|NS
+Away,|ADV I'm|IM bound|ADJ away|ADV
+'Cross|PREP the|DET wide|ADJ Missouri.|NAME` },
+  { id: "birthday", title: "Happy Birthday to You", credit: "Tune and words from the 1890s. The most-sung song
+    melody: [[[60, 60], [62, 60], 65, 64], [[60, 60], [62, 60], 67, 65], [[60, 60], [72, 69], 65, 64], [[70, 7
+    lyrics: `Happy|ADJ birthday|N to|PREP you!|PRON
+Happy|ADJ birthday|N to|PREP you!|PRON
+Happy|ADJ birthday,|N dear|ADJ Sam,|NAME
+Happy|ADJ birthday|N to|PREP you!|PRON` },
+  { id: "jingle", title: "Jingle Bells", credit: "Words and music by James Lord Pierpont, 1857",
+    melody: [[[69, 69], 69, [69, 69], 69], [[69, 72], 65, 67, 69], [70, 70, 70, 70, 70, 69, 69, 69, 69, [67, 6
+    lyrics: `Jingle|V bells,|NS jingle|V bells,|NS
+Jingle|V all|DET the|DET way!|N
+Oh|INTJ what|WH fun|N it|PRON is|LINK to|TO ride|V in|PREP a|DET one-horse|ADJ open|ADJ sleigh!|N
+Jingle|V bells,|NS jingle|V bells,|NS
+Jingle|V all|DET the|DET way!|N
+Oh|INTJ what|WH fun|N it|PRON is|LINK to|TO ride|V in|PREP a|DET one-horse|ADJ open|ADJ sleigh!|N` },
+  { id: "macdonald", title: "Old MacDonald Had a Farm", credit: "Traditional farm song, printed by 1917",
+    melody: [[65, [65, 65, 60], 62, 62, 60], [69, 69, 67, 67, 65], [60, 65, 65, 65, 60, 62, 62, 60], [69, 69, 
+    lyrics: `Old|ADJ MacDonald|NAME had|VED a|DET farm,|N
+E-|INTJ I-|INTJ E-|INTJ I-|INTJ O!|INTJ
+And|CONJ on|PREP his|POSS farm|N he|PRON had|VED a|DET cow,|N
+E-|INTJ I-|INTJ E-|INTJ I-|INTJ O!|INTJ
+With|PREP a|DET moo|N moo|N here|ADV and|CONJ a|DET moo|N moo|N there,|ADV
+Here|ADV a|DET moo,|N there|ADV a|DET moo,|N everywhere|ADV a|DET moo|N moo!|N
+Old|ADJ MacDonald|NAME had|VED a|DET farm,|N
+E-|INTJ I-|INTJ E-|INTJ I-|INTJ O!|INTJ` },
+  { id: "merry", title: "We Wish You a Merry Christmas", credit: "Traditional English carol",
+    melody: [[62, 67, 67, 69, [67, 66], [64, 64]], [64, 69, 69, 71, [69, 67], [66, 62]], [62, 71, 71, 72, [71,
+    lyrics: `We|PRON wish|V you|PRON a|DET merry|ADJ Christmas,|N
+We|PRON wish|V you|PRON a|DET merry|ADJ Christmas,|N
+We|PRON wish|V you|PRON a|DET merry|ADJ Christmas,|N
+And|CONJ a|DET happy|ADJ New|ADJ Year!|N` },
+  { id: "mary", title: "Mary Had a Little Lamb", credit: "Words by Sarah Josepha Hale, 1830",
+    melody: [[[64, 62], 60, 62, [64, 64], 64], [[62, 62], 62, [64, 67], 67], [[64, 62], 60, 62, [64, 64], 64],
+    lyrics: `Mary|NAME had|VED a|DET little|ADJ lamb,|N
+Little|ADJ lamb,|N little|ADJ lamb,|N
+Mary|NAME had|VED a|DET little|ADJ lamb,|N
+Its|POSS fleece|N was|LINKPAST white|ADJ as|PREP snow.|N
+Everywhere|ADV that|WH Mary|NAME went,|VED
+Mary|NAME went,|VED Mary|NAME went,|VED
+Everywhere|ADV that|WH Mary|NAME went,|VED
+The|DET lamb|N was|LINKPAST sure|ADJ to|TO go.|V` },
+  { id: "spider", title: "The Itsy Bitsy Spider", credit: "Traditional, printed by 1910",
+    melody: [[55, [60, 60, 60, 62], [64, 64], 64, 62, 60, [62, 64], 60], [64, 64, 65, 67, 67, 65, 64, [65, 67]
+      [60, 60, 62, 64, 64, 62, 60, 62, 64, 60], [55, 55, [60, 60, 60, 62], [64, 64], 64, 62, 60, 62, [64, 60]]
+    lyrics: `The|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET water|N spout.|N
+Down|ADV came|VED the|DET rain|N and|CONJ washed|VED the|DET spider|N out.|ADV
+Out|ADV came|VED the|DET sun|N and|CONJ dried|VED up|ADV all|DET the|DET rain,|N
+And|CONJ the|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET spout|N again.|ADV` },
+  { id: "london", title: "London Bridge Is Falling Down", credit: "Traditional English rhyme, 1700s",
+    melody: [[[67, 69], 67, 65, [64, 65], 67], [[62, 64], 65, [64, 65], 67], [[67, 69], 67, 65, [64, 65], 67],
+      [67, 69, 67, 65, 64, 65, 67], [62, 64, 65, 64, 65, 67], [67, 69, 67, 65, 64, 65, 67], [62, 67, [64, 60]]
+    lyrics: `London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
+Falling|VING down,|ADV falling|VING down,|ADV
+London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
+My|POSS fair|ADJ lady!|N
+Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
+Sticks|NS and|CONJ stones,|NS sticks|NS and|CONJ stones,|NS
+Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
+My|POSS fair|ADJ lady!|N` },
+  { id: "yankee", title: "Yankee Doodle", credit: "American folk song, 1700s",
+    melody: [[[60, 60], [62, 64], 60, 64, 62], [[55, 60, 60], 62, 64, [60, 59]], [60, 60, [62, 64], 65, 64, 62
+    lyrics: `Yankee|NAME Doodle|NAME went|VED to|PREP town,|N
+A-riding|VING on|PREP a|DET pony,|N
+Stuck|VED a|DET feather|N in|PREP his|POSS cap,|N
+And|CONJ called|VED it|PRON macaroni!|N` },
+  { id: "sleeping", title: "Are You Sleeping (Frère Jacques)", credit: "Traditional French round, 1700s",
+    melody: [[60, 62, [64, 60], 60, 62, [64, 60]], [[64, 65], 67, [64, 65], 67], [[67, 69], 67, 65, [64, 60], 
+    lyrics: `Are|LINK you|PRON sleeping,|VING are|LINK you|PRON sleeping,|VING
+Brother|N John?|NAME Brother|N John?|NAME
+Morning|N bells|NS are|LINK ringing,|VING morning|N bells|NS are|LINK ringing,|VING
+Ding,|INTJ dang,|INTJ dong!|INTJ Ding,|INTJ dang,|INTJ dong!|INTJ` },
+  { id: "farmer", title: "The Farmer in the Dell", credit: "Traditional singing game, 1800s",
+    melody: [[55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 6
+      [55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 64], 62,
+    lyrics: `The|DET farmer|N in|PREP the|DET dell,|N
+The|DET farmer|N in|PREP the|DET dell,|N
+Hi-ho,|INTJ the|DET derry-o,|INTJ
+The|DET farmer|N in|PREP the|DET dell!|N
+The|DET farmer|N takes|VS a|DET wife,|N
+The|DET farmer|N takes|VS a|DET wife,|N
+Hi-ho,|INTJ the|DET derry-o,|INTJ
+The|DET farmer|N takes|VS a|DET wife!|N` },
+  { id: "scarborough", title: "Scarborough Fair", credit: "Traditional English ballad",
+    melody: [[60, 60, [67, 67], 67, [62, 63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72, 72], 70
+      [60, 60, 67, 67, 67, 62, [63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72], 72, 70, 67, [67
+    lyrics: `Are|LINK you|PRON going|VING to|PREP Scarborough|NAME Fair?|NAME
+Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
+Remember|V me|PRON to|PREP one|PRON who|WH lives|VS there,|ADV
+She|PRON once|ADV was|LINKPAST a|DET true|ADJ love|N of|PREP mine.|PRON
+Tell|V her|PRON to|TO make|V me|PRON a|DET cambric|ADJ shirt,|N
+Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
+Without|PREP no|DET seams|NS nor|CONJ needlework,|N
+Then|ADV she'll|IM be|LINK a|DET true|ADJ love|N of|PREP mine.|PRON` },
+  { id: "saints", title: "When the Saints Go Marching In", credit: "Traditional American spiritual and jazz st
+    melody: [[60, 64, 65, 67, 60, [64, 65], 67], [60, 64, 65, 67, 64, [60, 64], 62], [64, 64, 62, 60, 60, 64, 
+    lyrics: `Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
+Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
+Oh|INTJ Lord,|NAME I|PRON want|V to|TO be|V in|PREP that|DET number,|N
+When|WH the|DET saints|NS go|V marching|VING in!|ADV` },
+  { id: "daisy", title: "Daisy Bell (Bicycle Built for Two)", credit: "Words and music by Harry Dacre, 1892",
+    melody: [[[72, 69], [65, 60], 62, 64, 65, [62, 65], 60], [67, 72, [69, 65], 62, 64, 65, 67, 69, 67], [69, 
+      [60, 65, 69, 67, [60, 65], 69, 67], [69, 70, [72, 69, 65], 67, 60, 65]],
+    lyrics: `Daisy,|NAME Daisy,|NAME give|V me|PRON your|POSS answer,|N do!|V
+I'm|IM half|ADV crazy|ADJ all|ADV for|PREP the|DET love|N of|PREP you.|PRON
+It|PRON won't|MODAL be|V a|DET stylish|ADJ marriage,|N
+I|PRON can't|MODAL afford|V a|DET carriage,|N
+But|CONJ you'll|ID look|V sweet|ADJ upon|PREP the|DET seat|N
+Of|PREP a|DET bicycle|N built|VED for|PREP two!|NUM` },
+  { id: "joy", title: "Ode to Joy (Joyful, Joyful)", credit: "Tune by Beethoven, 1824. Words by Henry van Dyke
+    melody: [[[64, 64], [65, 67], 67, [65, 64], 62], [60, 60, [62, 64], 64, 62, 62], [64, [64, 65], 67, 67, [6
+    lyrics: `Joyful,|ADJ joyful,|ADJ we|PRON adore|V thee,|PRON
+God|NAME of|PREP glory,|N Lord|NAME of|PREP love;|N
+Hearts|NS unfold|V like|PREP flowers|NS before|PREP thee,|PRON
+Opening|VING to|PREP the|DET sun|N above.|ADV` },
+  { id: "auld", title: "Auld Lang Syne", credit: "Words by Robert Burns, 1788. Traditional Scottish tune",
+    melody: [[55, 60, [60, 60, 64], 62, [60, 62]], [64, [60, 60], 64, 67, 69], [69, 67, [64, 64, 60], 62, [60,
+    lyrics: `Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
+And|CONJ never|ADV brought|VED to|PREP mind?|N
+Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
+And|CONJ auld|ADJ lang|ADJ syne?|N` }
+// art.js
+// Song art for Mad Libs Piano: an illustrated scene behind "Your song" for each song,
+// shown when the Art toggle is on. Each scene is flat SVG drawn in its own fixed colours
+// (it is a picture, so it looks the same in light and dark mode), with the lyric colours
+// chosen to read on top of it. Scenes keep their busy parts to the right and bottom so the
+// words on the left stay clear.
+const ART = (() => {
+  // a small seeded random, so every visit draws the same stars and confetti
+  function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+  const W = 800, H = 320;
+  const wrap = (bg, body) => `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMaxYMax slice" aria-hidden="t
+  const sky = (id, a, b) => `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" sto
+  const star = (x, y, r, c) => `<path d="M${x} ${y - r}L${x + r * .28} ${y - r * .28}L${x + r} ${y}L${x + r * 
+  const dots = (seed, n, x0, x1, y0, y1, f) => { const r = rnd(seed); let s = ""; for (let i = 0; i < n; i++) 
+  const hill = (y, amp, c, phase = 0) => { let d = `M0 ${H}L0 ${y}`; for (let x = 0; x <= W; x += 40) d += `L$
+  const cloud = (x, y, s, c) => `<g fill="${c}"><ellipse cx="${x}" cy="${y}" rx="${36 * s}" ry="${16 * s}"/><e
+  const pine = (x, y, h, c) => `<path d="M${x} ${y - h}L${x + h * .32} ${y - h * .45}L${x + h * .16} ${y - h *
+  const flake = (x, y, r, o) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(1 + r * 2.6).toFixed(
+  const light = { ink: "#1b1a2e", sub: "#3d3a52", silly: "#b0306a", glow: "rgba(255,255,255,.75)" };
+  const dark = { ink: "#fbf7ee", sub: "#d9d3e6", silly: "#ff9cc6", glow: "rgba(0,0,0,.55)" };
+  const scenes = {
+    twinkle: { ...dark, svg: () => wrap(sky("tw", "#0c1534", "#27407a"),
+      dots(7, 70, 0, W, 0, H * .8, (x, y, r) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(r * 1
+      star(560, 90, 26, "#ffe27a") + star(690, 160, 14, "#fff2b8") + star(470, 200, 10, "#fff2b8") + star(740,
+      `<circle cx="700" cy="130" r="34" fill="#fff4cf"/><circle cx="718" cy="120" r="32" fill="#1c2c5c"/>` +
+      `<path d="M600 230l24-22 24 22-24 34z" fill="#9fe7ff" opacity=".9"/><path d="M600 230h48M612 230l12 34 1
+      hill(290, 10, "#0b1129")) },
+    row: { ...light, svg: () => wrap(sky("rw", "#bfe6ff", "#e9f7ff"),
+      `<circle cx="720" cy="125" r="34" fill="#ffd45c"/>` + cloud(520, 70, 1, "#fff") + cloud(300, 40, .7, "#f
+      hill(200, 18, "#8fd18c") + hill(225, 12, "#6cbf73", 2) +
+      `<path d="M0 250 C200 230 420 270 800 245 L800 320 L0 320Z" fill="#4aa3df"/><path d="M0 270 C220 255 430
+      `<g transform="translate(560 238)"><path d="M-60 0h120l-18 22h-84z" fill="#a0522d"/><path d="M-40 -6l-26
+    grace: { ...light, svg: () => wrap(sky("gr", "#ffd9a8", "#fff3e0"),
+      `<g opacity=".55">${Array.from({ length: 14 }, (_, i) => { const a = Math.PI * (i / 13); return `<path d
+      `<circle cx="640" cy="300" r="70" fill="#ffb347"/>` + hill(270, 14, "#e8a27a") + hill(292, 10, "#c97b63"
+      `<path d="M560 180q14-14 28 0q14-14 28 0" stroke="#6b3e2e" stroke-width="4" fill="none"/><path d="M650 1
+    clementine: { ...light, svg: () => wrap(sky("cl", "#ffb46b", "#ffe2b0"),
+      `<circle cx="560" cy="115" r="40" fill="#fff0b3"/>` +
+      `<path d="M380 320V180h70l20-40h90l20 40h40v140z" fill="#c8553d"/><path d="M620 320V150h60l15-30h70l20 3
+      `<path d="M500 320v-60a35 35 0 0170 0v60z" fill="#3a1d14"/><path d="M490 262h90" stroke="#6b3a24" stroke
+      `<path d="M330 320v-80M330 270h-18v-26M330 280h18v-24" stroke="#3f8f4f" stroke-width="12" stroke-linecap
+      `<g transform="translate(720 300)"><path d="M-20 0l6-18h28l6 18z" fill="#c7a17a"/><path d="M-12-18c0-10 
+    range: { ...light, svg: () => wrap(sky("rg", "#8fd0ff", "#e6f5ff"),
+      cloud(460, 60, 1.1, "#fff") + cloud(700, 110, .8, "#fff") + `<circle cx="620" cy="125" r="26" fill="#ffd
+      hill(220, 6, "#b9a36b", .5) + hill(240, 8, "#d8bf63", 1) +
+      `<g fill="#5a3b22"><ellipse cx="560" cy="250" rx="46" ry="26"/><circle cx="604" cy="246" r="18"/><rect x
+      `<g fill="#b97a3c"><ellipse cx="700" cy="262" rx="24" ry="11"/><circle cx="724" cy="250" r="7"/><path d=
+      `<path d="M380 320 L410 236 M392 280 l28-10" stroke="#8a6a3a" stroke-width="3"/>`) },
+    shenandoah: { ...dark, svg: () => wrap(sky("sh", "#3c3f7a", "#e58b6b"),
+      `<circle cx="640" cy="210" r="46" fill="#ffd08a"/>` + hill(190, 26, "#4b4f8c") + hill(220, 22, "#373b6e"
+      `<path d="M300 320 C420 300 520 280 640 262 C700 254 760 252 800 252 L800 274 C700 280 580 296 480 320Z"
+      `<g transform="translate(560 288)"><path d="M-34 0h68l-10 12h-48z" fill="#1a1c3a"/><path d="M0 0v-46l26 
+    birthday: { ...light, svg: () => wrap(sky("bd", "#ffe3f1", "#fff7e0"),
+      dots(11, 45, 430, W, 60, H, (x, y, r, i) => `<rect x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="7" hei
+      [["#ff6b9a", 470, 90], ["#4fc3f7", 540, 60], ["#ffc93c", 610, 100], ["#7bd389", 700, 70]].map(([c, x, y]
+      `<g transform="translate(600 300)"><rect x="-90" y="-60" width="180" height="60" rx="8" fill="#ffb6c9"/>
+    jingle: { ...dark, svg: () => wrap(sky("jb", "#0e2a4a", "#3d6e9c"),
+      dots(5, 80, 0, W, 0, H, (x, y, r, i) => flake(x, y, r, (i * 37 % 10) / 10)) + hill(250, 16, "#eef4fb") +
+      pine(470, 250, 90, "#1f5a3e") + pine(740, 260, 120, "#1a4d35") +
+      `<g transform="translate(600 238)"><path d="M-70 0h110q20 0 24-24" stroke="#c0392b" stroke-width="8" fil
+      `<g transform="translate(470 200)">${[0, 1, 2].map(i => `<circle cx="${i * 16}" cy="${(i % 2) * 6}" r="8
+    macdonald: { ...light, svg: () => wrap(sky("md", "#a8dcff", "#e9f7ff"),
+      `<circle cx="740" cy="120" r="30" fill="#ffd45c"/>` + cloud(400, 60, .9, "#fff") + hill(240, 8, "#8bcf6e
+      `<g transform="translate(560 250)"><path d="M-70 0V-80l70-50 70 50V0z" fill="#c8372d"/><path d="M-70-80l
+      `<g transform="translate(700 270)"><ellipse cx="0" cy="0" rx="40" ry="22" fill="#fff"/><circle cx="-12" 
+      `<path d="M360 290h440M360 270h440" stroke="#d9b07a" stroke-width="6"/>${[380, 440, 500, 640, 760].map(x
+    merry: { ...dark, svg: () => wrap(sky("mx", "#1d1530", "#3b2a55"),
+      dots(9, 60, 0, W, 0, H, (x, y, r, i) => flake(x, y, r, (i * 53 % 10) / 10)) + hill(285, 8, "#f1eef8") +
+      `<g transform="translate(600 290)">${[[0, -220, 70], [0, -160, 95], [0, -95, 120]].map(([x, y, w]) => `<
+      `<g transform="translate(720 290)"><rect x="-26" y="-30" width="52" height="30" fill="#e74c3c"/><rect x=
+    mary: { ...light, svg: () => wrap(sky("my", "#c9ecff", "#f3fbff"),
+      cloud(380, 70, .8, "#fff") + `<circle cx="745" cy="115" r="26" fill="#ffe066"/>` + hill(235, 10, "#a8e08
+      `<g transform="translate(640 210)"><rect x="-56" y="-50" width="112" height="70" fill="#e85d4a"/><path d
+      `<g transform="translate(520 280)"><g fill="#fff">${[[-20, 0], [0, -8], [20, 0], [-10, 8], [10, 8], [0, 
+      dots(4, 16, 360, 800, 280, 315, (x, y, r, i) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="4"
+    spider: { ...light, svg: () => wrap(sky("sp", "#cfe6f5", "#f3f9ee"),
+      `<circle cx="700" cy="120" r="34" fill="#ffd45c"/>` + cloud(560, 70, 1, "#fff") + cloud(470, 105, .7, "#
+      dots(21, 26, 430, 620, 110, 230, (x, y) => `<path d="M${x.toFixed(0)} ${y.toFixed(0)}l-3 9" stroke="#7fb
+      hill(275, 8, "#9fd08a") + `<rect x="640" y="150" width="26" height="150" fill="#9aa7b4"/><rect x="630" y
+      `<path d="M653 158v52" stroke="#555" stroke-width="1.5"/><g transform="translate(653 222)"><ellipse rx="
+    london: { ...light, svg: () => wrap(sky("ld", "#c9d6e3", "#eef2f6"),
+      cloud(480, 70, 1, "#fff") + `<path d="M0 262h800v58H0z" fill="#6f8fa8"/><path d="M0 272c120-8 240 8 360 
+      `<g fill="#6b6f7a"><rect x="470" y="120" width="44" height="150"/><rect x="660" y="120" width="44" heigh
+      `<g fill="#9ea6b4">${[0, 1, 2, 3].map(i => `<rect x="${478 + i * 0}" y="${140 + i * 30}" width="28" heig
+      `<path d="M514 244q73-70 146 0" stroke="#4d5260" stroke-width="5" fill="none"/>`) },
+    yankee: { ...light, svg: () => wrap(sky("yk", "#dff0ff", "#fffaf0"),
+      `<g>${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<path d="M${400 + i * 52} 20l26 38 26-38z" fill="${["#c0392b", 
+      hill(265, 10, "#a5d78f") +
+      `<g transform="translate(620 250)"><ellipse rx="56" ry="26" fill="#a0673a"/><path d="M42-10l30-34 14 6-2
+      `<g transform="translate(560 150) rotate(-20)"><path d="M0 0q40-30 90-6-50 18-90 6z" fill="#fff" stroke=
+    sleeping: { ...dark, svg: () => wrap(sky("sl", "#141a3c", "#3a2e5c"),
+      dots(31, 50, 0, W, 0, H * .7, (x, y, r) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(r * 
+      `<circle cx="720" cy="80" r="30" fill="#fff4cf"/><circle cx="734" cy="72" r="28" fill="#1d2248"/>` +
+      `<g fill="#2a2450"><rect x="520" y="110" width="80" height="210"/><path d="M510 110l50-60 50 60z"/></g><
+      `<g font-family="Figtree, sans-serif" font-weight="700" fill="#d9d3e6" opacity=".85"><text x="640" y="20
+      hill(300, 6, "#120f26")) },
+    farmer: { ...light, svg: () => wrap(sky("fm", "#bfe3ff", "#fff8e6"),
+      `<circle cx="720" cy="120" r="28" fill="#ffd45c"/>` + cloud(480, 70, .9, "#fff") + hill(225, 20, "#9ccf7
+      `<g transform="translate(560 270)"><circle cy="-62" r="14" fill="#ffcf9e"/><path d="M-26-74h52l-8-10h-36
+      `<g transform="translate(700 280)"><path d="M0 0l40-24 40 24-40 18z" fill="#ffd54a"/><path d="M0 0v16l40
+    scarborough: { ...dark, svg: () => wrap(sky("sc", "#2f4f5f", "#9cb8b8"),
+      `<circle cx="660" cy="130" r="40" fill="#f3efe0" opacity=".85"/>` + hill(210, 16, "#3e6262", .8) +
+      `<path d="M380 320V230q60-30 120-20t110-10 190 0V320z" fill="#5d7f6b"/><path d="M0 270h800v50H0z" fill="
+      `<g transform="translate(470 285)" stroke="#2e5d3a" stroke-width="3" fill="#6ba36f">${[0, 1, 2, 3, 4].ma
+      `<g transform="translate(700 260)"><path d="M0 0v-90l18 10v80z" fill="#c9c2b0"/><path d="M-4-90l11-14 11
+    saints: { ...dark, svg: () => wrap(sky("st", "#2a1a4a", "#6a3d8a"),
+      dots(41, 40, 380, W, 20, 200, (x, y, r, i) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(2
+      `<g transform="translate(560 200) rotate(-12)"><path d="M0 0h120l40-26v66l-40-26H0z" fill="#ffcf3f"/><re
+      `<g fill="#ffd166" font-family="Georgia, serif" font-size="40"><text x="470" y="120">♪</text><text x="72
+      hill(300, 6, "#1d1233")) },
+    daisy: { ...light, svg: () => wrap(sky("dy", "#d7efff", "#fbfff0"),
+      `<circle cx="720" cy="110" r="28" fill="#ffd45c"/>` + cloud(480, 70, .9, "#fff") + hill(250, 10, "#a8dc8
+      dots(17, 24, 380, W, 262, 315, (x, y) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})">${[0
+      `<g transform="translate(560 220)" fill="none" stroke="#2d5aa0" stroke-width="5"><circle cx="0" cy="40" 
+    joy: { ...light, svg: () => wrap(sky("jy", "#ffe9b0", "#fff7e8"),
+      `<g opacity=".5">${Array.from({ length: 12 }, (_, i) => { const a = Math.PI * (i / 11); return `<path d=
+      `<circle cx="640" cy="320" r="64" fill="#ffb347"/>` + hill(285, 8, "#c6e3a0") +
+      dots(9, 18, 400, W, 250, 310, (x, y, r, i) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})"
+    auld: { ...dark, svg: () => wrap(sky("al", "#0d1430", "#2b2350"),
+      [[520, 90, "#ffd166"], [660, 70, "#ff9cc6"], [740, 150, "#7bd389"], [590, 170, "#9fd4ff"]].map(([x, y, c
+      `<g transform="translate(450 250)"><circle r="44" fill="#f3efe0"/><circle r="44" fill="none" stroke="#c9
+  };
+  // Key art: colours for the white and black keys, and a small picture (a 24x24 SVG shape)
+  // that sits at the top of each white key and repeats faintly as a pattern.
+  const K = (white, whiteDown, black, blackDown, line, ink, inkDark, silly, sillyDark, note, motifColor, motif
+    ({ white, whiteDown, black, blackDown, line, ink, inkDark, silly, sillyDark, note, motifColor, motifDark, 
+  const STAR = "<path d='M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.6z'/>";
+  const keys = {
+    twinkle: K("#eef1fb", "#d9def3", "#101a3d", "#26346a", "#c5cbe6", "#141a33", "#e8ecff", "#9b2a6b", "#ffb8d
+    row: K("#eef8ff", "#d6ecfb", "#1f4f7a", "#2f6a9c", "#bcd8ec", "#10283d", "#e6f4ff", "#a8326b", "#ffc2de", 
+      "<path d='M2 13c3-4 5-4 8 0s5 4 8 0 4-3 4-3v6c-3 3-5 3-8 0s-5-3-8 0-4 3-4 3z'/>"),
+    grace: K("#fff6e8", "#f4e3c6", "#5a2e22", "#7a4434", "#ead6b3", "#2e1a12", "#ffeedd", "#a82d5c", "#ffc0d6"
+      "<circle cx='12' cy='12' r='5'/><path d='M11 1h2v4h-2zM11 19h2v4h-2zM1 11h4v2H1zM19 11h4v2h-4zM4.2 5.6l1
+    clementine: K("#fff1e2", "#f5dcc0", "#5e2a1c", "#7c3c2a", "#ecceae", "#331a10", "#ffe9d6", "#9e2c55", "#ff
+      "<path d='M3 17l3-8 6-4 7 4 2 8-8 4z'/>"),
+    range: K("#fbf5e4", "#efe4c4", "#4a3420", "#654a30", "#e3d6b0", "#2b1e10", "#fff1d9", "#a3305e", "#ffc1d8"
+      "<path d='M5 3h3.5v9a3.5 3.5 0 007 0V3H19v9a7 7 0 01-14 0z'/>"),
+    shenandoah: K("#f1effa", "#dedaf0", "#262a54", "#3a3f78", "#cfcae4", "#1c1d3a", "#f0eeff", "#a8306a", "#ff
+      "<path d='M11 2v14H4zM13 5l6 11h-6zM2 18h20l-3 4H5z'/>"),
+    birthday: K("#fff4f8", "#fbdde8", "#5b2a5e", "#76407a", "#f2cddb", "#2e1630", "#fff0fb", "#a3215c", "#ffd2
+      "<ellipse cx='12' cy='9' rx='6' ry='7.5'/><path d='M10.5 16.2h3l-1.5 2zM11.4 18h1.2v5h-1.2z'/>"),
+    jingle: K("#f2f7fc", "#dce8f5", "#0e2a4a", "#1d4570", "#c9d9ea", "#0f2236", "#eef6ff", "#b02a3a", "#ff9aa6
+      "<path d='M12 2a1.5 1.5 0 011.5 1.5v.7A6 6 0 0118 10v5l2 3H4l2-3v-5a6 6 0 014.5-5.8v-.7A1.5 1.5 0 0112 2
+    macdonald: K("#fbf8ee", "#efe8d2", "#6b1f1a", "#8c2c25", "#e3dbc0", "#2a1d12", "#fff1ea", "#a3285a", "#ffc
+      "<path fill-rule='evenodd' d='M2 10L12 3l10 7v11H2zM9 21v-7h6v7z'/>"),
+    merry: K("#f4f9f4", "#dcecdc", "#2a1d40", "#3e2d5c", "#cfe0cf", "#14261a", "#f2ecff", "#b02a3a", "#ffd166"
+      "<path d='M12 1l5 7h-3l4 6h-3l4 6H5l4-6H6l4-6H7zM11 20h2v3h-2z'/>"),
+    mary: K("#f7fbf2", "#e3f0d6", "#4a3a36", "#655047", "#d6e6c6", "#1e2a14", "#fff6ee", "#a62c62", "#ffc4dc",
+      "<circle cx='8' cy='12' r='4'/><circle cx='12' cy='9.5' r='4'/><circle cx='15.5' cy='12' r='4'/><circle 
+    spider: K("#f3f7f2", "#dfe9db", "#2f3b45", "#46566a", "#cfdccb", "#1a2620", "#eef6ff", "#a62c62", "#ffc2de
+      "<ellipse cx='12' cy='13' rx='4' ry='3.4'/><circle cx='12' cy='8.5' r='2.4'/><path d='M8.5 11L3 7.5M8.5 
+    london: K("#f1f3f6", "#dde2e9", "#3a3f4b", "#525868", "#cdd3dc", "#1d212a", "#eef0f5", "#a62c62", "#ffc2de
+      "<path d='M2 20h20v2H2zM4 6h3v14H4zM17 6h3v14h-3zM3.5 6L5.5 2l2 4zM16.5 6l2-4 2 4zM7 9h10v1.6H7zM7 18q5-
+    yankee: K("#fbf7ef", "#efe6d2", "#1f3d72", "#2d5aa0", "#e6dcc6", "#1d1f2b", "#eef3ff", "#b02a3a", "#ffc2cc
+      "<path d='M3 20C8 9 15 4 21 3c-2 6-7 13-18 17z'/><path d='M3 20L19 5' stroke='#fff' stroke-width='1' fil
+    sleeping: K("#eef0f8", "#d9ddee", "#1d2248", "#2e3570", "#cdd2e6", "#151834", "#f0eeff", "#9b2a6b", "#ffb8
+      "<path d='M15 3a9 9 0 100 18 7.5 7.5 0 010-18z'/>"),
+    farmer: K("#fbfaee", "#efecd2", "#5a6b2a", "#728836", "#e3e0c0", "#262a12", "#f6ffe6", "#a3285a", "#ffc3d7
+      "<path d='M11 22V8h2v14zM12 2c2 2 2 5 0 7-2-2-2-5 0-7zM12 9c3 0 5 2 5 4-3 0-5-2-5-4zM12 9c-3 0-5 2-5 4 3
+    scarborough: K("#f1f6f4", "#dbe8e3", "#2b4a58", "#3d6475", "#cadfd8", "#16262c", "#e9f6f6", "#a62c62", "#f
+      "<path d='M12 22V10M12 14c-4 0-6-3-6-6 4 0 6 3 6 6zM12 11c4 0 6-3 6-6-4 0-6 3-6 6zM12 18c4 0 6-3 6-5-4 0
+    saints: K("#f6f0fb", "#e6dbf2", "#3a1f5e", "#53308a", "#dcc

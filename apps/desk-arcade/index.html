@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desk Arcade</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#181b24; --line:#2a2f3d; --text:#e8eaf0; --muted:#9097a8; --accent:#f5b83d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:0 16px 24px}
+  header{display:flex;align-items:baseline;gap:12px;padding:14px 0 10px}
+  h1{margin:0;font-size:22px;letter-spacing:.5px}
+  h1 span{color:var(--accent)}
+  header p{margin:0;color:var(--muted)}
+  main{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+  @media (max-width:900px){main{grid-template-columns:1fr}}
+  .stage{position:relative;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  canvas#view{display:block;width:100%;height:auto;image-rendering:auto}
+  canvas#view.picking{cursor:crosshair}
+  .msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:rgba(0,0,0,.7);font-size:16px}
+  .hint{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--accent);color:#111;font-weight:600;padding:6px 12px;border-radius:999px;pointer-events:none}
+  .help{color:var(--muted);margin-top:10px}
+  kbd{background:#262a36;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:12px;color:var(--text)}
+  aside{display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .card h2{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+  select,button{font:inherit;color:var(--text);background:#232734;border:1px solid var(--line);border-radius:7px;padding:6px 9px}
+  button{cursor:pointer}
+  button:hover{border-color:#4a5166}
+  button.on,button.primary{background:var(--accent);color:#111;border-color:var(--accent);font-weight:600}
+  select{width:100%}
+  label.chk{display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .row>*{flex:1 1 auto}
+  .seg{display:flex;gap:0}
+  .seg button{flex:1;border-radius:0}
+  .seg button:first-child{border-radius:7px 0 0 7px}
+  .seg button:last-child{border-radius:0 7px 7px 0}
+  #stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:10px;font-variant-numeric:tabular-nums}
+  #stats b{float:right}
+  .rule{display:grid;grid-template-columns:28px 1fr 26px;gap:6px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+  .rule:first-child{border-top:0}
+  .sw{width:28px;height:28px;border-radius:6px;border:2px solid #fff3}
+  .rule input[type=range]{grid-column:2/3;width:100%}
+  .rule .tl{grid-column:1/2;font-size:11px;color:var(--muted);text-align:center}
+  .rule .x{padding:2px 0;background:none;border:0;color:var(--muted);font-size:18px}
+  .tag{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;font-size:12px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Desk <span>Arcade</span></h1>
+  <p>Everything on your desk becomes part of the level.</p>
+</header>
+
+<main>
+  <section>
+    <div class="stage">
+      <canvas id="view" width="960" height="720"></canvas>
+      <div id="hint" class="hint" hidden></div>
+      <div id="msg" class="msg">Starting camera… allow camera access when your browser asks.</div>
+    </div>
+    <div class="help" id="help"></div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>Camera</h2>
+      <select id="camSel"></select>
+      <label class="chk"><input type="checkbox" id="mirror"> Mirror left/right</label>
+      <label class="chk"><input type="checkbox" id="rot"> Rotate 180°</label>
+      <label class="chk"><input type="checkbox" id="tint" checked> Show color meanings</label>
+      <label class="chk"><input type="checkbox" id="freeze"> Freeze level (stop re-scanning)</label>
+    </div>
+
+    <div class="card">
+      <h2>Game</h2>
+      <div class="seg">
+        <button data-mode="runner" class="on">Runner</button>
+        <button data-mode="marbles">Marble Run</button>
+      </div>
+      <div class="row">
+        <button id="spawnBtn">Set start point</button>
+        <button id="resetBtn">Reset score</button>
+      </div>
+      <div id="stats"></div>
+    </div>
+
+    <div class="card">
+      <h2>Color meanings</h2>
+      <div class="row" style="margin-top:0">
+        <select id="addMeaning" style="flex:1 1 120px"></select>
+        <button id="addBtn" class="primary" style="flex:1 1 120px">+ Pick color</button>
+      </div>
+      <div id="rules" style="margin-top:8px"></div>
+      <div class="row">
+        <button id="presetBtn">Marker preset</button>
+        <button id="clearBtn">Clear all</button>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+/* ---------------- Meanings ---------------- */
+const MEANINGS = {
+  solid:  {code:1, label:'Solid ground', tint:[59,130,246]},
+  bouncy: {code:2, label:'Bounce pad',   tint:[168,85,247]},
+  hazard: {code:3, label:'Lava (hazard)',tint:[239,68,68]},
+  coin:   {code:4, label:'Coin',         tint:[250,204,21]},
+  goal:   {code:5, label:'Goal',         tint:[34,197,94]},
+};
+const CODE_TINT = [null];
+for (const k in MEANINGS) CODE_TINT[MEANINGS[k].code] = MEANINGS[k].tint;
+
+const PRESET = [
+  {rgb:[35,35,40],   meaning:'solid',  tol:0.24},
+  {rgb:[200,45,50],  meaning:'hazard', tol:0.26},
+  {rgb:[40,150,80],  meaning:'goal',   tol:0.26},
+  {rgb:[235,200,40], meaning:'coin',   tol:0.24},
+  {rgb:[45,90,200],  meaning:'bouncy', tol:0.26},
+];
+
+/* ---------------- DOM ---------------- */
+const $ = id => document.getElementById(id);
+const view = $('view'), vctx = view.getContext('2d');
+const msg = $('msg'), hint = $('hint');
+const video = document.createElement('video');
+video.playsInline = true; video.muted = true;
+
+let DW = 960, DH = 720;
+const GW = 160; let GH = 120; let S = DW / GW;
+const fc = document.createElement('canvas'), fctx = fc.getContext('2d', {willReadFrequently:true});
+const sc = document.createElement('canvas'), sctx = sc.getContext('2d', {willReadFrequently:true});
+const tc = document.createElement('canvas'), tctx = tc.getContext('2d');
+let grid, tmp, collected, tintImg;
+
+function resize(vw, vh) {
+  DW = 960; DH = Math.round(DW * vh / vw);
+  GH = Math.round(GW * vh / vw); S = DW / GW;
+  view.width = fc.width = DW; view.height = fc.height = DH;
+  sc.width = tc.width = GW; sc.height = tc.height = GH;
+  grid = new Uint8Array(GW * GH); tmp = new Uint8Array(GW * GH); collected = new Uint8Array(GW * GH);
+  tintImg = tctx.createImageData(GW, GH);
+  respawnPlayer(); marbles = [];
+}
+
+/* ---------------- Settings / rules ---------------- */
+let rules = [];
+let opts = {mirror:false, rot:false, tint:true, freeze:false};
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem('deskArcade') || 'null');
+    if (s) { rules = s.rules || []; Object.assign(opts, s.opts || {}); if (s.spawn) spawn = s.spawn; }
+  } catch (e) {}
+  if (!rules.length) applyPreset();
+}
+function save() {
+  try { localStorage.setItem('deskArcade', JSON.stringify({rules, opts, spawn})); } catch (e) {}
+}
+function makeRule(rgb, meaning, tol) {
+  const [h, s, v] = hsv(rgb[0], rgb[1], rgb[2]);
+  return {rgb, h, s, v, meaning, tol};
+}
+function applyPreset() { rules = PRESET.map(p => makeRule(p.rgb, p.meaning, p.tol)); }
+
+/* ---------------- Color math ---------------- */
+let _h = 0, _s = 0, _v = 0;
+function hsvFast(r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  _v = mx / 255; _s = mx ? d / mx : 0;
+  if (!d) _h = 0;
+  else if (mx === r) _h = 60 * (((g - b) / d) % 6);
+  else if (mx === g) _h = 60 * ((b - r) / d + 2);
+  else _h = 60 * ((r - g) / d + 4);
+  if (_h < 0) _h += 360;
+}
+function hsv(r, g, b) { hsvFast(r, g, b); return [_h, _s, _v]; }
+function cdist(h, s, v, ru) {
+  let dh = Math.abs(h - ru.h); if (dh > 180) dh = 360 - dh; dh /= 180;
+  const bright = Math.max(v, ru.v);                 // saturation/hue are unreliable in the dark
+  const a = dh * Math.min(s, ru.s) * 2.2 * Math.min(1, bright * 1.4);
+  const b = (s - ru.s) * bright;
+  const c = (v - ru.v) * 0.85;
+  return Math.sqrt(a * a + b * b + c * c);
+}
+
+/* ---------------- Camera ---------------- */
+let stream = null;
+async function startCamera(deviceId) {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  msg.hidden = false; msg.textContent = 'Starting camera…';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: deviceId ? {deviceId:{exact:deviceId}, width:{ideal:1280}, height:{ideal:720}}
+                      : {width:{ideal:1280}, height:{ideal:720}}, audio:false});
+  } catch (e) {
+    msg.textContent = 'Could not open the camera: ' + e.message + '. Check that the document camera is plugged in and that this browser has camera permission.';
+    return;
+  }
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  await new Promise(r => { if (video.videoWidth) r(); else video.onloadedmetadata = r; });
+  resize(video.videoWidth, video.videoHeight);
+  msg.hidden = true;
+  await listCameras(stream.getVideoTracks()[0].getSettings().deviceId);
+}
+async function listCameras(currentId) {
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  const sel = $('camSel'); sel.innerHTML = '';
+  devs.forEach((d, i) => {
+    const o = document.createElement('option');
+    o.value = d.deviceId; o.textContent = d.label || ('Camera ' + (i + 1));
+    sel.appendChild(o);
+  });
+  sel.value = currentId;
+  return devs;
+}
+async function init() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    msg.textContent = 'This browser cannot access cameras here. Open the page through http://localhost in Chrome, Edge, or Safari.';
+    return;
+  }
+  await startCamera();
+  if (!stream) return;
+  // Prefer an external / document camera over the built-in one
+  const devs = await navigator.mediaDevices.enumerateDevices().then(d => d.filter(x => x.kind === 'videoinput'));
+  const cur = stream.getVideoTracks()[0].getSettings().deviceId;
+  const docRe = /doc|ipevo|elmo|hovercam|okiocam|aver|ziggi|lumens|visualizer|external|usb/i;
+  const builtIn = /facetime|built-in|integrated|isight/i;
+  const best = devs.find(d => docRe.test(d.label)) || devs.find(d => !builtIn.test(d.label));
+  if (best && best.deviceId !== cur) await startCamera(best.deviceId);
+}
+
+/* ---------------- Vision ---------------- */
+function grabFrame() {
+  fctx.save();
+  fctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (opts.rot) { fctx.translate(DW, DH); fctx.rotate(Math.PI); }
+  if (opts.mirror) { fctx.translate(DW, 0); fctx.scale(-1, 1); }
+  fctx.drawImage(video, 0, 0, DW, DH);
+  fctx.restore();
+}
+function classify() {
+  sctx.imageSmoothingEnabled = true; sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(fc, 0, 0, GW, GH);
+  const d = sctx.getImageData(0, 0, GW, GH).data;
+  const n = GW * GH, rl = rules.length;
+  const codes = rules.map(r => MEANINGS[r.meaning].code);
+  for (let i = 0; i < n; i++) {
+    const p = i * 4;
+    hsvFast(d[p], d[p + 1], d[p + 2]);
+    let best = 0, bd = 1e9;
+    for (let k = 0; k < rl; k++) {
+      const ru = rules[k], dd = cdist(_h, _s, _v, ru);
+      if (dd < ru.tol && dd < bd) { bd = dd; best = codes[k]; }
+    }
+    tmp[i] = best;
+  }
+  // remove speckle noise: a cell needs at least 2 matching neighbours
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    const i = y * GW + x, c = tmp[i];
+    if (!c) { grid[i] = 0; continue; }
+    let same = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const xx = x + dx, yy = y + dy;
+      if (xx >= 0 && yy >= 0 && xx < GW && yy < GH && tmp[yy * GW + xx] === c) same++;
+    }
+    grid[i] = same >= 2 ? c : 0;
+  }
+  for (let i = 0; i < n; i++) if (grid[i] !== 4) collected[i] = 0;
+}
+
+/* ---------------- World queries ---------------- */
+function cell(x, y) { return (x < 0 || y < 0 || x >= GW || y >= GH) ? 0 : grid[y * GW + x]; }
+function hit(x, y, w, h) {
+  const x0 = Math.floor(x), x1 = Math.floor(x + w - 1e-3), y0 = Math.floor(y), y1 = Math.floor(y + h - 1e-3);
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+    if (cx < 0 || cx >= GW) return true;           // side walls
+    if (cy < 0 || cy >= GH) continue;              // open top / bottom
+    const c = grid[cy * GW + cx];
+    if (c === 1 || c === 2) return true;
+  }
+  return false;
+}
+function touches(e) {
+  const r = {hazard:false, goal:false, coin:-1};
+  const x0 = Math.floor(e.x - 0.3), x1 = Math.floor(e.x + e.w + 0.3), y0 = Math.floor(e.y - 0.3), y1 = Math.floor(e.y + e.h + 0.3);
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+    if (cx < 0 || cy < 0 || cx >= GW || cy >= GH) continue;
+    const i = cy * GW + cx, c = grid[i];
+    if (c === 3) r.hazard = true;
+    else if (c === 5) r.goal = true;
+    else if (c === 4 && !collected[i]) r.coin = i;
+  }
+  return r;
+}
+function standingOn(e, code) {
+  const y = Math.floor(e.y + e.h + 0.3);
+  for (let x = Math.floor(e.x); x <= Math.floor(e.x + e.w - 1e-3); x++) if (cell(x, y) === code) return true;
+  return false;
+}
+function collectBlob(start) {
+  const q = [start]; collected[start] = 1; let n = 0;
+  while (q.length && n < 8000) {
+    const i = q.pop(); n++;
+    const x = i % GW, y = (i / GW) | 0;
+    const nb = [x > 0 ? i - 1 : -1, x < GW - 1 ? i + 1 : -1, y > 0 ? i - GW : -1, y < GH - 1 ? i + GW : -1];
+    for (const j of nb) if (j >= 0 && grid[j] === 4 && !collected[j]) { collected[j] = 1; q.push(j); }
+  }
+}
+
+/* ---------------- Physics ---------------- */
+function move(e, stepUp) {
+  e.hitX = false; e.hitY = false; e.landed = false;
+  const n = Math.max(1, Math.ceil(Math.max(Math.abs(e.vx), Math.abs(e.vy)) / 0.4));
+  const sx = e.vx / n, sy = e.vy / n;
+  for (let k = 0; k < n; k++) {
+    if (sx) {
+      const nx = e.x + sx;
+      if (!hit(nx, e.y, e.w, e.h)) e.x = nx;
+      else {
+        let ok = false;
+        for (let u = 1; u <= stepUp; u++) if (!hit(nx, e.y - u, e.w, e.h)) { e.x = nx; e.y -= u; ok = true; break; }
+        if (!ok) e.hitX = true;
+      }
+    }
+    if (sy && !e.hitY) {
+      const ny = e.y + sy;
+      if (!hit(e.x, ny, e.w, e.h)) e.y = ny;
+      else { e.hitY = true; if (sy > 0) e.landed = true; }
+    }
+  }
+  if (e.landed) { for (let i = 0; i < 10 && !hit(e.x, e.y + 0.05, e.w, e.h); i++) e.y += 0.05; }
+  e.grounded = e.landed || hit(e.x, e.y + 0.15, e.w, e.h);
+}
+function unstick(e) {
+  if (!hit(e.x, e.y, e.w, e.h)) return true;
+  for (let u = 1; u <= 14; u++) if (!hit(e.x, e.y - u, e.w, e.h)) { e.y -= u; return true; }
+  for (let s = 1; s <= 8; s++) {
+    if (!hit(e.x - s, e.y, e.w, e.h)) { e.x -= s; return true; }
+    if (!hit(e.x + s, e.y, e.w, e.h)) { e.x += s; return true; }
+  }
+  return false;
+}
+
+/* ---------------- Game state ---------------- */
+let mode = 'runner';
+let spawn = {fx:0.06, fy:0.06};
+let player, marbles = [], parts = [], banner = null;
+let stats = {score:0, coins:0, deaths:0, clears:0, marblesIn:0};
+const keys = {}; let jumpBuf = 0, prevJump = false;
+
+function respawnPlayer() {
+  player = {x:spawn.fx * GW, y:spawn.fy * GH, w:3, h:5, vx:0, vy:0, grounded:false, coyote:0, dead:0, face:1, inv:30};
+  if (grid) unstick(player);
+}
+function burst(x, y, color, n, spd = 1) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = (0.3 + Math.random()) * spd;
+    parts.push({x, y, vx:Math.cos(a) * s, vy:Math.sin(a) * s - 0.4, life:40 + Math.random() * 20, color});
+  }
+}
+function say(text, color = '#fff', t = 90) { banner = {text, color, t}; }
+
+function stepRunner() {
+  const p = player;
+  if (p.dead > 0) { if (--p.dead === 0) respawnPlayer(); return; }
+  if (p.inv > 0) p.inv--;
+  if (!unstick(p)) { die('Squished!'); return; }
+  const L = keys.ArrowLeft || keys.KeyA, R = keys.ArrowRight || keys.KeyD;
+  const J = keys.ArrowUp || keys.KeyW || keys.Space;
+  if (J && !prevJump) jumpBuf = 7; prevJump = J;
+  const acc = p.grounded ? 0.14 : 0.08;
+  if (L) { p.vx -= acc; p.face = -1; }
+  if (R) { p.vx += acc; p.face = 1; }
+  if (!L && !R) p.vx *= p.grounded ? 0.72 : 0.96;
+  p.vx = Math.max(-1.1, Math.min(1.1, p.vx));
+  p.coyote = p.grounded ? 6 : p.coyote - 1;
+  if (jumpBuf > 0) jumpBuf--;
+  if (jumpBuf > 0 && p.coyote > 0) { p.vy = -2.15; p.coyote = 0; jumpBuf = 0; beep(520, 0.07, 'square'); }
+  p.vy += 0.1; if (!J && p.vy < 0) p.vy += 0.12;
+  p.vy = Math.min(p.vy, 2.4);
+  move(p, p.grounded ? 2 : 0);
+  if (p.hitY) {
+    if (p.landed && standingOn(p, 2)) { p.vy = -3.3; burst(p.x + p.w / 2, p.y + p.h, '#c084fc', 10); beep(300, 0.15, 'sine', 900); }
+    else p.vy = 0;
+  }
+  if (p.hitX) p.vx = 0;
+  const t = touches(p);
+  if (t.coin >= 0) { collectBlob(t.coin); stats.coins++; stats.score += 10; burst(p.x + 1.5, p.y + 2, '#facc15', 14); beep(880, 0.08, 'square', 1320); }
+  if (t.hazard && p.inv <= 0) { die('Burned!'); return; }
+  if (t.goal) {
+    stats.clears++; stats.score += 50; say('LEVEL CLEAR!', '#4ade80');
+    burst(p.x + 1.5, p.y + 2, '#4ade80', 40, 1.6); beep(660, 0.1, 'square', 990); setTimeout(() => beep(990, 0.15, 'square', 1320), 110);
+    p.dead = 50; p.won = true; return;
+  }
+  if (p.y > GH + 4) die('Fell off!');
+}
+function die(why) {
+  const p = player; if (p.dead) return;
+  stats.deaths++; p.dead = 45; p.won = false;
+  burst(p.x + 1.5, p.y + 2.5, '#f87171', 30, 1.3); say(why, '#f87171', 60); beep(200, 0.25, 'sawtooth', 60);
+}
+
+function dropMarble(x, y) {
+  if (marbles.length > 80) marbles.shift();
+  marbles.push({x, y, w:2, h:2, vx:(Math.random() - 0.5) * 0.4, vy:0, grounded:false, age:0,
+    color:`hsl(${(Math.random() * 360) | 0} 90% 65%)`});
+}
+function stepMarbles() {
+  for (let i = marbles.length - 1; i >= 0; i--) {
+    const m = marbles[i]; m.age++;
+    let gone = false;
+    if (!unstick(m)) gone = true;
+    m.vy = Math.min(m.vy + 0.08, 2.6);
+    const vyBefore = m.vy;
+    move(m, m.grounded ? 1 : 0);
+    if (m.hitY) {
+      if (m.landed && standingOn(m, 2)) { m.vy = -3; beep(400, 0.06, 'sine', 800); }
+      else m.vy = (m.landed && vyBefore > 0.7) ? -vyBefore * 0.35 : 0;
+    }
+    if (m.hitX) m.vx = -m.vx * 0.5;
+    if (m.grounded) {
+      const l = hit(m.x - 1, m.y + 1, m.w, m.h), r = hit(m.x + 1, m.y + 1, m.w, m.h);
+      if (!l && r) m.vx -= 0.05;
+      else if (l && !r) m.vx += 0.05;
+      m.vx *= 0.992;
+    }
+    m.vx = Math.max(-1.5, Math.min(1.5, m.vx));
+    const t = touches(m);
+    if (t.coin >= 0) { collectBlob(t.coin); stats.coins++; stats.score += 10; burst(m.x + 1, m.y + 1, '#facc15', 10); beep(880, 0.08, 'square', 1320); }
+    if (t.hazard) { burst(m.x + 1, m.y + 1, '#f87171', 12); beep(180, 0.1, 'sawtooth', 80); gone = true; }
+    else if (t.goal) { stats.marblesIn++; stats.score += 5; burst(m.x + 1, m.y + 1, '#4ade80', 14); beep(700, 0.08, 'triangle', 1050); gone = true; }
+    if (m.y > GH + 4 || m.age > 60 * 45) gone = true;
+    if (gone) marbles.splice(i, 1);
+  }
+  if ((keys.Space || keys.ArrowDown || keys.KeyS) && frame % 8 === 0) dropMarble(spawn.fx * GW, spawn.fy * GH);
+}
+function stepParts() {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const q = parts[i]; q.x += q.vx; q.y += q.vy; q.vy += 0.05; q.life--;
+    if (q.life <= 0) parts.splice(i, 1);
+  }
+  if (banner && --banner.t <= 0) banner = null;
+}
+
+/* ---------------- Sound ---------------- */
+let actx = null;
+function beep(f, dur, type = 'square', f2) {
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+  } catch (e) {}
+}
+
+/* ---------------- Rendering ---------------- */
+function render() {
+  vctx.drawImage(fc, 0, 0);
+  if (opts.tint) {
+    const d = tintImg.data, n = GW * GH;
+    for (let i = 0; i < n; i++) {
+      const c = grid[i], p = i * 4;
+      if (!c) { d[p + 3] = 0; continue; }
+      const t = CODE_TINT[c];
+      if (c === 4 && collected[i]) { d[p] = d[p + 1] = d[p + 2] = 90; d[p + 3] = 120; continue; }
+      d[p] = t[0]; d[p + 1] = t[1]; d[p + 2] = t[2]; d[p + 3] = 125;
+    }
+    tctx.putImageData(tintImg, 0, 0);
+    vctx.imageSmoothingEnabled = false;
+    vctx.drawImage(tc, 0, 0, DW, DH);
+    vctx.imageSmoothingEnabled = true;
+  }
+  // start flag
+  const sx = spawn.fx * DW, sy = spawn.fy * DH;
+  vctx.strokeStyle = '#fff'; vctx.lineWidth = 2;
+  vctx.beginPath(); vctx.moveTo(sx, sy + 30); vctx.lineTo(sx, sy); vctx.stroke();
+  vctx.fillStyle = '#f5b83d'; vctx.beginPath(); vctx.moveTo(sx, sy); vctx.lineTo(sx + 16, sy + 6); vctx.lineTo(sx, sy + 12); vctx.fill();
+
+  if (mode === 'runner' && player && !player.dead) drawPlayer(player);
+  if (mode === 'marbles') for (const m of marbles) {
+    vctx.fillStyle = m.color; vctx.strokeStyle = '#000a'; vctx.lineWidth = 2;
+    vctx.beginPath(); vctx.arc((m.x + 1) * S, (m.y + 1) * S, S * 1.05, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
+    vctx.fillStyle = '#fff8'; vctx.beginPath(); vctx.arc((m.x + 0.7) * S, (m.y + 0.6) * S, S * 0.3, 0, Math.PI * 2); vctx.fill();
+  }
+  for (const q of parts) { vctx.globalAlpha = Math.min(1, q.life / 30); vctx.fillStyle = q.color; vctx.fillRect(q.x * S - 3, q.y * S - 3, 6, 6); }
+  vctx.globalAlpha = 1;
+
+  // HUD
+  vctx.font = 'bold 22px system-ui, sans-serif'; vctx.textBaseline = 'top';
+  const hud = mode === 'runner'
+    ? `★ ${stats.score}   ● ${stats.coins}   ⚑ ${stats.clears}   ✖ ${stats.deaths}`
+    : `★ ${stats.score}   ● ${stats.coins}   marbles home ${stats.marblesIn}`;
+  vctx.fillStyle = '#000a'; vctx.fillRect(10, 10, vctx.measureText(hud).width + 20, 34);
+  vctx.fillStyle = '#fff'; vctx.fillText(hud, 20, 16);
+  if (banner) {
+    vctx.font = 'bold 64px system-ui, sans-serif'; vctx.textAlign = 'center'; vctx.textBaseline = 'middle';
+    vctx.lineWidth = 8; vctx.strokeStyle = '#000'; vctx.strokeText(banner.text, DW / 2, DH / 2);
+    vctx.fillStyle = banner.color; vctx.fillText(banner.text, DW / 2, DH / 2);
+    vctx.textAlign = 'start';
+  }
+}
+function drawPlayer(p) {
+  const x = p.x * S, y = p.y * S, w = p.w * S, h = p.h * S;
+  if (p.inv > 0 && (p.inv >> 2) % 2) return;
+  vctx.fillStyle = '#000'; vctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+  vctx.fillStyle = '#fff'; vctx.fillRect(x, y, w, h);
+  vctx.fillStyle = '#f5b83d'; vctx.fillRect(x, y + h * 0.55, w, h * 0.45);
+  vctx.fillStyle = '#111';
+  const ex = p.face > 0 ? x + w * 0.35 : x + w * 0.1;
+  vctx.fillRect(ex, y + h * 0.2, w * 0.16, h * 0.16);
+  vctx.fillRect(ex + w * 0.36, y + h * 0.2, w * 0.16, h * 0.16);
+}
+
+/* ---------------- Main loop ---------------- */
+let last = performance.now(), accum = 0, frame = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  if (!grid || !video.videoWidth) return;
+  accum += Math.min(0.1, (now - last) / 1000); last = now;
+  grabFrame();
+  if (!opts.freeze) classify();
+  while (accum >= 1 / 60) {
+    accum -= 1 / 60; frame++;
+    if (mode === 'runner') stepRunner(); else stepMarbles();
+    stepParts();
+  }
+  render();
+  if (frame % 15 === 0) updateStats();
+}
+
+/* ---------------- UI ---------------- */
+let pickMode = null; // 'color' | 'spawn'
+function setPick(m, text) {
+  pickMode = m; view.classList.toggle('picking', !!m);
+  hint.hidden = !m; hint.textContent = text || '';
+  $('addBtn').textContent = m === 'color' ? 'Cancel' : '+ Pick color';
+}
+function canvasPoint(ev) {
+  const r = view.getBoundingClientRect();
+  return {x:(ev.clientX - r.left) / r.width * DW, y:(ev.clientY - r.top) / r.height * DH};
+}
+view.addEventListener('click', ev => {
+  if (!grid) return;
+  const pt = canvasPoint(ev);
+  if (pickMode === 'color') {
+    const R = 5, x0 = Math.max(0, Math.round(pt.x) - R), y0 = Math.max(0, Math.round(pt.y) - R);
+    const d = fctx.getImageData(x0, y0, R * 2 + 1, R * 2 + 1).data;
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+    rules.push(makeRule([r / n | 0, g / n | 0, b / n | 0], $('addMeaning').value, 0.22));
+    setPick(null); renderRules(); save();
+  } else if (pickMode === 'spawn') {
+    spawn = {fx:pt.x / DW, fy:pt.y / DH}; setPick(null); save(); respawnPlayer();
+  } else if (mode === 'marbles') {
+    dropMarble(pt.x / S - 1, pt.y / S - 1);
+  }
+});
+
+function renderRules() {
+  const box = $('rules'); box.innerHTML = '';
+  if (!rules.length) { box.innerHTML = '<div style="color:var(--muted)">No colors yet. Pick a meaning, then click an object in the camera view.</div>'; return; }
+  rules.forEach((r, idx) => {
+    const row = document.createElement('div'); row.className = 'rule';
+    const sw = document.createElement('div'); sw.className = 'sw'; sw.style.background = `rgb(${r.rgb})`;
+    const sel = document.createElement('select');
+    for (const k in MEANINGS) { const o = document.createElement('option'); o.value = k; o.textContent = MEANINGS[k].label; sel.appendChild(o); }
+    sel.value = r.meaning;
+    sel.onchange = () => { r.meaning = sel.value; sel.blur(); save(); };
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '×'; x.title = 'Remove';
+    x.onclick = () => { rules.splice(idx, 1); renderRules(); save(); };
+    const tl = document.createElement('div'); tl.className = 'tl'; tl.textContent = 'range';
+    const rg = document.createElement('input'); rg.type = 'range'; rg.min = 0.05; rg.max = 0.5; rg.step = 0.01; rg.value = r.tol;
+    rg.title = 'How loosely this color matches';
+    rg.oninput = () => { r.tol = +rg.value; save(); };
+    row.append(sw, sel, x, tl, rg);
+    box.appendChild(row);
+  });
+}
+function updateStats() {
+  $('stats').innerHTML = mode === 'runner'
+    ? `<div>Score <b>${stats.score}</b></div><div>Coins <b>${stats.coins}</b></div><div>Goals <b>${stats.clears}</b></div><div>Deaths <b>${stats.deaths}</b></div>`
+    : `<div>Score <b>${stats.score}</b></div><div>Coins <b>${stats.coins}</b></div><div>Home <b>${stats.marblesIn}</b></div><div>Rolling <b>${marbles.length}</b></div>`;
+}
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  $('help').innerHTML = m === 'runner'
+    ? 'Runner: move with <kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd>, jump with <kbd>Space</kbd> / <kbd>↑</kbd>. Get coins, avoid lava, and reach the goal color. You can move objects while you play.'
+    : 'Marble Run: click anywhere to drop a marble, or hold <kbd>Space</kbd> to pour from the start flag. Build ramps with objects or ink to guide marbles to the goal color.';
+  marbles = []; respawnPlayer();
+}
+
+const sel = $('addMeaning');
+for (const k in MEANINGS) {
+  const o = document.createElement('option'); o.value = k; o.textContent = MEANINGS[k].label; sel.appendChild(o);
+  const t = MEANINGS[k].tint;
+  $('legend').insertAdjacentHTML('beforeend', `<div><span class="tag" style="background:rgb(${t})"></span>${MEANINGS[k].label}</div>`);
+}
+$('addBtn').onclick = () => pickMode === 'color' ? setPick(null) : setPick('color', 'Click an object in the camera view to sample its color');
+$('spawnBtn').onclick = () => setPick('spawn', 'Click where the player and marbles should start');
+$('resetBtn').onclick = () => { stats = {score:0, coins:0, deaths:0, clears:0, marblesIn:0}; collected && collected.fill(0); respawnPlayer(); marbles = []; updateStats(); };
+$('presetBtn').onclick = () => { applyPreset(); renderRules(); save(); };
+$('clearBtn').onclick = () => { rules = []; renderRules(); save(); };
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { setMode(b.dataset.mode); b.blur(); });
+$('camSel').onchange = e => { startCamera(e.target.value); e.target.blur(); };
+for (const id of ['mirror', 'rot', 'tint', 'freeze']) {
+  const el = $(id); el.checked = opts[id];
+  el.onchange = () => { opts[id] = el.checked; el.blur(); save(); };
+}
+
+const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyA', 'KeyD', 'KeyW', 'KeyS']);
+window.addEventListener('keydown', e => {
+  if (GAME_KEYS.has(e.code)) { e.preventDefault(); if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }
+  if (e.code === 'Escape') setPick(null);
+  if (e.code === 'KeyR') respawnPlayer();
+  if (e.code === 'KeyF') { opts.freeze = !opts.freeze; $('freeze').checked = opts.freeze; save(); }
+  keys[e.code] = true;
+}, true);
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+load(); renderRules(); setMode('runner'); updateStats();
+init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

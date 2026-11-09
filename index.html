@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1derworld</title>
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌮</text></svg>">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/three.module.js",
+  "three/addons/": "./vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="title" class="screen">
+  <canvas id="titleCircuit"></canvas>
+  <div class="title-inner"><h1>1DERWORLD</h1><div id="loading">warming up the fryers…</div></div>
+</div>
+<div id="soundPill" hidden>🔊 click anywhere or press any key for sound</div>
+<div id="wordmark" hidden>1DERWORLD</div>
+
+<div id="hud" hidden>
+  <div id="crosshair"></div>
+  <div id="prompt"></div>
+  <div id="zone"><b></b><i></i></div>
+  <div id="toast"></div>
+  <div id="quickbar">
+    <button data-zone="plaza"><kbd>1</kbd>Portals</button>
+    <button data-zone="buffet"><kbd>2</kbd>Buffet</button>
+    <button data-zone="skate"><kbd>3</kbd>Skate</button>
+    <button data-zone="tramp"><kbd>4</kbd>Bounce</button>
+    <button data-zone="shop"><kbd>5</kbd>Shop</button>
+    <button data-zone="field"><kbd>6</kbd>Prairie</button>
+    <button data-zone="mezz"><kbd>7</kbd>Mezz</button>
+  </div>
+  <div id="corner">
+    <button id="btnList" title="All portals (Tab)">◎ Portals <kbd>Tab</kbd></button>
+    <button id="btnLens" title="Constructive Lens (L)">⌕ Lens <kbd>L</kbd></button>
+    <button id="btnMute" title="Mute (M)">♪ <kbd>M</kbd></button>
+    <input id="vol" type="range" min="0" max="1" step="0.01" value="0.85" title="Volume">
+    <button id="btnHelp" title="Help (H)">? <kbd>H</kbd></button>
+  </div>
+</div>
+
+<div id="portalMenu" class="modal" hidden>
+  <div class="panel">
+    <header><h2>Portals</h2><input id="search" placeholder="search projects…" autocomplete="off"><button class="x" data-close>✕</button></header>
+    <div id="cards"></div>
+    <footer>New apps show up on their own: drop a folder with an <code>index.html</code> into <code>~/Documents/projects</code> or <code>~/Developer</code>, or add it to <code>projects.json</code>, then reload.</footer>
+  </div>
+</div>
+
+<div id="help" class="modal" hidden>
+  <div class="panel narrow">
+    <header><h2>How to 1derworld</h2><button class="x" data-close>✕</button></header>
+    <ul>
+      <li><kbd>W</kbd><kbd>S</kbd>/<kbd>↑</kbd><kbd>↓</kbd> walk · <kbd>←</kbd><kbd>→</kbd> turn · <kbd>A</kbd><kbd>D</kbd> sidestep · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump</li>
+      <li>Drag to look around (like the Scratch bedroom) · scroll wheel steps forward and back</li>
+      <li><kbd>Click</kbd> anything glowing under the cursor to use it (or <kbd>E</kbd>)</li>
+      <li>Walk into a portal to launch that app. <kbd>Esc</kbd> or the ⟵ button comes back.</li>
+      <li><kbd>1</kbd>–<kbd>7</kbd> warp between zones · <kbd>Tab</kbd> portal list · <kbd>L</kbd> Constructive Lens · <kbd>M</kbd> mute</li>
+      <li>Trampolines stack height: keep bouncing, hold <kbd>Space</kbd> on landing. Land on the mezzanine, take the slide.</li>
+      <li>Red-rimmed hatches are trapdoors. They go somewhere good.</li>
+      <li>Every buffet food is a key. Plug in a MIDI keyboard and the world plays along.</li>
+    </ul>
+  </div>
+</div>
+
+<div id="demo" hidden>
+  <div id="demoBackdrop" title="step back out"></div>
+  <div id="demoWin">
+    <div id="demoBar">
+      <span id="demoTitle"></span>
+      <span id="demoCam" hidden>📷 uses your camera: allow it in the address bar, or pop it out ⧉</span>
+      <span class="grow"></span>
+      <button id="demoReload" title="Reload">↻</button>
+      <button id="demoPop" title="Pop out into its own window (best for camera apps)" aria-label="Pop out">⧉</button>
+      <button id="demoFull" title="Full screen (Esc to come back)" aria-label="Full screen">⛶</button>
+      <button id="demoBack" title="Step back out (Esc)">✕</button>
+    </div>
+    <div id="boot" hidden><div class="spinner"></div><div id="bootMsg"></div><pre id="bootCode"></pre></div>
+    <iframe id="demoFrame" allow="camera; microphone; midi; autoplay; fullscreen; clipboard-read; clipboard-write; gamepad; accelerometer; gyroscope" allowfullscreen></iframe>
+  </div>
+  <div id="demoHint">click anywhere outside the frame to step back out</div>
+</div>
+
+<div id="drawHint" hidden>drawing on the Drawdio wall · move to draw, hold the mouse to make sound · <kbd>Esc</kbd> to stop</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,1977 @@
+<title>Mad Libs Piano</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23b0306a'/><path d='M26 14v26.5A8 8 0 1 0 30 47V24l16-4v16.5A8 8 0 1 0 50 43V9z' fill='%23fff'/></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;1,6..96,400;1,6..96,500&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Same music stand as Song Piano: song chips, the sung lyric as the score, the keyboard, the source text below. */
+:root {
+  --paper: #f1efe9;
+  --stage: #e6e2d8;
+  --ink: #1d1a17;
+  --muted: #675f55;
+  --line: #cfc8bb;
+  --brass: #8d6a26;
+  --silly: #b0306a;
+  --ivory: #fbfaf6;
+  --ivory-down: #e6dfcf;
+  --ebony: #15181d;
+  --ebony-down: #3a3f47;
+  --key-ink: #2a2f36;
+  --key-ink-on-ebony: #d8dbe0;
+  --key-silly: #a32a60;
+  --key-silly-on-ebony: #f3a6c8;
+  --chip: #ffffff;
+  --guide: #2a8a74;
+  --key-note: #7b8590;
+  --key-hint: #a3abb4;
+  --display: "Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #110f0d; --stage: #1a1714; --ink: #ece7df; --muted: #a0968a; --line: #322d27;
+    --brass: #d3aa5e; --silly: #f07aac; --ivory: #e8e5dc; --ivory-down: #c9c0ab;
+    --ebony: #050608; --ebony-down: #30353d; --key-ink: #23272d; --key-ink-on-ebony: #c9cdd3;
+    --key-silly: #a32a60; --key-silly-on-ebony: #f3a6c8;
+    --chip: #201c18; --guide: #4fc4a6; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #110f0d; --stage: #1a1714; --ink: #ece7df; --muted: #a0968a; --line: #322d27;
+  --brass: #d3aa5e; --silly: #f07aac; --ivory: #e8e5dc; --ivory-down: #c9c0ab;
+  --ebony: #050608; --ebony-down: #30353d; --key-ink: #23272d; --key-ink-on-ebony: #c9cdd3;
+  --key-silly: #a32a60; --key-silly-on-ebony: #f3a6c8;
+  --chip: #201c18; --guide: #4fc4a6; color-scheme: dark;
+}
+html, body { background: var(--paper); color: var(--ink); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap {
+  max-width: 1080px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+  display: grid; gap: 22px;
+}
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; }
+.bar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; position: relative; }
+.pick { display: grid; gap: 3px; }
+.pick select { font: 500 14px/1.2 var(--body); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 4px; padding: 7px 28px 7px 10px; min-height: 34px; max-width: 64vw; }
+/* the song picker is the main control: big, bold, dark outline, a note and a clear chevron */
+.song-pick { position: relative; }
+.song-pick::before { content: "♪"; position: absolute; left: 13px; top: 50%; transform: translateY(-52%); font-size: 18px; color: var(--silly); pointer-events: none; }
+.song-pick select { appearance: none; -webkit-appearance: none; font: 700 17px/1.2 var(--body); color: var(--ink); background-color: var(--chip);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 12px 8px;
+  border: 2px solid var(--ink); border-radius: 8px; padding: 8px 38px 8px 34px; min-height: 42px; min-width: 17em; cursor: pointer; }
+.song-pick select:hover { background-color: color-mix(in srgb, var(--silly) 6%, var(--chip)); }
+.keys-pick { flex: 0 0 auto; min-width: 0; }
+
+/* the words / syllables menu matches the outlined Start over button, with the song menu's chevron */
+.keys-pick select { appearance: none; -webkit-appearance: none; min-height: 42px; min-width: 0; box-sizing: border-box;
+  font: 600 13px/1 var(--body); color: var(--ink); background-color: var(--chip); border: 1.5px solid var(--ink); border-radius: 4px;
+  padding: 0 32px 0 12px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center; background-size: 11px 7px; }
+.keys-pick select:hover { background-color: color-mix(in srgb, var(--silly) 6%, var(--chip)); }
+.pick select:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.more { position: static; }  /* the menu lines up with the right edge of the whole bar, so it stays on screen */
+.more summary { list-style: none; display: inline-flex; align-items: center; min-height: 34px; box-sizing: border-box; }
+.more summary::-webkit-details-marker { display: none; }
+.opt-short { display: none; font-size: 18px; line-height: 1; }
+.more .menu .pick, .more .menu .pick select { width: 100%; max-width: none; box-sizing: border-box; }
+.more .menu { min-width: 260px; }
+.more summary::after { content: "▾"; margin-left: 6px; font-size: 11px; }
+.more .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 10px; justify-items: start; width: max-content; max-width: min(320px, 90vw); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+.cue { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; align-items: baseline; min-height: 20px; margin-bottom: -12px; }
+.btn { min-height: 34px; box-sizing: border-box; }
+.bar > .btn, .bar .more summary { min-height: 42px; }
+h1 { font-family: var(--display); font-weight: 500; font-size: clamp(34px, 6vw, 52px); line-height: 1; margin: 0; letter-spacing: -0.01em; }
+h1 em { font-style: italic; color: var(--silly); }
+
+.label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+.songs { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font: 500 14px/1 var(--body); color: var(--ink); background: var(--chip);
+  border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px; cursor: pointer;
+}
+.chip:hover { border-color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip:focus-visible, button:focus-visible, .key:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.stage {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: var(--stage); border-radius: 6px; padding: 22px clamp(16px, 3vw, 32px);
+  min-height: 200px; display: grid; gap: 12px; align-content: start;
+}
+.stage-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: center; }
+/* Start over sits on top of the song art, so it gets its own solid background */
+.btn.restart { background: var(--chip); color: var(--ink); border: 1.5px solid var(--ink); }
+.btn.restart span[aria-hidden] { font-size: 16px; line-height: 0; position: relative; top: 1px; }
+#auto .ico { font-size: 11px; display: inline-block; width: 1em; text-align: center; }
+#auto { min-width: 7.6em; }
+.now { font-family: var(--body); font-size: 14px; color: var(--muted); }
+.now b { font-weight: 700; color: var(--ink); }
+.now .pos { font-family: var(--mono); font-style: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--silly); border: 1px solid currentColor; border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
+.sung { font-family: var(--body); font-weight: 500; font-size: clamp(22px, 3.2vw, 30px); line-height: 1.3; max-height: 9.6em; overflow-y: auto; min-width: 0; }
+.sung p { margin: 0 0 .25em; }
+.sung .placeholder { color: var(--muted); font: 400 15px/1.4 var(--body); opacity: .75; }
+.stage.art .sung .placeholder { color: var(--art-sub); }
+.w { display: inline-flex; flex-direction: column; align-items: center; vertical-align: top; margin-right: 0.26em; }
+.w.silly { color: var(--silly); font-weight: 700; }
+.w.silly::after { content: attr(data-pos); font: 400 10px/1.3 var(--mono); font-style: normal; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1px; white-space: nowrap; }
+.w.fresh { animation: sing .5s ease-out; }
+.sung .done { font: 500 13px/1.6 var(--body); color: var(--guide); }
+/* Start over: dim before you play, quiet while you play, filled in once the song is done */
+#clear[data-state="idle"] { opacity: .45; cursor: default; }
+
+@keyframes nudge { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--silly) 55%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
+.end-strip[hidden] { display: none; }
+.end-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; background: var(--stage); border-radius: 6px; padding: 10px 14px; font: 600 16px/1.3 var(--body); color: var(--ink); animation: sing .5s ease-out; }
+.end-strip .btn { font-size: 13px; }
+.end-strip [data-act="restart"] span[aria-hidden] { font-size: 16px; line-height: 0; position: relative; top: 1px; }
+.end-strip .btn:first-of-type { animation: nudge 1.4s ease-out 1; }
+@keyframes sing { from { transform: translateY(-0.18em); opacity: .2; } to { transform: none; opacity: 1; } }
+/* Art: a picture behind the lyric, with lyric colours chosen per picture */
+.art-layer { position: absolute; inset: 0; z-index: -1; display: none; }
+.art-layer svg { display: block; width: 100%; height: 100%; }
+.art-layer::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, var(--art-scrim) 0%, var(--art-scrim) 30%, transparent 70%); }
+.stage.art { background: transparent; color: var(--art-ink); min-height: 240px; }
+.stage.art .art-layer { display: block; }
+.stage.art .label, .stage.art .now, .stage.art .legend, .stage.art .sung .placeholder { color: var(--art-sub); }
+.stage.art .now b { color: var(--art-ink); }
+.stage.art .now .pos { color: var(--art-silly); }
+.stage.art .sung { text-shadow: 0 0 14px var(--art-glow), 0 1px 2px var(--art-glow); }
+.stage.art .w.silly { color: var(--art-silly); }
+.stage.art .w.silly::after { color: var(--art-sub); border-top-color: currentColor; }
+.stage.art .sung .done { color: var(--art-ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: -14px; }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: var(--ink); vertical-align: 0; }
+.legend .l-guide::before { background: var(--guide); }
+.legend .l-silly::before { background: var(--silly); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls .spacer { flex: 1; }
+.toggle { font: 500 13px/1 var(--body); background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 8px 11px; cursor: pointer; }
+.toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+.toggle[aria-pressed="true"]::before { content: "● "; color: var(--brass); }
+.toggle[aria-pressed="false"]::before { content: "○ "; }
+.seg { display: flex; align-items: center; gap: 6px; margin-right: 10px; }
+.seg .label { margin-right: 2px; }
+.toggle.mode::before { content: none !important; }
+.toggle.mode[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn { font: 600 13px/1 var(--body); background: var(--ink); color: var(--paper); border: 0; border-radius: 4px; padding: 9px 13px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn.silly { background: var(--silly); color: #fff; }
+.status { font-size: 13px; color: var(--muted); }
+
+.kb-wrap { overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 6px; }
+.kb { --kbh: 250px; position: relative; height: var(--kbh); min-width: 700px; display: flex; user-select: none; -webkit-user-select: none; touch-action: none; }
+.key { position: relative; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.key.white { flex: 1; background: var(--ivory); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 5px 5px; margin-right: -1px; padding-bottom: 8px; box-shadow: inset 0 -6px 0 rgba(0,0,0,0.06); }
+.key.white.down { background: var(--ivory-down); box-shadow: inset 0 -2px 0 rgba(0,0,0,0.06); }
+.key.black { position: absolute; top: 0; height: 60%; background: var(--ebony); border-radius: 0 0 4px 4px; z-index: 2; padding-bottom: 8px; box-shadow: 0 3px 0 rgba(0,0,0,0.25); }
+.key.black.down { background: var(--ebony-down); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+.kw { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--body); font-weight: 600; letter-spacing: .01em; font-size: 17px; white-space: nowrap; max-height: calc(var(--kbh) * 0.6); overflow: hidden; text-overflow: ellipsis; color: var(--key-ink); }
+.black .kw { font-size: 13px; max-height: calc(var(--kbh) * 0.6 - 56px); color: var(--key-ink-on-ebony); }
+.key.white .kw.silly { color: var(--key-silly); }
+.key.black .kw.silly { color: var(--key-silly-on-ebony); }
+.key.white.guide { background: color-mix(in srgb, var(--guide) 30%, var(--ivory)); }
+.key.black.guide { background: color-mix(in srgb, var(--guide) 75%, var(--ebony)); }
+.key.guide::after { content: ""; position: absolute; left: 50%; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--guide); box-shadow: 0 0 0 3px color-mix(in srgb, var(--guide) 30%, transparent); }
+.key.white.guide::after { top: 14px; } /* words on white keys can be tall, so the dot sits at the top, between the black keys */
+.key.black.guide::after { top: 10px; background: var(--ivory); }
+.key.white.guide.down { background: color-mix(in srgb, var(--guide) 45%, var(--ivory-down)); }
+.key.guide .kw { color: var(--key-ink); font-weight: 800; }
+.key.black.guide .kw { color: #fff; }
+/* Song art on the keys: the song's colours, a faint pattern, and a little picture at the top of each white key */
+.ki { display: none; position: absolute; left: 50%; top: 10px; width: 22px; height: 22px; margin-left: -11px; pointer-events: none; }
+.ki svg { width: 100%; height: 100%; display: block; }
+.kb.art .key.white { background-color: var(--k-white); background-image: var(--k-pattern); background-size: 34px 34px; border-color: var(--k-line); }
+.kb.art .key.white.down { background-color: var(--k-white-down); }
+.kb.art .key.black { background-color: var(--k-black); background-image: var(--k-pattern-dark); background-size: 26px 26px; }
+.kb.art .key.black.down { background-color: var(--k-black-down); }
+.kb.art .key.white .kw { color: var(--k-ink); }
+.kb.art .key.black .kw { color: var(--k-ink-dark); }
+.kb.art .key.white .kw.silly { color: var(--k-silly); }
+.kb.art .key.black .kw.silly { color: var(--k-silly-dark); }
+.kb.art .key.white .ki { display: block; }
+.kb.art .key.white.guide { background-color: color-mix(in srgb, var(--guide) 34%, var(--k-white)); }
+.kb.art .key.black.guide { background-color: color-mix(in srgb, var(--guide) 70%, var(--k-black)); }
+.kb.art .key.guide .kw { color: var(--k-ink); }
+.kb.art .key.black.guide .kw { color: #fff; }
+.kb.art .key.guide .ki { display: none; }
+.kb.art .kn, .kb.art .kn i { color: var(--k-note); }
+.kb.art .black .kn { color: var(--k-ink-dark); }
+/* every word runs up the key; a lone letter ("I", the E-I-E-I-O letters) stands upright so it doesn't look like a dash */
+.kw.letter { transform: none; text-orientation: upright; }
+/* the Auto play hand: its fingertip sits on the point it presses */
+.hand { position: absolute; z-index: 5; width: 34px; height: 44px; margin: -42px 0 0 -19px; pointer-events: none; transition: left .18s ease-out, top .18s ease-out; filter: drop-shadow(0 3px 4px rgba(0,0,0,.3)); }
+.hand[hidden] { display: none; }
+.hand svg { width: 100%; height: 100%; display: block; }
+.hand .ripple { position: absolute; left: 10px; top: 33px; width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--silly); opacity: 0; }
+.hand.tap svg { animation: press .3s ease-out; }
+.hand.tap .ripple { animation: ripple .5s ease-out; }
+@keyframes press { 0% { transform: none; } 35% { transform: translateY(4px) scale(.92); } 100% { transform: none; } }
+@keyframes ripple { 0% { opacity: .9; transform: scale(.4); } 100% { opacity: 0; transform: scale(2.2); } }
+@media (max-width: 640px) { .hand { width: 28px; height: 36px; margin: -34px 0 0 -15px; } .hand .ripple { left: 6px; top: 25px; } }
+.kw.changed { animation: deal .35s ease-out; }
+@keyframes deal { from { opacity: 0; } to { opacity: 1; } }
+.kn { font-family: var(--mono); font-size: 10px; color: var(--key-note); margin-top: 6px; text-align: center; line-height: 1.25; }
+.black .kn { color: var(--key-ink-on-ebony); opacity: .7; }
+.kn i { font-style: normal; display: block; color: var(--key-hint); }
+
+.lower { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 28px; }
+@media (max-width: 760px) { .lower { grid-template-columns: minmax(0, 1fr); } }
+.source { min-width: 0; }
+.source h2, .how h2 { font-family: var(--display); font-weight: 500; font-size: 22px; margin: 4px 0 10px; text-wrap: balance; }
+.credit { font-size: 13px; color: var(--muted); margin: -6px 0 10px; }
+.src { font-family: var(--display); font-size: 17px; line-height: 1.55; }
+.src p { margin: 0; }
+.src span { border-radius: 2px; padding: 0 1px; }
+.src span.past { color: var(--muted); }
+.src span.cur { outline: 1.5px solid var(--guide); outline-offset: 1px; background: color-mix(in srgb, var(--guide) 14%, transparent); }
+.how { font-size: 14px; color: var(--ink); min-width: 0; }
+.how p { margin: 0 0 10px; max-width: 60ch; }
+.how b { font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .w.fresh, .kw.changed, .end-strip, .end-strip .btn, .hand svg, .hand .ripple { animation: none !important; } .hand { transition: none; } }
+
+/* Phones held upright: everything about 20% smaller so more of the piano fits */
+@media (max-width: 640px) {
+  body { font-size: 13px; }
+  .wrap { padding-block: 14px 32px; gap: 14px; }
+  h1 { font-size: 30px; }
+  .pick select { font-size: 13px; }
+  .bar { gap: 6px; }
+  .song-pick { flex: 1 1 100%; }
+  .keys-pick { flex: 1 1 auto; }
+  .keys-pick select { width: 100%; }
+  .song-pick select { width: 100%; max-width: none; }
+  .more .menu { left: 0; right: auto; width: calc(100vw - 32px); max-width: 360px; min-width: 0; box-sizing: border-box; }
+  .opt-long { display: none; }
+  .opt-short { display: inline; }
+  .more summary::after { content: none; }
+  .label { font-size: 10px; }
+  .chip { font-size: 12px; padding: 7px 11px; }
+  .songs { gap: 6px; }
+  .stage { padding: 12px 14px; min-height: 0; gap: 6px; }
+  .stage.art { min-height: 200px; }
+  .now { font-size: 13px; }
+  .sung { font-size: 19px; max-height: 7.5em; }
+  .legend { font-size: 11px; gap: 4px 12px; }
+  .controls { gap: 6px; }
+  .toggle, .btn { font-size: 12px; padding: 7px 9px; }
+  .seg { margin-right: 4px; }
+  .status { font-size: 12px; }
+  .kb { --kbh: 200px; min-width: 560px; }
+  .kw { font-size: 14px; }
+  .black .kw { font-size: 11px; max-height: calc(var(--kbh) * 0.6 - 48px); }
+  .kn { font-size: 9px; margin-top: 4px; }
+  .ki { width: 18px; height: 18px; margin-left: -9px; top: 8px; }
+  .key.white, .key.black { padding-bottom: 6px; }
+  .key.guide::after { width: 8px; height: 8px; margin-left: -4px; }
+  .lower { gap: 20px; }
+  .source h2, .how h2 { font-size: 18px; }
+  .src { font-size: 14px; }
+  .how { font-size: 13px; }
+}
+/* Phones turned sideways: the screen is short, so the keys take about half its height
+   and the rest of the page scrolls normally above and below them. */
+@media (orientation: landscape) and (max-height: 540px) {
+  body { font-size: 13px; }
+  .wrap { padding-block: 10px 28px; gap: 10px; }
+  header { align-items: center; }
+  h1 { font-size: 26px; }
+  h1 { font-size: 22px; }
+  .wrap { gap: 8px; }
+  .song-pick select { min-width: 12em; max-width: 16em; font-size: 15px; }
+  .bar { flex: 1 1 100%; }
+  .cue { margin-bottom: -4px; }
+  .legend { margin-top: -6px; }
+  .chip { font-size: 12px; padding: 6px 10px; }
+  .songs { gap: 5px; }
+  .stage { padding: 8px 14px; min-height: 0; gap: 4px; }
+  .stage.art { min-height: 0; }
+  .now { font-size: 13px; }
+  .sung { font-size: 18px; max-height: 4.6em; }
+  .w.silly::after { font-size: 9px; }
+  .legend { display: none; }
+  .controls { gap: 5px; }
+  .toggle, .btn { font-size: 12px; padding: 6px 9px; }
+  .status { font-size: 12px; }
+  .kb { --kbh: clamp(130px, 48vh, 190px); min-width: 640px; }
+  .kw { font-size: 13px; }
+  .black .kw { font-size: 10px; max-height: calc(var(--kbh) * 0.6 - 40px); }
+  .kn { font-size: 9px; margin-top: 3px; }
+  .kn i { display: none; }
+  .ki { width: 16px; height: 16px; margin-left: -8px; top: 6px; }
+  .key.white, .key.black { padding-bottom: 5px; }
+  .key.guide::after { width: 8px; height: 8px; margin-left: -4px; }
+  .key.black.guide::after { top: 6px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Mad Libs <em>Piano</em></h1>
+    <div class="bar">
+      <label class="pick song-pick"><select id="song" aria-label="Song"></select></label>
+      <button class="btn silly" id="auto"><span class="ico" aria-hidden="true">▶</span> <span class="lbl">Auto play</span></button>
+      <button class="btn restart" id="clear" data-state="idle" disabled aria-label="Start over"><span aria-hidden="true">↺</span> <span class="opt-long">Start over</span></button>
+      <label class="pick keys-pick"><select id="stretch" aria-label="Each key sings" title="What each key sings: a whole word, or one syllable">
+        <option value="0">Whole words</option>
+        <option value="1">Syllables (beta)</option>
+      </select></label>
+    </div>
+  </header>
+
+  <div class="cue"><span class="now" id="now">Press any key to begin</span><span class="status" id="status"></span></div>
+  <div class="kb-wrap"><div class="kb" id="kb" aria-label="Piano keyboard"></div></div>
+  <div class="legend">
+    <span class="l-guide">the real word</span>
+    <span class="l-silly">a silly word</span>
+  </div>
+
+  <div class="end-strip" id="end-strip" hidden>
+    <span>That's the whole song!</span>
+    <button class="btn" data-act="restart"><span aria-hidden="true">↺</span> Start over</button>
+    <button class="btn ghost" data-act="next">Next song →</button>
+  </div>
+
+  <section class="stage" id="stage" aria-live="polite">
+    <div class="art-layer" id="art-layer"></div>
+    <span class="label">Your song</span>
+    <div class="sung" id="sung"></div>
+  </section>
+
+  <div class="lower">
+    <section class="source">
+      <span class="label">The real lyrics</span>
+      <h2 id="src-title"></h2>
+      <p class="credit" id="src-credit"></p>
+      <div class="src" id="src"></div>
+    </section>
+    <section class="how">
+      <span class="label">How it works</span>
+      <h2>How to play</h2>
+      <p>Pick a song, then press the <b>green key</b>. It sings the next word of the song. Keep pressing the green key and you'll play the whole song.</p>
+      <p>Press <b>any other key</b> and it sings a silly word instead, like "Twinkle, twinkle, little meatball."</p>
+      <p>Your song shows up under the piano as you play. When it's done, start over or try the next song.</p>
+      <p>Don't want to play? Press <b>Auto play</b> and watch it go.</p>
+      <p>On a computer, the letter keys play the piano too.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+// Song and word data for Mad Libs Piano. All song lyrics are in the public domain.
+// Each lyric word is written "word|TAG", where TAG is its part of speech.
+// The green key always sings the real word; every other key sings a silly word with the same TAG.
+// build.js inlines this file into the page and lists every word for build_voice.py to record.
+
+const POS_NAMES = {
+  N: "noun", NS: "plural noun", NAME: "name", PRON: "person", POSS: "whose",
+  V: "verb", VING: "verb ending in -ing", VED: "past-tense verb", LINK: "linking verb", LINKPAST: "linking verb, past",
+  MODAL: "helping verb", ADJ: "adjective", ADV: "adverb", PREP: "preposition", DET: "determiner",
+  CONJ: "conjunction", WH: "question word", INTJ: "exclamation", NUM: "number", TO: "to + adverb",
+  ITIS: "it is", ITWAS: "it was", IM: "I am", ID: "I would", VS: "verb ending in -s"
+};
+
+// Silly words, by part of speech. Kept kid-friendly.
+const SILLY = {
+  N: ["pickle", "noodle", "walrus", "burrito", "kazoo", "potato", "llama", "sock", "toaster", "banana", "armpit",
+    "pancake", "hamster", "meatball", "unicorn", "sandwich", "penguin", "waffle", "cactus", "trombone", "goblin",
+    "nugget", "spatula", "donut", "octopus", "pudding", "broccoli", "poodle", "eyebrow", "marshmallow", "tuba",
+    "chicken", "bathtub", "giraffe", "muffin", "weasel", "platypus", "jellybean", "nostril", "cupcake", "raccoon",
+    "slipper", "moose", "taco", "pretzel", "toenail", "noggin", "burp", "tutu", "lasagna", "porcupine", "wombat"],
+  NS: ["pickles", "noodles", "walruses", "socks", "toasters", "bananas", "pancakes", "hamsters", "meatballs",
+    "unicorns", "penguins", "waffles", "kazoos", "armpits", "goblins", "nuggets", "donuts", "potatoes", "llamas",
+    "burritos", "chickens", "muffins", "cupcakes", "raccoons", "slippers", "eyebrows", "marshmallows", "jellybeans",
+    "nostrils", "weasels", "tacos", "pretzels", "gerbils", "toenails", "bubbles", "dinosaurs", "sneakers", "robots",
+    "grandmas", "underpants", "meatloaves", "noodle-heads", "pigeons", "wombats"],
+  NAME: ["Gertrude", "Kevin", "Mildred", "Waldo", "Bartholomew", "Doris", "Gus", "Bernadette", "Rumpelstiltskin",
+    "Nebraska", "Albuquerque", "Timbuktu", "Cleveland", "Toledo", "Kalamazoo", "Mississippi", "Wisconsin",
+    "Humperdinck", "Ethel", "Fernando", "Agnes", "Barnaby", "Winnifred", "Poughkeepsie", "Tallahassee", "Ziggy"],
+  PRON: ["Grandma", "Grandpa", "Santa", "Bigfoot", "Dracula", "nobody", "everybody", "somebody", "Mom", "Dad",
+    "Kevin", "Gertrude", "the dog", "my uncle", "a pirate", "the mailman", "a wizard", "the baby", "a robot",
+    "the teacher", "a ninja", "Aunt Mildred", "the goldfish", "a cowboy"],
+  POSS: ["Grandma's", "Grandpa's", "Santa's", "Bigfoot's", "Dracula's", "somebody's", "nobody's", "everybody's",
+    "Kevin's", "Mildred's", "the dog's", "a pirate's", "the mailman's", "a wizard's", "the baby's", "a robot's",
+    "the teacher's", "a ninja's", "my uncle's", "a cowboy's"],
+  V: ["wiggle", "sneeze", "burp", "tickle", "juggle", "waddle", "hiccup", "slurp", "boogie", "yodel", "giggle",
+    "scoot", "gobble", "smooch", "wobble", "sniff", "bounce", "squish", "nibble", "moonwalk", "tiptoe", "honk",
+    "quack", "munch", "flap", "twirl", "squeak", "lick", "poke", "splash", "gargle", "cartwheel", "shimmy", "snore",
+    "toot", "hug", "pounce", "belly flop"],
+  VING: ["wiggling", "sneezing", "burping", "tickling", "juggling", "waddling", "slurping", "yodeling", "giggling",
+    "gobbling", "wobbling", "bouncing", "squishing", "nibbling", "snoring", "honking", "twirling", "splashing",
+    "gargling", "tiptoeing", "moonwalking", "munching", "flapping", "sniffing", "scooting", "hopping", "quacking",
+    "smooching", "shimmying", "tooting"],
+  VED: ["wiggled", "sneezed", "burped", "tickled", "juggled", "waddled", "slurped", "yodeled", "giggled", "gobbled",
+    "wobbled", "bounced", "squished", "nibbled", "snored", "honked", "twirled", "splashed", "licked", "poked",
+    "smooched", "tooted", "flopped", "sniffed", "munched", "hiccupped", "gargled", "tiptoed", "moonwalked",
+    "scooted", "plopped", "quacked", "shimmied"],
+  LINK: ["smell", "look", "feel", "seem", "taste", "sound", "stay", "get", "turn", "act", "grow", "go"],
+  LINKPAST: ["smelled", "looked", "felt", "seemed", "tasted", "sounded", "stayed", "got", "turned", "acted",
+    "grew", "went", "became"],
+  MODAL: ["might", "could", "should", "would", "must", "shall", "may", "can", "won't", "can't", "will", "did", "didn't"],
+  ADJ: ["squishy", "stinky", "wobbly", "soggy", "fluffy", "sparkly", "greasy", "crunchy", "bouncy", "slimy",
+    "grumpy", "sticky", "ticklish", "lumpy", "gigantic", "teeny", "purple", "bald", "spicy", "smelly", "jiggly",
+    "cranky", "hairy", "moldy", "gooey", "fuzzy", "noisy", "sweaty", "cheesy", "dizzy", "nutty", "wacky", "goofy",
+    "fancy", "rubbery", "sneaky", "puffy", "crusty", "chunky", "frumpy", "lopsided", "itchy", "bossy", "toasty"],
+  ADV: ["wildly", "sloppily", "loudly", "sneakily", "grumpily", "backwards", "sideways", "clumsily", "noisily",
+    "dizzily", "secretly", "awkwardly", "bravely", "lazily", "suddenly", "politely", "rudely", "barefoot", "twice",
+    "upside down", "extremely", "totally", "barely", "kinda", "sorta", "squishily", "gently", "never", "nearly",
+    "almost", "accidentally"],
+  PREP: ["under", "behind", "inside", "beside", "around", "between", "beneath", "upon", "toward", "against",
+    "past", "beyond", "near", "without", "among", "onto", "outside", "underneath", "across", "over", "within"],
+  DET: ["one", "some", "this", "that", "every", "no", "each", "my", "your", "our", "any", "another", "a", "the",
+    "a big", "a tiny", "a smelly", "a soggy", "a purple", "an extra", "your mom's", "the whole"],
+  CONJ: ["and", "but", "or", "yet", "so", "plus", "because", "although", "unless", "while", "and then", "but also"],
+  WH: ["who", "why", "when", "where", "which", "whatever", "whoever", "wherever", "whenever", "how come", "what"],
+  INTJ: ["whoa", "yikes", "gosh", "golly", "phooey", "yippee", "whoopsie", "hooray", "hey", "wowza", "oops", "ahoy",
+    "egad", "yahoo", "boing", "ta-da", "uh-oh", "jeepers", "zoinks", "bleh"],
+  NUM: ["seven", "eleven", "twelve", "a zillion", "twenty", "sixty", "ninety", "thirteen", "eighty", "a million",
+    "four", "a hundred", "a gazillion", "three"],
+  TO: ["not to", "to never", "to sorta", "to secretly", "to kinda", "to sneakily", "to almost", "to loudly"],
+  ITIS: ["it's", "that's", "here's", "there's", "what's", "Grandma's", "who's"],
+  ITWAS: ["there was", "here came", "it smelled", "it seemed", "Grandma said", "it was", "then came", "it tasted"],
+  IM: ["I'm", "you're", "we're", "he's", "she's", "Grandma's", "Santa's", "Bigfoot's", "the dog's", "they're"],
+  VS: ["wiggles", "sneezes", "burps", "tickles", "juggles", "waddles", "hiccups", "slurps", "boogies", "yodels", "giggles",
+    "scoots", "gobbles", "wobbles", "sniffs", "bounces", "squishes", "nibbles", "moonwalks", "tiptoes", "honks", "quacks",
+    "munches", "twirls", "squeaks", "splashes", "gargles", "shimmies", "snores", "toots"],
+  ID: ["I'd", "you'd", "we'd", "he'd", "she'd", "they'd", "Grandma'd", "nobody'd"]
+};
+
+// Melodies: one MIDI note per word, line by line (same tunes as Song Piano).
+const SONGS = [
+  { id: "twinkle", title: "Twinkle, Twinkle, Little Star", credit: "Words by Jane Taylor, 1806",
+    melody: [[[60, 60], [67, 67], [69, 69], 67], [65, 65, [64, 64], 62, 62, 60], [67, [67, 65], 65, 64, 64, 62], [67, 67, [65, 65], 64, 64, 62], [[60, 60], [67, 67], [69, 69], 67], [65, 65, [64, 64], 62, 62, 60]],
+    lyrics: `Twinkle,|V twinkle,|V little|ADJ star,|N
+How|WH I|PRON wonder|V what|WH you|PRON are!|LINK
+Up|ADV above|PREP the|DET world|N so|ADV high,|ADJ
+Like|PREP a|DET diamond|N in|PREP the|DET sky.|N
+Twinkle,|V twinkle,|V little|ADJ star,|N
+How|WH I|PRON wonder|V what|WH you|PRON are!|LINK` },
+  { id: "row", title: "Row, Row, Row Your Boat", credit: "Traditional, first printed 1852",
+    melody: [[60, 60, 60, 62, 64], [[64, 62], 64, 65, 67], [[72, 72, 72], [67, 67, 67], [64, 64, 64], [60, 60, 60]], [67, 65, 64, 62, 60]],
+    lyrics: `Row,|V row,|V row|V your|POSS boat,|N
+Gently|ADV down|PREP the|DET stream.|N
+Merrily,|ADV merrily,|ADV merrily,|ADV merrily,|ADV
+Life|N is|LINK but|ADV a|DET dream.|N` },
+  { id: "grace", title: "Amazing Grace", credit: "Words by John Newton, 1779",
+    melody: [[[60, 65, 69], 69, 67, 65, 62, 60], [60, 65, 69, 69, 67, 72], [69, 72, 69, 69, 67, 65, 62, 60], [60, 65, 69, 67, 67, 65], [60, 65, 69, 69, 67, 65, 62, 60], [60, 65, 69, 69, [67, 72]], [69, [72, 69], 69, 67, 65, [62, 60]], [60, 65, 69, 67, [67, 65]], [60, [65, 69], [69, 67], 65, 62, 60], [60, 65, [69, 69, 67], 72], [69, 72, 69, 69, 67, 65, 62, 60], [60, 65, 69, 67, 67, 65]],
+    lyrics: `Amazing|ADJ grace!|N How|WH sweet|ADJ the|DET sound|N
+That|WH saved|VED a|DET wretch|N like|PREP me!|PRON
+I|PRON once|ADV was|LINKPAST lost,|ADJ but|CONJ now|ADV am|LINK found;|ADJ
+Was|LINKPAST blind,|ADJ but|CONJ now|ADV I|PRON see.|V
+'Twas|ITWAS grace|N that|WH taught|VED my|POSS heart|N to|TO fear,|V
+And|CONJ grace|N my|POSS fears|NS relieved;|VED
+How|WH precious|ADJ did|MODAL that|DET grace|N appear|V
+The|DET hour|N I|PRON first|ADV believed!|VED
+Through|PREP many|DET dangers,|NS toils|NS and|CONJ snares,|NS
+I|PRON have|MODAL already|ADV come;|VED
+'Tis|ITIS grace|N hath|MODAL brought|VED me|PRON safe|ADJ thus|ADV far,|ADV
+And|CONJ grace|N will|MODAL lead|V me|PRON home.|N` },
+  { id: "clementine", title: "Oh My Darling, Clementine", credit: "Words by Percy Montrose, 1884",
+    melody: [[60, 60, [60, 55], 64, 64, [64, 60]], [[60, 64, 67, 67], 65, 64, 62], [62, 64, [65, 65], [64, 62, 64, 60]], [60, 64, [62, 55], [59, 62, 60]], [60, 60, [60, 55], 64, 64, [64, 60]], [60, 64, [67, 67], [65, 64, 62]], [62, 64, 65, 65, 64, [62, 64, 60]], [[60, 64], [62, 55], [59, 62, 60]], [60, 60, 60, 55, 64, 64, [64, 60]], [60, 64, 67, 67, [65, 64], 62], [[62, 64], [65, 65], [64, 62], [64, 60]], [[60, 64], 62, 55, [59, 62, 60]]],
+    lyrics: `In|PREP a|DET cavern,|N in|PREP a|DET canyon,|N
+Excavating|VING for|PREP a|DET mine,|N
+Dwelt|VED a|DET miner|N forty-niner,|N
+And|CONJ his|POSS daughter|N Clementine.|NAME
+Oh|INTJ my|POSS darling,|N oh|INTJ my|POSS darling,|N
+Oh|INTJ my|POSS darling,|N Clementine!|NAME
+You|PRON are|LINK lost|ADJ and|CONJ gone|ADJ forever,|ADV
+Dreadful|ADJ sorry,|ADJ Clementine.|NAME
+Light|ADJ she|PRON was|LINKPAST and|CONJ like|PREP a|DET fairy,|N
+And|CONJ her|POSS shoes|NS were|LINKPAST number|N nine,|NUM
+Herring|N boxes|NS without|PREP topses,|NS
+Sandals|NS were|LINKPAST for|PREP Clementine.|NAME` },
+  { id: "range", title: "Home on the Range", credit: "Words by Brewster Higley, 1870s",
+    melody: [[55, 55, 60, 62, 64, 60, 59, [57, 65, 65], 65], [64, 65, 67, 64, 64, 64, 62], [55, 55, 62, 64, 60, 59, 65], [65, 65, 64, 62, 60, 59, 62, 60], [67, 65, 64, 65, 67], [64, 65, 67, 64, 64, 64, 62], [55, 55, 62, 64, 60, 59, 65], [65, 65, 64, 62, 60, 59, 62, 60]],
+    lyrics: `Oh,|INTJ give|V me|PRON a|DET home|N where|WH the|DET buffalo|NS roam,|V
+Where|WH the|DET deer|NS and|CONJ the|DET antelope|NS play,|V
+Where|WH seldom|ADV is|LINK heard|VED a|DET discouraging|ADJ word,|N
+And|CONJ the|DET skies|NS are|LINK not|ADV cloudy|ADJ all|DET day.|N
+Home,|N home|N on|PREP the|DET range,|N
+Where|WH the|DET deer|NS and|CONJ the|DET antelope|NS play;|V
+Where|WH seldom|ADV is|LINK heard|VED a|DET discouraging|ADJ word,|N
+And|CONJ the|DET skies|NS are|LINK not|ADV cloudy|ADJ all|DET day.|N` },
+  { id: "shenandoah", title: "Shenandoah", credit: "Traditional sea shanty, 1800s",
+    melody: [[55, 60, 69, 67, 65, 72, 69], [67, 67, 69, 64], [55, 60, 69, 67, 65, 72, 69], [62, 64, 60, 64], [67, 60, 62, 60], [55, 60, 69, 67, 72, 69], [67, 67, 69, 64], [55, 60, 69, 67, 65, 72, 69], [62, 64, 60, 64], [67, 60, 62, 60]],
+    lyrics: `Oh|INTJ Shenandoah,|NAME I|PRON long|V to|TO see|V you,|PRON
+Away,|ADV you|PRON rolling|ADJ river.|N
+Oh|INTJ Shenandoah,|NAME I|PRON long|V to|TO see|V you,|PRON
+Away,|ADV I'm|IM bound|ADJ away|ADV
+'Cross|PREP the|DET wide|ADJ Missouri.|NAME
+Oh|INTJ Shenandoah,|NAME I|PRON love|V your|POSS daughter,|N
+Away,|ADV you|PRON rolling|ADJ river.|N
+For|PREP her|PRON I'd|ID cross|V your|POSS roaming|ADJ waters,|NS
+Away,|ADV I'm|IM bound|ADJ away|ADV
+'Cross|PREP the|DET wide|ADJ Missouri.|NAME` },
+  { id: "birthday", title: "Happy Birthday to You", credit: "Tune and words from the 1890s. The most-sung song in the world",
+    melody: [[[60, 60], [62, 60], 65, 64], [[60, 60], [62, 60], 67, 65], [[60, 60], [72, 69], 65, 64], [[70, 70], [69, 65], 67, 65]],
+    lyrics: `Happy|ADJ birthday|N to|PREP you!|PRON
+Happy|ADJ birthday|N to|PREP you!|PRON
+Happy|ADJ birthday,|N dear|ADJ Sam,|NAME
+Happy|ADJ birthday|N to|PREP you!|PRON` },
+  { id: "jingle", title: "Jingle Bells", credit: "Words and music by James Lord Pierpont, 1857",
+    melody: [[[69, 69], 69, [69, 69], 69], [[69, 72], 65, 67, 69], [70, 70, 70, 70, 70, 69, 69, 69, 69, [67, 67], [69, 67], 72], [[69, 69], 69, [69, 69], 69], [[69, 72], 65, 67, 69], [70, 70, 70, 70, 70, 69, 69, 69, 69, [72, 72], [70, 67], 65]],
+    lyrics: `Jingle|V bells,|NS jingle|V bells,|NS
+Jingle|V all|DET the|DET way!|N
+Oh|INTJ what|WH fun|N it|PRON is|LINK to|TO ride|V in|PREP a|DET one-horse|ADJ open|ADJ sleigh!|N
+Jingle|V bells,|NS jingle|V bells,|NS
+Jingle|V all|DET the|DET way!|N
+Oh|INTJ what|WH fun|N it|PRON is|LINK to|TO ride|V in|PREP a|DET one-horse|ADJ open|ADJ sleigh!|N` },
+  { id: "macdonald", title: "Old MacDonald Had a Farm", credit: "Traditional farm song, printed by 1917",
+    melody: [[65, [65, 65, 60], 62, 62, 60], [69, 69, 67, 67, 65], [60, 65, 65, 65, 60, 62, 62, 60], [69, 69, 67, 67, 65], [60, 60, 65, 65, 65, 60, 60, 65, 65, 65], [65, 65, 65, 65, 65, 65, [65, 65, 65], 65, 65, 65], [65, [65, 65, 60], 62, 62, 60], [69, 69, 67, 67, 65]],
+    lyrics: `Old|ADJ MacDonald|NAME had|VED a|DET farm,|N
+E-|INTJ I-|INTJ E-|INTJ I-|INTJ O!|INTJ
+And|CONJ on|PREP his|POSS farm|N he|PRON had|VED a|DET cow,|N
+E-|INTJ I-|INTJ E-|INTJ I-|INTJ O!|INTJ
+With|PREP a|DET moo|N moo|N here|ADV and|CONJ a|DET moo|N moo|N there,|ADV
+Here|ADV a|DET moo,|N there|ADV a|DET moo,|N everywhere|ADV a|DET moo|N moo!|N
+Old|ADJ MacDonald|NAME had|VED a|DET farm,|N
+E-|INTJ I-|INTJ E-|INTJ I-|INTJ O!|INTJ` },
+  { id: "merry", title: "We Wish You a Merry Christmas", credit: "Traditional English carol",
+    melody: [[62, 67, 67, 69, [67, 66], [64, 64]], [64, 69, 69, 71, [69, 67], [66, 62]], [62, 71, 71, 72, [71, 69], [67, 64]], [62, 62, [64, 69], 66, 67]],
+    lyrics: `We|PRON wish|V you|PRON a|DET merry|ADJ Christmas,|N
+We|PRON wish|V you|PRON a|DET merry|ADJ Christmas,|N
+We|PRON wish|V you|PRON a|DET merry|ADJ Christmas,|N
+And|CONJ a|DET happy|ADJ New|ADJ Year!|N` },
+  { id: "mary", title: "Mary Had a Little Lamb", credit: "Words by Sarah Josepha Hale, 1830",
+    melody: [[[64, 62], 60, 62, [64, 64], 64], [[62, 62], 62, [64, 67], 67], [[64, 62], 60, 62, [64, 64], 64], [64, 62, 62, 64, 62, 60], [[64, 62, 60], 62, [64, 64], 64], [[62, 62], 62, [64, 67], 67], [[64, 62, 60], 62, [64, 64], 64], [64, 62, 62, 64, 62, 60]],
+    lyrics: `Mary|NAME had|VED a|DET little|ADJ lamb,|N
+Little|ADJ lamb,|N little|ADJ lamb,|N
+Mary|NAME had|VED a|DET little|ADJ lamb,|N
+Its|POSS fleece|N was|LINKPAST white|ADJ as|PREP snow.|N
+Everywhere|ADV that|WH Mary|NAME went,|VED
+Mary|NAME went,|VED Mary|NAME went,|VED
+Everywhere|ADV that|WH Mary|NAME went,|VED
+The|DET lamb|N was|LINKPAST sure|ADJ to|TO go.|V` },
+  { id: "spider", title: "The Itsy Bitsy Spider", credit: "Traditional, printed by 1910",
+    melody: [[55, [60, 60, 60, 62], [64, 64], 64, 62, 60, [62, 64], 60], [64, 64, 65, 67, 67, 65, 64, [65, 67], 64],
+      [60, 60, 62, 64, 64, 62, 60, 62, 64, 60], [55, 55, [60, 60, 60, 62], [64, 64], 64, 62, 60, 62, [64, 60]]],
+    lyrics: `The|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET water|N spout.|N
+Down|ADV came|VED the|DET rain|N and|CONJ washed|VED the|DET spider|N out.|ADV
+Out|ADV came|VED the|DET sun|N and|CONJ dried|VED up|ADV all|DET the|DET rain,|N
+And|CONJ the|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET spout|N again.|ADV` },
+  { id: "london", title: "London Bridge Is Falling Down", credit: "Traditional English rhyme, 1700s",
+    melody: [[[67, 69], 67, 65, [64, 65], 67], [[62, 64], 65, [64, 65], 67], [[67, 69], 67, 65, [64, 65], 67], [62, 67, [64, 60]],
+      [67, 69, 67, 65, 64, 65, 67], [62, 64, 65, 64, 65, 67], [67, 69, 67, 65, 64, 65, 67], [62, 67, [64, 60]]],
+    lyrics: `London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
+Falling|VING down,|ADV falling|VING down,|ADV
+London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
+My|POSS fair|ADJ lady!|N
+Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
+Sticks|NS and|CONJ stones,|NS sticks|NS and|CONJ stones,|NS
+Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
+My|POSS fair|ADJ lady!|N` },
+  { id: "yankee", title: "Yankee Doodle", credit: "American folk song, 1700s",
+    melody: [[[60, 60], [62, 64], 60, 64, 62], [[55, 60, 60], 62, 64, [60, 59]], [60, 60, [62, 64], 65, 64, 62], [60, 59, 55, [57, 59, 60, 60]]],
+    lyrics: `Yankee|NAME Doodle|NAME went|VED to|PREP town,|N
+A-riding|VING on|PREP a|DET pony,|N
+Stuck|VED a|DET feather|N in|PREP his|POSS cap,|N
+And|CONJ called|VED it|PRON macaroni!|N` },
+  { id: "sleeping", title: "Are You Sleeping (Frère Jacques)", credit: "Traditional French round, 1700s",
+    melody: [[60, 62, [64, 60], 60, 62, [64, 60]], [[64, 65], 67, [64, 65], 67], [[67, 69], 67, 65, [64, 60], [67, 69], 67, 65, [64, 60]], [60, 55, 60, 60, 55, 60]],
+    lyrics: `Are|LINK you|PRON sleeping,|VING are|LINK you|PRON sleeping,|VING
+Brother|N John?|NAME Brother|N John?|NAME
+Morning|N bells|NS are|LINK ringing,|VING morning|N bells|NS are|LINK ringing,|VING
+Ding,|INTJ dang,|INTJ dong!|INTJ Ding,|INTJ dang,|INTJ dong!|INTJ` },
+  { id: "farmer", title: "The Farmer in the Dell", credit: "Traditional singing game, 1800s",
+    melody: [[55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 64], 62, 62, 60],
+      [55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 64], 62, 62, 60]],
+    lyrics: `The|DET farmer|N in|PREP the|DET dell,|N
+The|DET farmer|N in|PREP the|DET dell,|N
+Hi-ho,|INTJ the|DET derry-o,|INTJ
+The|DET farmer|N in|PREP the|DET dell!|N
+The|DET farmer|N takes|VS a|DET wife,|N
+The|DET farmer|N takes|VS a|DET wife,|N
+Hi-ho,|INTJ the|DET derry-o,|INTJ
+The|DET farmer|N takes|VS a|DET wife!|N` },
+  { id: "scarborough", title: "Scarborough Fair", credit: "Traditional English ballad",
+    melody: [[60, 60, [67, 67], 67, [62, 63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72, 72], 70, 67, 67, 65, 63, 62], [60, 67, 65, 63, 62, 60, 58, 60],
+      [60, 60, 67, 67, 67, 62, [63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72], 72, 70, 67, [67, 65, 62]], [60, 67, 65, 63, 62, 60, 58, 60]],
+    lyrics: `Are|LINK you|PRON going|VING to|PREP Scarborough|NAME Fair?|NAME
+Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
+Remember|V me|PRON to|PREP one|PRON who|WH lives|VS there,|ADV
+She|PRON once|ADV was|LINKPAST a|DET true|ADJ love|N of|PREP mine.|PRON
+Tell|V her|PRON to|TO make|V me|PRON a|DET cambric|ADJ shirt,|N
+Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
+Without|PREP no|DET seams|NS nor|CONJ needlework,|N
+Then|ADV she'll|IM be|LINK a|DET true|ADJ love|N of|PREP mine.|PRON` },
+  { id: "saints", title: "When the Saints Go Marching In", credit: "Traditional American spiritual and jazz standard",
+    melody: [[60, 64, 65, 67, 60, [64, 65], 67], [60, 64, 65, 67, 64, [60, 64], 62], [64, 64, 62, 60, 60, 64, 67, 67, [65, 65]], [64, 65, 67, 64, [60, 62], 60]],
+    lyrics: `Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
+Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
+Oh|INTJ Lord,|NAME I|PRON want|V to|TO be|V in|PREP that|DET number,|N
+When|WH the|DET saints|NS go|V marching|VING in!|ADV` },
+  { id: "daisy", title: "Daisy Bell (Bicycle Built for Two)", credit: "Words and music by Harry Dacre, 1892",
+    melody: [[[72, 69], [65, 60], 62, 64, 65, [62, 65], 60], [67, 72, [69, 65], 62, 64, 65, 67, 69, 67], [69, 70, 69, 67, [72, 69], [67, 65]], [67, 69, [65, 62], 65, [62, 60]],
+      [60, 65, 69, 67, [60, 65], 69, 67], [69, 70, [72, 69, 65], 67, 60, 65]],
+    lyrics: `Daisy,|NAME Daisy,|NAME give|V me|PRON your|POSS answer,|N do!|V
+I'm|IM half|ADV crazy|ADJ all|ADV for|PREP the|DET love|N of|PREP you.|PRON
+It|PRON won't|MODAL be|V a|DET stylish|ADJ marriage,|N
+I|PRON can't|MODAL afford|V a|DET carriage,|N
+But|CONJ you'll|ID look|V sweet|ADJ upon|PREP the|DET seat|N
+Of|PREP a|DET bicycle|N built|VED for|PREP two!|NUM` },
+  { id: "joy", title: "Ode to Joy (Joyful, Joyful)", credit: "Tune by Beethoven, 1824. Words by Henry van Dyke, 1907",
+    melody: [[[64, 64], [65, 67], 67, [65, 64], 62], [60, 60, [62, 64], 64, 62, 62], [64, [64, 65], 67, 67, [65, 64], 62], [[60, 60], 62, 64, 62, [60, 60]]],
+    lyrics: `Joyful,|ADJ joyful,|ADJ we|PRON adore|V thee,|PRON
+God|NAME of|PREP glory,|N Lord|NAME of|PREP love;|N
+Hearts|NS unfold|V like|PREP flowers|NS before|PREP thee,|PRON
+Opening|VING to|PREP the|DET sun|N above.|ADV` },
+  { id: "auld", title: "Auld Lang Syne", credit: "Words by Robert Burns, 1788. Traditional Scottish tune",
+    melody: [[55, 60, [60, 60, 64], 62, [60, 62]], [64, [60, 60], 64, 67, 69], [69, 67, [64, 64, 60], 62, [60, 62]], [64, 60, 57, 60]],
+    lyrics: `Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
+And|CONJ never|ADV brought|VED to|PREP mind?|N
+Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
+And|CONJ auld|ADJ lang|ADJ syne?|N` }
+];
+
+// Song menu order: the simplest, best-known songs first; long story-songs that suit
+// "One syllable" best (Clementine, Scarborough Fair) at the bottom.
+const SONG_ORDER = ["twinkle", "row", "birthday", "mary", "macdonald", "jingle", "spider", "london", "sleeping", "farmer",
+  "yankee", "merry", "saints", "joy", "daisy", "auld", "range", "grace", "shenandoah", "clementine", "scarborough"];
+SONGS.sort((a, b) => SONG_ORDER.indexOf(a.id) - SONG_ORDER.indexOf(b.id));
+
+
+// Hand-picked silly words for each word of each song, written with the song in mind:
+// rhymes where they work ("Gnome, gnome on the stove"), jokes from the song's own world,
+// and words that make a funny phrase with their neighbours. Same part of speech as the
+// word they replace. Keys are the word in lower case; "word|TAG" picks one use of a word
+// that appears with two parts of speech in the same song.
+// The keys nearest the green key get these words first; keys further away fall back to SILLY.
+
+const ALTS = {
+  twinkle: {
+    "twinkle": "sprinkle, wrinkle, crinkle, jingle, jiggle, wiggle, sizzle, fizzle, drizzle, dribble, giggle, wobble, hiccup, yodel, pickle, tickle",
+    "little": "teeny, itty-bitty, gigantic, ginormous, squishy, sweaty, stinky, cheesy, crispy, lumpy, sleepy, chubby, wobbly, crunchy, glowing, hairy",
+    "star": "candy bar, pickle jar, guitar, jaguar, chocolate bar, meatball, disco ball, nightlight, firefly, cheeseball, marshmallow, potato, flashlight, lightbulb, hamster, car",
+    "how": "why, when, where, how come, whenever, wherever, why on earth, because",
+    "i": "my cat, the moon, an astronaut, my grandma, a sleepy owl, Bigfoot, the tooth fairy, my teddy bear, a space alien, a sleepwalker, the man in the moon, my goldfish",
+    "wonder": "sniff, lick, taste, smell, tickle, nibble, poke, guess, measure, interview, high-five, wrestle, sneeze at, yodel at",
+    "what": "who, where, how big, how smelly, how sticky, how hairy, how cheesy, how fast, how far, how crunchy, how sneezy, how loud",
+    "you": "your socks, your mom, the moon, Uncle Bob, my nose, the pizza, a llama, the cat, your feet, my pillow, a burrito, the dog",
+    "are": "weigh, cost, eat, smell, taste, snore, burp, sound, look, mean, dream, owe",
+    "up": "way, down, sideways, upside down, backwards, waaay, deep, smack, right, far, hopping, wiggling",
+    "above": "below, under, inside, behind, beneath, around, beside, all over, on top of, underneath, way past, upon",
+    "the": "my, your, Grandma's, a cheesy, the whole, everybody's, a soggy, the stinky, my uncle's, a sleepy, the sticky, a fuzzy",
+    "world": "squirrel, pearl, swirl, curl, kitchen, bathtub, doghouse, pancake, sandwich, school bus, refrigerator, cheese, laundry, trampoline, swimming pool, potato",
+    "so": "too, very, super, way, totally, extra, kinda, sorta, ridiculously, embarrassingly, suspiciously, wobbly",
+    "high": "shy, dry, fried, sly, sleepy, sticky, wiggly, sneezy, crunchy, hungry, grumpy, slimy, spicy, cheesy, stinky, fluffy",
+    "like": "unlike, inside, behind, beside, under, without, near, on top of, instead of, next to",
+    "a": "one, my, your, a giant, a greasy, a frozen, a moldy, a talking, a hairy, a glow-in-the-dark, a squishy, a stinky",
+    "diamond": "diaper, dinosaur, donut, potato chip, pineapple, meatball, pickle, toaster, hairball, marshmallow, chicken nugget, cupcake, dumpling, doorknob, bubblegum, hamster",
+    "in": "under, behind, inside, beside, on, beneath, near, over, around, all over",
+    "sky": "pie, French fry, eye, bow tie, apple pie, soup, bathtub, fridge, sandbox, oven, closet, microwave, cereal, armpit, potpie, pigsty"
+  },
+  row: {
+    "row": "mow, tow, throw, blow, sew, lick, sniff, hug, tickle, shampoo, butter, honk, pedal, steer, slurp, smooch",
+    "your": "my, Grandma's, the dog's, a pirate's, Santa's, a walrus's, your mom's, the teacher's, a duck's, a frog's, nobody's, Bigfoot's",
+    "boat": "goat, coat, throat, root beer float, billy goat, raincoat, rubber duck, bathtub, sofa, shoe, banana, waffle, pickle, hamster, school bus, lawnmower",
+    "gently": "wildly, sneakily, sloppily, grumpily, loudly, clumsily, angrily, backwards, sideways, upside down, hungrily, sleepily, dizzily, rudely, noisily, frantically",
+    "down": "up, around, across, under, into, inside, behind, over, through, all over, against, beneath",
+    "the": "my, your, Grandma's, a stinky, a bubbly, a soggy, the whole, the chocolate, a frozen, a slimy, the gooey, a sticky",
+    "stream": "ice cream, whipped cream, sour cream, cream cheese, football team, steam, laser beam, moonbeam, sunbeam, bathtub, soup, gravy, pudding, kitchen sink, swimming pool, milkshake",
+    "merrily": "grumpily, sloppily, burpily, sneezily, lazily, crazily, dizzily, hungrily, sleepily, greasily, cheesily, smellily, noisily, clumsily, angrily, squishily",
+    "life": "knife, lunch, school, math, homework, Grandpa, broccoli, pizza, Tuesday, bathtime, bedtime, summer camp, dinner, recess, spaghetti, Monday",
+    "is": "smells, tastes, looks, sounds, feels, seems, stays, gets, acts, becomes, burps",
+    "but": "just, barely, totally, mostly, secretly, basically, kinda, sorta, only, probably, accidentally, technically",
+    "a": "one, my, your, a big, a stinky, a soggy, a cheesy, a squishy, a bad, a weird, a greasy, a gooey",
+    "dream": "ice cream, whipped cream, scream, team, steam, jelly bean, sunbeam, moonbeam, laser beam, sandwich, pickle, burrito, hiccup, tummy ache, bubble bath, meatball"
+  },
+  grace: {
+    "amazing": "amusing, confusing, disgusting, blazing, glazed, stinky, squishy, gigantic, cheesy, slippery, crunchy, gooey, ticklish, embarrassing, sneezy, sparkly",
+    "grace": "face, space, lace, vase, shoelace, suitcase, pillowcase, toothpaste, cheese, gravy, bacon, pancake, outer space, mustache, ice cube, waffle",
+    "how": "why, when, where, how come, whenever, wherever, why oh why, because",
+    "sweet": "neat, sour, salty, spicy, stinky, squeaky, cheesy, fishy, crunchy, sticky, sweaty, burpy, loud, weird, fresh, beefy",
+    "the": "my, your, Grandpa's, a, this, a loud, a squeaky, the burpy, the cat's, a walrus's, the stinky, my tummy's",
+    "sound": "smell, burp, hiccup, sneeze, snore, honk, squeak, hound, pound cake, playground, merry-go-round, ground beef, greyhound, potato, meatball, toot",
+    "that|WH": "who, which, whoever, whatever, the guy who, the goat that",
+    "saved": "shaved, waved at, paved, bathed, licked, tickled, tackled, sneezed on, burped on, washed, smooched, babysat, hugged, pickled, buttered, microwaved",
+    "a": "one, my, your, a stinky, a smelly, a soggy, a grumpy, a sweaty, a cheesy, a hairy, a grubby, a wiggly",
+    "wretch": "sketch, ketchup, slob, goofball, knucklehead, couch potato, stinker, weirdo, grouch, sloth, gremlin, pickle, noodle, booger, doofus, dork",
+    "like": "unlike, near, behind, beside, inside, without, under, plus, instead of, next to",
+    "me": "my dog, my sister, Grandpa, a raccoon, Uncle Bob, the mailman, my goldfish, my teacher, a walrus, my baby brother, my socks, Bigfoot",
+    "i": "my dog, my sister, Grandpa, a raccoon, my goldfish, Uncle Bob, the mailman, a walrus, my cat, my teacher, Bigfoot, the baby",
+    "once": "twice, never, always, sometimes, often, usually, accidentally, secretly, totally, kinda, three times, every Tuesday",
+    "was": "got, felt, smelled, looked, seemed, went, became, stayed, turned, grew, sounded, tasted",
+    "lost": "frosted, sauced, tossed, bossy, sticky, sweaty, sleepy, squishy, stinky, soggy, cheesy, dizzy, grumpy, hungry, ticklish, glossy",
+    "but": "and, so, plus, then, yet, or, because, although, unless",
+    "now": "later, sometimes, tomorrow, on Tuesday, always, suddenly, secretly, at lunch, twice, never",
+    "am": "smell, look, feel, sound, taste, stay, get, act, seem",
+    "found": "round, browned, crowned, bald, soggy, sticky, smelly, ticklish, crunchy, sweaty, cheesy, squishy, glazed, toasted, grumpy, frowned",
+    "blind": "kind, fried, dried, wild, mild, grumpy, sleepy, sticky, stinky, ticklish, bald, cranky, itchy, hairy, refined, lined",
+    "see": "sneeze, ski, flee, agree, wheeze, freeze, sing, burp, dance, smell, snore, giggle, yodel, wiggle, juggle, moonwalk",
+    "'twas": "there was, here came, it smelled, Grandma said, then came, it tasted, here's, who stole",
+    "taught": "caught, bought, fought, sought, got, tickled, tossed, tripped, licked, poked, shaved, bopped, hugged, knotted, buttered, sneezed on",
+    "my": "your, Grandma's, a pirate's, the dog's, my uncle's, Santa's, Bigfoot's, the cat's, a walrus's, nobody's, everybody's, a ninja's",
+    "heart": "tart, cart, go-kart, shopping cart, dart, art, chart, tummy, nose, armpit, belly button, elbow, toenail, eyebrow, kneecap, earwax",
+    "to": "not to, to never, to sorta, to secretly, to kinda, to sneakily, to almost, to loudly, to totally",
+    "fear": "cheer, steer, sneer, smear, sneeze, burp, tickle, dance, wiggle, jiggle, giggle, yodel, hiccup, disappear, reappear, volunteer",
+    "and": "plus, but, or, so, yet, then, also, and then, but also",
+    "fears": "ears, years, gears, spears, cheers, steers, pickles, noodles, socks, toenails, boogers, burps, eyebrows, hiccups, nostrils, armpits",
+    "relieved": "sneezed, received, deceived, retrieved, tickled, sniffed, pickled, burped, juggled, buttered, licked, wiggled, squeezed, froze, peeled, shampooed",
+    "precious": "delicious, suspicious, nutritious, ridiculous, ambitious, stinky, squishy, crunchy, cheesy, slimy, sticky, smelly, wiggly, bossy, sweaty, lumpy",
+    "did": "could, would, might, should, must, can, will, shall, may, didn't, won't",
+    "that|DET": "this, my, your, the, some, one, Grandma's, a stinky, the cheesy, a soggy, the burpy, a squishy",
+    "appear": "disappear, reappear, steer, cheer, sneer, burp, sneeze, wiggle, explode, melt, sparkle, jiggle, giggle, moonwalk, yodel, fizz",
+    "hour": "flower, shower, tower, cauliflower, sunflower, bubble bath, Tuesday, minute, bath time, lunchtime, recess, snack time, nap time, bedtime, birthday, power",
+    "first": "last, twice, once, never, finally, secretly, accidentally, loudly, sneakily, totally, kinda, almost",
+    "believed": "sneezed, received, retrieved, deceived, burped, giggled, sniffed, tickled, wiggled, hiccupped, yodeled, juggled, moonwalked, snored, squeaked, sneaked",
+    "through": "under, over, around, behind, beside, inside, past, between, without, despite, on top of, underneath",
+    "many": "some, few, lots of, a zillion, eleven, ninety, too many, so many, three, no, a few, a thousand",
+    "dangers": "strangers, mangers, park rangers, pickles, noodles, burritos, puddles, hiccups, mosquitoes, boogers, dust bunnies, spiders, socks, pancakes, potholes, cupcakes",
+    "toils": "oils, coils, boils, foils, noodles, pretzels, waffles, toenails, burps, wiggles, tickles, giggles",
+    "snares": "bears, chairs, pears, stairs, hairs, squares, teddy bears, polar bears, rocking chairs, eclairs, nose hairs, underwears",
+    "have": "had, might, could, should, would, must, will, shall",
+    "already": "almost, barely, nearly, accidentally, secretly, finally, never, totally, sorta, kinda, probably, sneakily",
+    "come": "hummed, drummed, burped, sneezed, danced, giggled, wiggled, yodeled, snored, tooted, sung, swum, chewed gum, spun, won, fallen",
+    "'tis": "it's, that's, here's, there's, what's, Grandma's, who's, this is",
+    "hath": "has, had, just, once, might, could, should, would",
+    "brought": "bought, caught, taught, thought, fought, sought, got, flung, tossed, kicked, licked, carried, dragged, pickled, launched, mailed",
+    "safe": "sweaty, stinky, soggy, sticky, smelly, squishy, sleepy, bald, cheesy, frozen, glazed, crispy, dizzy, grumpy, hungry, ticklish",
+    "thus": "way, so, too, very, super, kinda, sorta, way too, ever so, really",
+    "far": "fast, slow, loud, late, early, sideways, backwards, upside down, wildly, quickly, sloppily, twice",
+    "will": "might, could, should, would, must, shall, may, can, won't, can't, did",
+    "lead": "feed, read, need, knead, tickle, sneeze on, piggyback, carry, drag, chase, follow, wheelbarrow, shove, push, juggle, mail",
+    "home": "gnome, comb, foam, dome, Rome, garden gnome, honeycomb, school, camp, lunch, bed, Hawaii, Texas, Paris, Mars, the zoo"
+  },
+  clementine: {
+    "in": "under, behind, inside, beside, near, beneath, above, past, without, on top of",
+    "a": "one, my, your, a smelly, a soggy, a giant, a teeny, a stinky, a dusty, a muddy, a moldy, a haunted",
+    "cavern": "tavern, kitchen, closet, bathtub, sandwich, dumpster, laundromat, refrigerator, outhouse, cereal box, sock drawer, pizza, meatball, hamster cage, cavity, cafeteria",
+    "canyon": "onion, cannon, banana, bathtub, burrito, lasagna, pizza box, hot tub, mud puddle, pickle jar, piñata, frying pan, mailbox, companion, crayon, canoe",
+    "excavating": "exaggerating, decorating, hibernating, levitating, ice skating, roller skating, celebrating, marinating, meditating, procrastinating, vacuuming, tap dancing, belly dancing, yodeling, sneezing, nibbling",
+    "for": "with, without, under, behind, beside, around, past, near, against, inside, like",
+    "mine": "pine, sign, dime, lime, porcupine, valentine, Frankenstein, spine, twine, stop sign, conga line, sunshine, clothesline, pickle, sandwich, swine",
+    "dwelt": "knelt, melted, burped, sneezed, snored, danced, yodeled, wiggled, waddled, slept, tap-danced, moonwalked, juggled, napped, smelt, belched",
+    "miner": "diner, eyeliner, ocean liner, whiner, recliner, designer, burrito, llama, pirate, baker, dentist, plumber, ballerina, wrestler, clown, shiner",
+    "forty-niner": "recliner, whiner, eyeliner, ocean liner, pizza diner, sock designer, seventy-niner, ninety-niner, shoe shiner, porcupine, ballerina, Carolina, cheese grater, dinner diner",
+    "and": "plus, but, or, so, then, and then, but also, while, yet",
+    "his": "her, my, your, their, Grandma's, a pirate's, the dog's, the mule's, Santa's, Bigfoot's, a cowboy's, the sheriff's",
+    "daughter": "otter, water, quarter, sea otter, hot water, sister, goldfish, donkey, mule, parrot, hamster, grandma, pickle, potato, toaster, teeter-totter",
+    "clementine": "Valentine, Frankenstein, Josephine, Geraldine, Tangerine, Nectarine, Gertrude, Bernadette, Kevin, Wolverine, Evangeline, Madeline, Jellybean, Porcupine, Florentine, Turpentine",
+    "oh": "whoa, yikes, gosh, golly, phooey, yippee, ahoy, egad, yee-haw, howdy, uh-oh, oops",
+    "my": "your, his, Grandma's, Santa's, a cowboy's, the sheriff's, a pirate's, nobody's, the mule's, everybody's, a gopher's, Bigfoot's",
+    "darling": "starling, dumpling, pumpkin, noodle, meatball, muffin, cupcake, pickle, sugar plum, pork chop, cheese puff, jellybean, nugget, burrito, pancake, waffle",
+    "you": "your socks, the mule, my sandwich, the miner, the sheriff, Grandpa, the goldfish, your shoes, the cowboy, my mustache, the donkey, your hat",
+    "are": "smell, look, feel, sound, taste, stay, seem, get",
+    "lost": "bossy, frosted, sauced, sticky, smelly, soggy, sweaty, toasted, crispy, fizzy, frozen, moldy, grumpy, ticklish, bald, hairy",
+    "gone": "blonde, wrong, strong, long, bald, fried, glazed, stinky, crispy, sticky, soggy, melted, moldy, frozen, sneezy, yawning",
+    "forever": "whenever, however, never, together, sideways, backwards, on Tuesdays, sometimes, occasionally, accidentally, mostly, kinda, every morning, until lunchtime, since breakfast, clever",
+    "dreadful": "wonderful, awful, beautiful, ridiculous, extremely, totally, super, kinda, sorta, really, slightly, majorly",
+    "sorry": "furry, blurry, worried, hurried, hairy, sweaty, stinky, sleepy, hungry, grumpy, soggy, sticky, cheesy, ticklish, starry, curry",
+    "light": "bright, white, tight, polite, uptight, slight, heavy, chubby, wobbly, squishy, stinky, sweaty, hairy, grumpy, cheesy, bossy",
+    "she": "he, Grandma, the mule, the sheriff, my uncle, a cowboy, Bigfoot, the goldfish, the donkey, a pirate, the miner, the cook",
+    "was": "got, felt, smelled, looked, seemed, went, became, stayed, turned, grew, sounded, tasted",
+    "like": "unlike, inside, behind, beside, under, without, near, on top of, instead of, next to",
+    "fairy": "canary, strawberry, blueberry, cherry, dairy cow, raspberry, cranberry, ferry, hippopotamus, hippo, elephant, walrus, bowling ball, refrigerator, sumo wrestler, hairy",
+    "her": "his, my, your, Grandma's, the mule's, a cowboy's, a pirate's, the sheriff's, Bigfoot's, Santa's, a gopher's, the cook's",
+    "shoes": "canoes, kazoos, tattoos, cockatoos, kangaroos, igloos, shampoos, burritos, pancakes, toenails, waffles, flip-flops, socks, nostrils, two left feet, horseshoes",
+    "were": "got, felt, smelled, looked, seemed, went, became, stayed, turned, grew, sounded",
+    "number": "size, price, age, channel, chapter, grade, aisle, room, bus, lucky, shoe size, locker",
+    "nine": "ninety-nine, a zillion, eleven, twelve, thirteen, forty, a hundred, a million, a gazillion, nine thousand, fifty-five, seventy-nine",
+    "herring": "earring, pizza, pickle, sardine, waffle, cereal, shoe, cookie, burrito, banana, doughnut, cheese, cardboard, juice, tissue, cracker",
+    "boxes": "foxes, sockses, lunchboxes, mailboxes, crayons, socks, bags, cans, jars, buckets, cartons, crates, slippers, bathtubs, chicken poxes, rockses",
+    "without": "with, inside, behind, beside, under, near, past, upon, beyond, on top of",
+    "topses": "sockses, lollipopses, mopses, flip-flopses, pork chopses, raindropses, cough dropses, gumdropses, lamb chopses, bus stopses, hip-hopses, flopses",
+    "sandals": "candles, handles, scandals, vandals, pickles, noodles, pancakes, waffles, pizzas, burritos, bananas, slippers, rain boots, tacos, potatoes, panda bears",
+    "for": "with, without, behind, under, near, against, like, beside"
+  },
+  range: {
+    "oh": "whoa, yee-haw, howdy, yikes, gosh, golly, phooey, yippee, egad, ahoy, giddyup, uh-oh",
+    "give": "lend, mail, sell, bake, knit, build, toss, throw, buy, find, fetch, hand, pass, sing, draw, sew",
+    "me": "Grandpa, my horse, the cowboy, my cat, the sheriff, Uncle Bob, a llama, my teacher, the mailman, a gopher, my goldfish, a cactus",
+    "a": "one, my, your, a stinky, a soggy, a giant, a teeny, a dusty, a muddy, a pink, a bouncy, a haunted",
+    "home": "gnome, comb, foam, dome, Rome, garden gnome, honeycomb, metronome, sandwich, hot tub, trampoline, pizza, cupcake, bathtub, pickle, pony",
+    "where": "when, why, while, until, because, unless, wherever, whenever, as soon as",
+    "the": "my, your, Grandma's, the sheriff's, a cowboy's, the stinky, the hairy, the dancing, the giant, the soggy, the purple, the sleepy",
+    "buffalo": "buffalo wings, tornadoes, avocados, armadillos, flamingos, burritos, piccolos, potatoes, tomatoes, mosquitoes, marshmallows, elbows, pillows, rainbows, dominoes, jellies",
+    "roam": "comb, foam, moan, groan, phone home, moonwalk, sneeze, burp, yodel, tap-dance, nap, giggle, sunbathe, snore, waddle, boogie",
+    "deer": "reindeer, pioneers, engineers, musketeers, cashiers, auctioneers, llamas, chickens, grandmas, cowboys, pirates, puppies, penguins, raccoons, hamsters, cheerleaders",
+    "and": "plus, but, or, so, while, yet, and also, but not",
+    "antelope": "cantaloupes, envelopes, telescopes, jump ropes, horoscopes, kangaroos, gorillas, alligators, kittens, porcupines, chipmunks, grasshoppers, ballerinas, cantaloupe, bars of soap, antelopes",
+    "play": "neigh, bray, sway, spray, weigh, burp, sneeze, wiggle, yodel, tap-dance, moonwalk, belly flop, cartwheel, giggle, square dance, sashay",
+    "seldom": "often, always, never, constantly, loudly, rudely, secretly, sometimes, sneakily, hourly, nightly, every Tuesday, accidentally",
+    "is": "gets, got, was, becomes, stays, remains, gets totally, is never",
+    "heard": "stirred, purred, blurred, slurred, burped, sneezed, smelled, tickled, licked, sniffed, yodeled, chewed, sung, eaten, served, curdled",
+    "discouraging": "embarrassing, disgusting, ridiculous, gigantic, tremendous, enormous, suspicious, delicious, slobbery, ticklish, cheesy, stinky, sneezy, slippery, rubbery, burpy",
+    "word": "bird, nerd, herd, curd, cheese curd, hummingbird, mockingbird, blackbird, burp, sneeze, hiccup, sandwich, pickle, pancake, potato, third",
+    "skies": "pies, fries, flies, eyes, ties, French fries, apple pies, bow ties, mud pies, butterflies, guys, pancakes, pickles, sneakers, armpits, mince pies",
+    "are": "smell, look, feel, sound, taste, seem, get, stay, act, turn",
+    "not": "never, rarely, totally, extremely, barely, kinda, sorta, slightly, super, always, sometimes, way too",
+    "cloudy": "rowdy, grouchy, slouchy, pouty, stinky, cheesy, sticky, soggy, smelly, sweaty, burpy, hairy, wiggly, giggly, loud, proudly",
+    "all": "every, each, some, half the, most of the, any, no, one, the whole, my, your, Grandpa's",
+    "day": "hay, May, ballet, buffet, bouquet, Tuesday, birthday, Saturday, holiday, toupee, soufflé, sundae, payday, bale of hay, entrée, sleigh",
+    "on": "in, under, behind, beside, inside, near, beyond, past, below, above, without, on top of",
+    "range": "stove, oven, microwave, grill, toaster, lawn, sofa, trampoline, playground, moon, bus, beach, roof, couch, orange, grange"
+  },
+  shenandoah: {
+    "oh": "whoa, yikes, gosh, golly, ahoy, yo-ho, egad, phooey, yippee, uh-oh, aw shucks, hey",
+    "shenandoah": "Oklahoma, Iowa, Samoa, Noah, Genoa, Minnesota, Barcelona, Arizona, Daytona, Pomona, Sedona, Aunt Rhoda, Mona Lisa, Kalamazoo, Saskatchewan, Mississippi",
+    "i": "my dog, the captain, a pirate, my goldfish, Grandpa, the sailor, a walrus, Uncle Bob, the parrot, my sister, a seagull, the cook",
+    "long": "want, need, plan, hope, try, love, hate, refuse, forget, pretend, wait, promise, beg, decide, learn, tiptoe",
+    "to": "not to, to never, to sorta, to secretly, to kinda, to sneakily, to almost, to loudly, to totally, to accidentally",
+    "see": "sneeze on, tickle, sniff, lick, smooch, hug, smell, shampoo, tackle, serenade, high-five, poke, sing to, burp at, out-eat, arm wrestle",
+    "you": "your mom, your feet, Grandpa, the captain, a walrus, my socks, the parrot, your beard, the pirate, a mermaid, your boots, a lobster",
+    "away": "today, astray, sideways, anyway, halfway, someday, upstairs, downstairs, backwards, outside, nearby, okay",
+    "rolling": "bowling, strolling, snoring, burping, sneezing, gurgling, giggling, wiggling, slurping, stinky, soggy, smelly, cheesy, belching, yodeling, bubbling",
+    "river": "liver, shiver, quiver, sliver, chicken liver, bathtub, puddle, milkshake, gravy, soup, pudding, noodle, spaghetti, garden hose, sprinkler, sock",
+    "i'm": "you're, we're, he's, she's, Grandma's, Santa's, Bigfoot's, the dog's, they're, the captain's, the parrot's",
+    "bound": "round, crowned, browned, bald, sticky, soggy, sleepy, hungry, grumpy, dizzy, ticklish, sweaty, stinky, sneezy, found, gowned",
+    "'cross": "under, over, behind, beside, inside, beneath, around, past, through, along, beyond, upon",
+    "the": "my, your, Grandma's, the captain's, a pirate's, the soggy, the stinky, the giant, the purple, the sleepy, the spicy, the bubbly",
+    "wide": "fried, dried, deep-fried, slimy, cheesy, stinky, soggy, sticky, smelly, sweaty, hairy, grumpy, wiggly, bald, tied, pie-eyed",
+    "missouri": "Mississippi, Kentucky, Kalamazoo, Albuquerque, Timbuktu, Aunt Mary, Uncle Larry, Mister Furry, Missus Murray, Hawaii, New Jersey, Saskatchewan, Missus Jury, Cincinnati",
+    "love": "shove, tickle, sniff, lick, smell, shampoo, tackle, babysit, serenade, high-five, poke, borrow, arm wrestle, sneeze on, out-dance, glove",
+    "your": "my, his, Grandma's, the captain's, a pirate's, the parrot's, a walrus's, Bigfoot's, Santa's, the mermaid's, a seagull's, the cook's",
+    "daughter": "otter, water, quarter, sea otter, bathwater, teeter-totter, goldfish, parrot, pet goat, rubber duck, laundry, grandma, mustache, potato, pickle, lobster",
+    "for": "with, without, like, behind, near, beside, under, against, toward, unlike",
+    "her": "him, Grandma, the captain, a pirate, my goldfish, the parrot, a walrus, a mermaid, Uncle Bob, a llama, my teacher, a seagull",
+    "i'd": "you'd, we'd, he'd, she'd, they'd, Grandma'd, nobody'd, the captain'd",
+    "cross": "floss, toss, sauce, boss, slurp, sip, gargle, splash, sniff, lick, mop, bottle, freeze, microwave, stir, drink",
+    "roaming": "foaming, homing, Wyoming, bubbly, fizzy, stinky, soggy, gurgling, burping, snoring, gooey, minty, cheesy, slurpy, chocolate, combing",
+    "waters": "otters, quarters, sea otters, puddles, milkshakes, bathtubs, noodles, pickles, root beers, lemonades, sprinklers, socks, potters, teeter-totters, gravies, soups"
+  },
+  birthday: {
+    "happy": "grumpy, soggy, stinky, sneezy, sweaty, cheesy, bumpy, lumpy, jumpy, crabby, snappy, sappy, flappy, crispy, squishy, burpy",
+    "birthday": "bath day, Tuesday, sneeze day, hair day, pizza day, burp day, laundry day, garbage day, sick day, snow day, pajama day, nap day, pancake day, wash day, field day, bad hair day",
+    "to": "for, from, at, near, under, beside, behind, without, like, on",
+    "you": "your feet, your mom, the cat, my socks, Grandpa, a llama, the goldfish, your armpit, the mailman, a raccoon, your nose, the baby, Bigfoot, a potato, the dentist, a burrito",
+    "dear": "smelly, stinky, sleepy, soggy, sneezy, grumpy, weird, old, hairy, squishy, cheesy, crusty, goofy, wobbly, sticky, ticklish",
+    "sam": "Spam, ham, clam, lamb, jam, yam, Pam, Uncle Sam, Grandma, Kevin, Gertrude, Bigfoot, Santa, Dracula, Waldo, Pickles"
+  },
+  jingle: {
+    "jingle": "jiggle, wiggle, mingle, tingle, tickle, sizzle, giggle, wobble, juggle, sniffle, sprinkle, fizzle, dribble, wrinkle, bonk, boing",
+    "bells": "smells, shells, yells, spells, wells, seashells, doorbells, cowbells, eggshells, caramels, gazelles, pickles, noodles, toenails, armpits, nostrils",
+    "all": "half, most of, part of, some of, none of, all of, a bit of, three-quarters of, almost all, a teeny bit of, nearly all, way more than",
+    "the": "my, your, Grandma's, the stinky, a soggy, the whole, the slippery, the snowy, the slushy, a wobbly, the bumpy, the long",
+    "way": "day, hay, May, ballet, buffet, bouquet, Tuesday, toupee, parfait, entrée, highway, hallway, driveway, runway, subway, sundae",
+    "oh": "whoa, yikes, gosh, golly, phooey, yippee, ho ho, egad, wowza, hey, uh-oh, oops",
+    "what": "how much, so much, too much, no, some, extra, such, a ton of, a smidge of, zero, way more, not much",
+    "fun": "pun, bun, mess, trouble, noise, slime, cheese, pudding, homework, laundry, broccoli, glitter, spaghetti, ketchup, chaos, nonsense",
+    "it": "Grandma, the cat, my dog, Santa, a reindeer, the snowman, Bigfoot, a penguin, the elf, my uncle, a moose, the baby",
+    "is": "smells, feels, looks, sounds, tastes, seems, gets, stays, burps",
+    "to": "not to, to never, to sorta, to secretly, to kinda, to sneakily, to almost, to loudly, to totally",
+    "ride": "slide, glide, hide, fry, tickle, sneeze, wiggle, waddle, snore, yodel, boogie, moonwalk, juggle, burp, skate, tumble",
+    "in": "under, behind, inside, beside, on top of, near, beneath, around, upon, without",
+    "a": "one, my, your, a soggy, a stinky, a frozen, a squeaky, a giant, a teeny, a wobbly, a haunted, a jiggly",
+    "one-horse": "two-horse, no-horse, one-moose, one-goose, one-mouse, ten-cow, one-llama, one-penguin, one-hamster, one-walrus, one-chicken, three-pig, one-noodle, one-pickle, moose-powered, sneeze-powered",
+    "open": "broken, frozen, soggy, stinky, squeaky, wobbly, rusty, leaky, purple, sparkly, slippery, bouncy, fuzzy, chocolate, rubber, cardboard",
+    "sleigh": "tray, lunch tray, buffet, bouquet, toupee, parfait, bale of hay, canoe, bathtub, shopping cart, wheelbarrow, pizza box, sofa, lawnmower, cereal bowl, trampoline"
+  },
+  macdonald: {
+    "old": "young, bald, stinky, grumpy, sleepy, soggy, cheesy, hairy, smelly, wobbly, sneezy, tiny, giant, sweaty, fancy, goofy",
+    "macdonald": "McDougal, McNoodle, McPickle, McWaffle, McSneeze, McGillicuddy, McSprinkles, McTickle, McWiggle, McPuddle, McFluffy, Gertrude, Kevin, Grandma, Bigfoot, Dracula",
+    "had": "bought, built, sold, lost, found, painted, licked, sneezed on, tickled, borrowed, baked, knitted, squished, ate, rented, invented",
+    "a": "one, my, your, a soggy, a stinky, a muddy, a squeaky, a giant, a teeny, a wobbly, a haunted, a smelly",
+    "farm": "arm, charm, alarm, fire alarm, lucky charm, zoo, bakery, bathtub, castle, spaceship, closet, sandbox, treehouse, trampoline, pizza shop, hot tub",
+    "e": "B, Z, Q, P, T, G, D, V, ya, wee, yee, moo",
+    "i": "Y, U, R, N, eye, aye, hi, my, pie, bye, sky, yi",
+    "o": "Q, X, ho, yo, no, whoa, go, toe, dough, oh no, bingo, yo-yo",
+    "and": "plus, or, but, and then, and also, while, yet, so",
+    "on": "under, behind, inside, beside, near, beneath, above, past, around, on top of",
+    "his": "her, my, your, Grandma's, the cow's, a pig's, Santa's, Bigfoot's, the goat's, a chicken's, nobody's, the duck's",
+    "he": "she, Grandma, the farmer, a pig, the cow, Bigfoot, Santa, my uncle, a goat, the duck, a robot, the baby",
+    "cow": "eyebrow, chow chow, bow-wow, plow, owl, kangaroo, dinosaur, giraffe, unicorn, robot, tuba, walrus, hamster, penguin, octopus, toaster",
+    "with": "without, behind, beside, under, near, inside, around, against, like, plus",
+    "moo": "honk, boing, burp, beep, toot, quack, oink, splat, boop, zoom, kaboom, achoo, hiccup, squeak, ribbit, yodel",
+    "here": "there, everywhere, nowhere, upstairs, downstairs, outside, inside, sideways, backwards, somewhere, on Tuesday, in the bath",
+    "there": "here, everywhere, nowhere, upstairs, downstairs, outside, inside, over there, way up there, somewhere, in my sock, on the roof",
+    "everywhere": "nowhere, somewhere, anywhere, upstairs, downstairs, sideways, on the roof, in the bath, under the bed, at school, in my pocket, on Grandpa"
+  },
+  merry: {
+    "we": "Grandma, the reindeer, Santa, my dog, the elves, a snowman, Bigfoot, the penguins, my uncle, the baby, a moose, everybody",
+    "wish": "fish, squish, swish, tickle, sneeze on, burp at, wiggle, juggle, poke, lick, sniff, hug, smooch, mail, bake, wrap",
+    "you": "Grandpa, the cat, a reindeer, my socks, the mailman, a penguin, Bigfoot, the snowman, your nose, a llama, the goldfish, your armpit",
+    "a": "one, my, your, a soggy, a stinky, a frozen, a squeaky, a giant, a teeny, a wobbly, a jiggly, a sparkly",
+    "merry": "hairy, scary, very, dairy, wary, contrary, smelly, soggy, stinky, sneezy, grumpy, sweaty, cheesy, sticky, slushy, burpy",
+    "christmas": "Tuesday, bath time, homework, hiccup, Halloween, Groundhog Day, laundry day, birthday, sneeze, pickle, haircut, toothache, snow day, field trip, sleepover, bedtime",
+    "and": "plus, or, but, and also, then, but also, so, and maybe",
+    "happy": "grumpy, soggy, stinky, sneezy, sweaty, cheesy, bumpy, lumpy, jumpy, crabby, snappy, sappy, flappy, crispy, squishy, burpy",
+    "new": "used, old, blue, gooey, stinky, soggy, slimy, chewy, crunchy, squishy, sneezy, smelly, two, fuzzy, toasty, true",
+    "year": "ear, deer, reindeer, cheer, gear, spear, pier, steer, beard, sandwich, pickle, haircut, sock, hamster, potato, earmuff"
+  },
+  mary: {
+    "mary": "Larry, Barry, Gary, Harry, Jerry, Carrie, Perry, Terry, Fairy, Hairy, Gertrude, Kevin, Grandma, Bigfoot, Santa, Dracula",
+    "had": "bought, lost, found, licked, sneezed on, tickled, borrowed, baked, knitted, squished, rented, hugged, sniffed, juggled, smooched, mailed",
+    "a": "one, my, your, a soggy, a stinky, a fluffy, a squeaky, a giant, a teeny, a wobbly, a jiggly, a sleepy",
+    "little": "teeny, itty-bitty, gigantic, ginormous, squishy, sweaty, stinky, cheesy, crispy, lumpy, sleepy, chubby, wobbly, crunchy, hairy, fluffy",
+    "lamb": "clam, ham, jam, yam, ram, gram, tram, telegram, hippo, llama, walrus, hamster, potato, pickle, dinosaur, kangaroo",
+    "its": "his, her, my, your, Grandma's, the cat's, a llama's, Santa's, the teacher's, Bigfoot's, a dog's, nobody's",
+    "fleece": "geese, niece, piece, police, grease, cheese, Greece, masterpiece, centerpiece, puzzle piece, beard, hair, nose, toenail, tummy, mustache",
+    "was": "got, felt, smelled, looked, seemed, went, became, stayed, turned, grew, sounded, tasted",
+    "white": "bright, tight, polite, uptight, green, purple, stinky, soggy, slimy, sticky, cold, squishy, fluffy, crunchy, lumpy, spotty",
+    "as": "like, than, unlike, near, beside, under, behind",
+    "snow": "dough, toe, crow, bow, cookie dough, mistletoe, buffalo, piccolo, tomato, potato, avocado, glue, milk, toothpaste, cheese, marshmallow",
+    "everywhere": "nowhere, somewhere, anywhere, upstairs, downstairs, sideways, on the roof, in the bath, under the bed, at school, in my pocket, on Grandpa",
+    "that": "which, who, whoever, whatever, wherever, when, where",
+    "went": "burped, sneezed, danced, waddled, hopped, tiptoed, moonwalked, wiggled, yodeled, scooted, skipped, snored, cartwheeled, bounced, slid, giggled",
+    "the": "my, your, a, Grandma's, the soggy, the stinky, the fluffy, the hairy, the giant, the purple, the sleepy, the squeaky",
+    "sure": "ready, eager, happy, afraid, too lazy, too sleepy, way too slow, likely, unlikely, determined, excited, scared, quick, too stinky, too cheesy, nervous",
+    "to": "not to, to never, to sorta, to secretly, to kinda, to sneakily, to almost, to loudly, to totally",
+    "go": "glow, row, throw, mow, sew, tiptoe, burp, sneeze, dance, wiggle, snore, yodel, moonwalk, waddle, boogie, slow down"
+  },
+  spider: {
+    "the": "my, your, a, Grandma's, the soggy, the stinky, the fuzzy, the giant, the sleepy, the sneaky, a hairy, the wobbly",
+    "itsy-bitsy": "teeny-weeny, gigantic, humongous, super-duper, wiggly-jiggly, hairy-scary, itty-bitty, roly-poly, hoity-toity, wishy-washy, hokey-pokey, okey-dokey, silly-billy, stinky-winky",
+    "spider": "cider, glider, rider, tiger, beaver, noodle, pickle, hamster, waffle, penguin, walrus, llama, cupcake, meatball, burrito, spatula",
+    "climbed": "slid, crawled, danced, hopped, burped, sneezed, wiggled, tiptoed, moonwalked, bounced, rolled, zoomed, skipped, flopped, waddled, scooted",
+    "up|PREP": "down, inside, around, across, under, behind, beside, over, past, through",
+    "water": "pudding, gravy, ketchup, chocolate, milkshake, bubble, noodle, pizza, jelly, syrup, soda, cereal, pickle, mustard, spaghetti, lemonade",
+    "spout": "snout, sprout, trout, scout, Brussels sprout, sauerkraut, drainpipe, sock, nose, slide, sleeve, tuba, straw, chimney, bathtub, banana",
+    "down": "up, out, in, back, around, sideways, backwards, over, suddenly, loudly, sneakily, splat",
+    "came": "flew, fell, rolled, zoomed, crashed, splashed, plopped, tumbled, waddled, danced, snuck, bounced, burped, sneezed, dripped, slid",
+    "rain": "train, plane, cane, brain, chain, crane, candy cane, mayonnaise, jelly, pudding, gravy, ketchup, popcorn, glitter, cheese, sprinkles",
+    "and": "plus, but, then, so, and then, while, yet, and also",
+    "washed": "squashed, sloshed, tickled, sneezed, blew, licked, poked, bonked, flicked, splashed, tossed, booped, pushed, wiggled, flushed, scared",
+    "out": "away, off, around, up, sideways, upside down, backwards, inside out, everywhere, far away, to Ohio, into space",
+    "sun": "bun, hot cross bun, cinnamon bun, moon, pizza, pancake, meatball, donut, cookie, lemon, cheese, hamster, penguin, disco ball, potato, onion",
+    "dried": "fried, tried, dyed, glued, licked, tickled, sniffed, ate, slurped, zapped, blew, burped, sneezed, vacuumed, toasted, hid",
+    "up|ADV": "away, off, out, down, around, back, over, quickly, sloppily, noisily, sideways, loudly",
+    "all": "some, most of, half, none of, a bit of, three drops of, a zillion, every bit of, all of, nearly all, way too much of, a lot of",
+    "again": "backwards, sideways, twice, once more, forever, upside down, in pajamas, on Tuesday, for lunch, with Grandma, real slow, with a hat"
+  },
+  london: {
+    "london": "Pudding, Noodle, Pickle, Sandwich, Toaster, Mustard, Muffin, Bubble, Wobble, Jelly, Spaghetti, Pancake, Cupcake, Banana, Sausage, Tuna",
+    "bridge": "Fridge, Ridge, Midge, Pudding, Sandwich, Castle, Bathtub, Pancake, Treehouse, Sandbox, Doghouse, Cupcake, Snowman, Trampoline, Mailbox, Hot Tub",
+    "is": "smells, looks, keeps, gets, seems, feels, stays, ends, burps, starts, sounds, goes",
+    "falling": "calling, crawling, bawling, sprawling, stalling, drooling, wobbling, dancing, burping, sneezing, melting, wiggling, yodeling, snoring, giggling, toppling",
+    "down": "up, out, sideways, backwards, around, over, apart, asleep, away, upside down, everywhere, again",
+    "my": "your, Grandma's, Santa's, Bigfoot's, the dog's, a pirate's, the queen's, the king's, nobody's, a robot's, the baby's, a wizard's",
+    "fair": "hairy, square, rare, bare, stinky, soggy, sneezy, wobbly, cheesy, sticky, grumpy, fancy, spare, scary, fluffy, purple",
+    "lady": "baby, gravy, daisy, potato, pickle, noodle, walrus, llama, hamster, burrito, penguin, cupcake, spatula, teapot, unicorn, goldfish",
+    "build": "fill, drill, grill, paint, lick, tickle, butter, sneeze, juggle, glue, stack, knit, bake, frost, decorate, sprinkle",
+    "it": "Grandma, the cat, my dog, Santa, a robot, the baby, a pirate, my uncle, the queen, a llama, Bigfoot, the mailman",
+    "up": "down, out, back, around, over, sideways, upside down, again, away, together, apart, higher",
+    "with": "without, using, plus, like, near, behind, beside, under, against, of",
+    "sticks": "bricks, chicks, kicks, licks, pickles, noodles, pancakes, waffles, socks, marshmallows, gumdrops, meatballs, crayons, jellybeans, pretzels, cupcakes",
+    "and": "plus, but, then, so, and then, while, yet, and also",
+    "stones": "bones, phones, cones, ice cream cones, trombones, scones, jellybeans, pickles, pancakes, noodles, cookies, pillows, slippers, donuts, gumdrops, toenails"
+  },
+  yankee: {
+    "yankee": "Hanky, Cranky, Lanky, Swanky, Stinky, Silly, Wiggly, Pickle, Noodle, Grumpy, Cheesy, Sneezy, Jelly, Snuggly, Fancy, Wonky",
+    "doodle": "Noodle, Poodle, Strudel, Oodle, Pickle, Waffle, Muffin, Bubble, Pudding, Burrito, Pancake, Cupcake, Pretzel, Meatball, Bagel, Taco",
+    "went": "flew, ran, rode, danced, waddled, hopped, tiptoed, moonwalked, skipped, scooted, rolled, bounced, snuck, swam, cartwheeled, yodeled",
+    "to": "into, past, around, through, under, behind, beside, toward, across, beyond",
+    "town": "clown, crown, gown, frown, downtown, ghost town, the moon, the zoo, the beach, school, camp, the store, the dentist, the bathtub, Grandma's, the park",
+    "a-riding": "a-gliding, a-sliding, a-hiding, a-bouncing, a-dancing, a-hopping, a-skipping, a-snoring, a-burping, a-sneezing, a-yodeling, a-wiggling, a-tiptoeing, a-moonwalking, a-giggling, a-juggling",
+    "on": "under, behind, inside, beside, near, beneath, above, upon, around, on top of",
+    "a": "one, my, your, a soggy, a stinky, a giant, a teeny, a wobbly, a squeaky, a sleepy, a cheesy, a hairy",
+    "pony": "pepperoni, rigatoni, cannelloni, bologna, llama, walrus, hamster, pickle, potato, goat, sofa, skateboard, bicycle, unicorn, dinosaur, turtle",
+    "stuck": "put, glued, tucked, shoved, jammed, taped, sneezed, stapled, squished, poked, dropped, hid, planted, balanced, crammed, stashed",
+    "feather": "sweater, letter, pickle, noodle, carrot, lollipop, pancake, sausage, banana, flower, fork, toothbrush, cupcake, broccoli, spoon, hot dog",
+    "in": "on, under, behind, beside, inside, atop, near, upon, all over, around",
+    "his": "her, my, your, Grandma's, the horse's, a pirate's, Santa's, the baby's, a goat's, the teacher's, Bigfoot's, nobody's",
+    "cap": "lap, map, nap, flap, trap, snap, bottle cap, kneecap, ice cap, sandwich, sock, ear, nose, armpit, belly button, pocket",
+    "and": "plus, but, then, so, and then, while, yet, and also",
+    "called": "named, dubbed, nicknamed, labeled, renamed, crowned, proclaimed, declared, christened, deemed, titled, branded",
+    "it": "his hat, the horse, Grandma, his nose, the feather, the pony, his socks, a pickle, the cap, his lunch, the town, his mom",
+    "macaroni": "pepperoni, rigatoni, cannelloni, bologna, minestrone, abalone, baloney, spumoni, zucchini, linguine, broccoli, tortellini, spaghetti, ravioli, fettuccine, provolone"
+  },
+  sleeping: {
+    "are": "were, aren't, weren't, is, was, isn't, wasn't, ain't",
+    "you": "Grandpa, the cat, my dog, Santa, a bear, the baby, my uncle, a llama, the moon, Bigfoot, the mailman, a walrus",
+    "sleeping": "snoring, slurping, burping, sneezing, dancing, yodeling, juggling, wiggling, moonwalking, skating, tickling, giggling, hiccupping, drooling, waddling, singing",
+    "brother": "Mother, Grandmother, Big Brother, Uncle, Auntie, Cousin, Grandpa, Doctor, Captain, Professor, Sir, Mister, Madam, Sister, Lord, Baby",
+    "john": "Ron, Don, Juan, Shawn, Swan, Yawn, Prawn, Lawn, Fawn, Bigfoot, Kevin, Gertrude, Pickles, Waldo, Bob, Dave",
+    "morning": "Evening, Bathtub, Birthday, Lunchtime, Pizza, Pancake, Noodle, Pickle, Jingle, Wedding, Diner, Sleigh, Taco, Hamster, Monster, Cowboy",
+    "bells": "smells, shells, yells, spells, seashells, doorbells, cowbells, eggshells, gazelles, caramels, pickles, noodles, toenails, armpits, hamsters, alarms",
+    "ringing": "singing, dinging, swinging, stinging, flinging, zinging, burping, sneezing, dancing, yodeling, snoring, giggling, wiggling, honking, squeaking, hiccupping",
+    "ding": "bing, ping, zing, ring, sing, boing, ting, fling, wing, cling, bling, swing",
+    "dang": "bang, twang, clang, boing, zang, yang, fang, gang, hang, sang, tang, sprang",
+    "dong": "bong, gong, song, long, pong, wrong, boink, honk, bonk, plonk, boing, ping-pong"
+  },
+  farmer: {
+    "the": "my, your, a, Grandma's, the stinky, the soggy, the dancing, the sleepy, the hairy, the giant, the silly, the muddy",
+    "farmer": "llama, walrus, pirate, penguin, hamster, dentist, wizard, baker, ninja, robot, mailman, zombie, plumber, cowboy, grandma, pickle",
+    "in": "under, behind, inside, beside, near, beneath, above, past, without, on top of",
+    "dell": "bell, well, shell, hotel, motel, jail cell, caramel, carousel, smell, gel, jelly, bathtub, closet, sandbox, treehouse, pickle jar",
+    "hi-ho": "yo-ho, yee-haw, whoopee, hooray, yahoo, oh no, uh-oh, heave-ho, ho-ho, yippee, wahoo, kaboom",
+    "derry-o": "cheerio, merry-o, berry-o, fairy-o, scary-o, cherry-o, hairy-o, very-o, Larry-o, dairy-o, pickle-o, noodle-o, potato, piccolo, tomato, buffalo",
+    "takes": "bakes, shakes, wakes, makes, fakes, rakes, tickles, licks, sniffs, hugs, juggles, borrows, mails, paints, sneezes on, high-fives",
+    "a": "one, my, your, a soggy, a stinky, a giant, a teeny, a wobbly, a squeaky, a sleepy, a cheesy, a hairy",
+    "wife": "knife, life, fife, pickle, noodle, walrus, llama, hamster, burrito, penguin, cupcake, tuba, bicycle, unicorn, sandwich, giraffe"
+  },
+  scarborough: {
+    "are": "were, aren't, weren't, is, was, isn't, wasn't, ain't",
+    "you": "Grandpa, the cat, my dog, Santa, a llama, the baby, my uncle, Bigfoot, the mailman, a walrus, your mom, a pirate",
+    "going": "jogging, waddling, tiptoeing, moonwalking, skipping, hopping, sneaking, rolling, bouncing, yodeling, skating, crawling, galloping, scooting, cartwheeling, wandering",
+    "scarborough": "Pickleborough, Noodleborough, Waffle, Pancake, Cheeseburger, Wobbly, Stinky, Soggy, Sneezy, Bubblegum, Jellybean, Spaghetti, Marshmallow, Broccoli, Sausage, Pudding",
+    "fair": "Square, Chair, Bear, Pear, Hair, Stairs, Fair-ish, Mall, Zoo, Dentist, Bathtub, Laundromat, Carnival, Bakery, Sandbox, Swamp",
+    "parsley": "Pickles, Noodles, Ketchup, Mustard, Broccoli, Jellybeans, Pancakes, Sprinkles, Popcorn, Gravy, Pudding, Muffins, Waffles, Bacon, Cheese, Spinach",
+    "sage": "Cage, Page, Stage, Beige, Paige, Cabbage, Sausage, Fudge, Jam, Bread, Glue, Socks, Slime, Gum, Soup, Spam",
+    "rosemary": "Cauliflower, Macaroni, Marmalade, Pepperoni, Pumpernickel, Strawberry, Cinnamon, Gingerbread, Mozzarella, Bubblegum, Jelly beans, Rigatoni, Licorice, Lollipops, Butterscotch, Popsicles",
+    "and": "plus, but, then, so, and then, while, yet, and also",
+    "thyme": "slime, lime, dime, grime, rhyme, mime, chime, pie, cheese, toast, soup, glue, ham, jam, pizza, fudge",
+    "remember": "tickle, sniff, lick, hug, smell, shampoo, butter, juggle, mail, poke, serenade, high-five, introduce, tattle on, describe, sneeze on",
+    "me": "Grandpa, the cat, my dog, Santa, a llama, the baby, my uncle, Bigfoot, the mailman, a walrus, my socks, a pirate",
+    "to|PREP": "for, from, with, at, by, near, like, beside, behind, without",
+    "one": "someone, nobody, Grandma, a goat, the mayor, a pirate, a llama, my uncle, the baker, a wizard, the mailman, a ghost",
+    "who": "that, which, whoever, who sorta, who never, who secretly",
+    "lives": "jogs, dances, burps, sneezes, snores, yodels, juggles, naps, hides, waddles, giggles, wiggles, sings, bakes, knits, skates",
+    "there": "here, upstairs, downstairs, nearby, next door, in a sock, on the roof, in a tree, underground, in a bathtub, on the moon, in Ohio",
+    "she": "Grandma, the cat, my dog, Santa, a llama, the baby, my uncle, Bigfoot, the mailman, a walrus, a pirate, the queen",
+    "once": "twice, never, always, sometimes, often, accidentally, secretly, totally, kinda, three times, every Tuesday, nearly",
+    "was": "got, felt, smelled, looked, seemed, went, became, stayed, turned, grew, sounded, tasted",
+    "a": "one, my, your, a soggy, a stinky, a giant, a teeny, a wobbly, a squeaky, a sleepy, a cheesy, a hairy",
+    "true": "blue, new, gooey, chewy, stinky, soggy, hairy, sneezy, grumpy, cheesy, sticky, wobbly, squishy, crunchy, fake, spare",
+    "love": "glove, dove, shove, sock, pickle, noodle, snack, sandwich, burrito, hamster, goldfish, penguin, waffle, cupcake, potato, lunch",
+    "of": "for, from, with, near, like, beside, behind, without, under, inside",
+    "mine": "yours, Grandma's, Bigfoot's, the cat's, Santa's, my uncle's, nobody's, the dog's, a pirate's, the baby's, the queen's, everyone's",
+    "tell": "ask, beg, bribe, dare, tickle, remind, pay, help, train, invite, teach, hire, convince, expect, warn, allow",
+    "her": "Grandma, the cat, my dog, Santa, a llama, the baby, my uncle, Bigfoot, the mailman, a walrus, a pirate, the queen",
+    "to|TO": "not to, to never, to sorta, to secretly, to kinda, to sneakily, to almost, to loudly, to totally",
+    "make": "bake, knit, sew, build, paint, lick, sniff, butter, tickle, juggle, wash, shrink, mail, borrow, frost, glue",
+    "cambric": "fancy, stinky, soggy, sparkly, wobbly, itchy, pickle-green, fuzzy, glow-in-the-dark, polka-dot, plaid, purple, cheesy, crunchy, invisible, inflatable",
+    "shirt": "skirt, dirt, squirt, dessert, yogurt, sock, hat, sandwich, pancake, burrito, tutu, cape, onesie, costume, tuxedo, raincoat",
+    "without": "with, despite, inside, beside, under, near, past, upon, beyond, behind",
+    "no": "some, any, a few, a zillion, extra, more, plenty of, twelve, purple, giant, tiny, soggy",
+    "seams": "beams, dreams, screams, streams, teams, creams, jellybeans, buttons, zippers, pockets, sprinkles, noodles, pickles, stripes, sequins, feathers",
+    "nor": "or, and, plus, but, yet, so, with, and also",
+    "needlework": "homework, paperwork, fireworks, clockwork, guesswork, teamwork, footwork, artwork, glitter, ketchup, peanut butter, macaroni, bubblegum, glue, duct tape, frosting",
+    "then": "and, so, now, soon, someday, later, maybe, quickly, finally, suddenly, secretly, Tuesday",
+    "she'll": "he'll, you'll, we'll, they'll, Grandma'll, the cat'll, nobody'll, everyone'll",
+    "be": "seem, look, smell, feel, sound, stay, become, turn, act, get, grow, taste"
+  },
+  saints: {
+    "oh": "whoa, yikes, gosh, golly, hey, hooray, yippee, uh-oh, yahoo, egad, wowza, phooey",
+    "when": "if, while, until, because, unless, whenever, after, before, as soon as",
+    "the": "my, your, Grandma's, the stinky, the soggy, the dancing, the sleepy, the hairy, the giant, the silly, the muddy, the sneaky",
+    "saints": "aunts, ants, pants, plants, chants, giants, elephants, penguins, llamas, pickles, noodles, grandmas, walruses, hamsters, zombies, robots",
+    "go": "come, keep, start, stop, quit, go on, try, finish, practice, enjoy, avoid, begin",
+    "marching": "dancing, waddling, tiptoeing, moonwalking, skipping, hopping, rolling, bouncing, yodeling, skating, crawling, galloping, scooting, cartwheeling, burping, sneezing",
+    "in": "out, off, around, away, back, sideways, backwards, upside down, home, uptown, downtown, everywhere",
+    "lord": "Mom, Dad, Grandma, Kevin, Gertrude, boy, man, wow, gosh, Bigfoot, Santa, dude",
+    "i": "my dog, the cat, Grandpa, a llama, my uncle, Bigfoot, the baby, a pirate, the mailman, my teacher, a walrus, Santa",
+    "want": "need, plan, hope, try, love, hate, refuse, forget, pretend, wait, promise, beg, decide, learn, deserve, expect",
+    "to": "not to, to never, to sorta, to secretly, to kinda, to sneakily, to almost, to loudly, to totally",
+    "be": "dance, sneeze, burp, nap, hide, sing, swim, sit, sleep, yodel, wiggle, juggle, tiptoe, live, bounce, snore",
+    "that": "this, my, your, a, the, Grandma's, the stinky, the soggy, the giant, the wobbly, the sneaky, the sparkly",
+    "number": "slumber, cucumber, plumber, lumber, summer, drummer, pickle, noodle, sandwich, bathtub, conga line, marching band, choir, parade, cupcake, hot tub"
+  },
+  daisy: {
+    "daisy": "Gravy, Lazy, Crazy, Hazy, Baby, Maisie, Katie, Pickles, Noodle, Kevin, Gertrude, Bigfoot, Waffle, Muffin, Potato, Pudding",
+    "give": "lend, mail, sell, bake, knit, build, toss, throw, buy, find, fetch, hand, pass, sing, draw, sew",
+    "me": "Grandpa, the cat, my dog, Santa, a llama, the baby, my uncle, Bigfoot, the mailman, a walrus, my socks, a pirate",
+    "your": "my, Grandma's, the dog's, a pirate's, Santa's, a walrus's, your mom's, the teacher's, a duck's, a frog's, nobody's, Bigfoot's",
+    "answer": "dancer, prancer, hamster, sandwich, pickle, noodle, burrito, cupcake, waffle, pancake, sneeze, hiccup, banana, potato, pudding, slipper",
+    "do": "too, chew, moo, boo, shoo, achoo, hula, dance, wiggle, sneeze, burp, yodel, giggle, scoot, honk, sing",
+    "i'm": "you're, we're, he's, she's, Grandma's, Santa's, Bigfoot's, the dog's, they're, the cat's",
+    "half": "totally, mostly, slightly, extremely, kinda, sorta, barely, super, way too, nearly, a bit, almost",
+    "crazy": "lazy, hazy, gravy, sneezy, cheesy, sleepy, grumpy, stinky, soggy, sticky, hungry, sweaty, dizzy, wobbly, ticklish, crabby",
+    "all": "just, mostly, partly, totally, secretly, only, kinda, sorta, not, also, sneakily, completely",
+    "for": "about, from, without, like, near, beside, under, against, toward, despite",
+    "the": "my, your, a, Grandma's, the stinky, the soggy, the giant, the sleepy, the hairy, the silly, the squeaky, the fancy",
+    "love": "glove, dove, shove, smell, taste, sound, noise, sneeze, burp, hiccup, socks, hair, lunch, snacks, nose, toes",
+    "of": "for, from, with, near, like, beside, behind, without, under, inside",
+    "you": "your feet, your mom, the cat, my socks, Grandpa, a llama, the goldfish, your armpit, the mailman, a raccoon, your nose, the baby",
+    "it": "my lunch, the cat, the wedding, the party, my nap, the picnic, the parade, our date, the soup, the bus, the show, my sock",
+    "won't": "will, can't, might, should, would, must, can, shall, may, could, did",
+    "be": "seem, look, smell, feel, sound, stay, become, turn, taste, get, act, grow",
+    "a": "one, my, your, a soggy, a stinky, a giant, a teeny, a wobbly, a squeaky, a sleepy, a cheesy, a hairy",
+    "stylish": "smelly, soggy, stinky, wobbly, cheesy, sneezy, grumpy, lumpy, sticky, sparkly, noisy, fancy, crunchy, gooey, slimy, fishy",
+    "marriage": "garage, cabbage, porridge, sausage, sandwich, picnic, pancake, taco, pizza, birthday, sleepover, hiccup, bathtub, waffle, wrestling match, tea party",
+    "i": "my dog, the cat, Grandpa, a llama, my uncle, Bigfoot, the baby, a pirate, the mailman, my teacher, a walrus, Santa",
+    "can't": "can, won't, will, might, should, would, must, shall, may, could, did",
+    "afford": "borrow, carry, juggle, steer, drive, paint, wash, lick, tickle, sniff, smell, hug, find, build, fix, rent",
+    "carriage": "cabbage, sausage, porridge, garage, bathtub, shopping cart, wheelbarrow, pickle jar, pizza box, skateboard, scooter, pogo stick, hot tub, trampoline, lawnmower, unicycle",
+    "but": "and, so, plus, yet, then, and then, but also, so then",
+    "you'll": "I'll, we'll, they'll, Grandma'll, the cat'll, nobody'll, everyone'll, the dog'll",
+    "look": "smell, sound, taste, feel, seem, act, stay, get, turn, grow, become, go",
+    "sweet": "neat, sour, salty, spicy, stinky, squeaky, cheesy, fishy, crunchy, sticky, sweaty, burpy, loud, weird, fresh, beefy",
+    "upon": "under, behind, beside, inside, near, beneath, above, past, around, on top of",
+    "seat": "feet, beet, treat, sheet, wheat, meat, street, parakeet, car seat, bed sheet, pickle, noodle, sandwich, pancake, waffle, cushion",
+    "bicycle": "icicle, popsicle, tricycle, motorcycle, unicycle, pickle, noodle, waffle, pancake, hamster, sandwich, bathtub, broomstick, pogo stick, skateboard, camel",
+    "built": "made, baked, knit, sewn, glued, carved, drawn, painted, frosted, buttered, tickled, licked, sneezed, folded, stacked, wrapped",
+    "two": "three, four, five, twelve, a zillion, a million, ninety-nine, one, a hundred, eleven, twenty, a dozen"
+  },
+  joy: {
+    "joyful": "Pickled, Soggy, Stinky, Wobbly, Cheesy, Sneezy, Grumpy, Lumpy, Sticky, Sparkly, Noisy, Fancy, Crunchy, Gooey, Slimy, Fishy",
+    "we": "Grandma, the cat, my dog, Santa, the elves, my uncle, Bigfoot, the baby, a pirate, the mailman, the penguins, everybody",
+    "adore": "ignore, explore, restore, abhor, tickle, sniff, lick, hug, smell, shampoo, butter, juggle, poke, serenade, high-five, sneeze on",
+    "thee": "thy socks, the cheese, the tree, the bee, the sea, my knee, a flea, a pea, the TV, tea, Grandpa, the dog",
+    "god": "King, Duke, Queen, Boss, Chief, Prince, Count, Captain, Pickle, Noodle, Waffle, Bigfoot, Grandma, Uncle, Doctor, Sir",
+    "of": "for, from, with, near, like, beside, behind, without, under, inside",
+    "glory": "story, gory, Lori, Dory, gravy, pickles, noodles, burritos, cupcakes, waffles, pancakes, broccoli, hiccups, pudding, sprinkles, popcorn",
+    "lord": "King, Duke, Queen, Boss, Chief, Prince, Count, Captain, Pickle, Noodle, Waffle, Bigfoot, Grandma, Uncle, Doctor, Sir",
+    "love": "glove, dove, shove, socks, lunch, snacks, cheese, toast, soup, burps, sneezes, hiccups, gravy, sprinkles, jelly, waffles",
+    "hearts": "carts, darts, tarts, parts, arts, pickles, noodles, burritos, cupcakes, waffles, pancakes, hamsters, penguins, slippers, toenails",
+    "unfold": "unroll, explode, unzip, wiggle, jiggle, sneeze, burp, melt, giggle, wobble, dance, yodel, snore, bounce, sparkle, hiccup",
+    "like": "unlike, near, beside, behind, inside, under, without, plus, instead of, next to",
+    "flowers": "showers, towers, powers, hours, cauliflowers, sunflowers, pickles, noodles, burritos, cupcakes, waffles, pancakes, hamsters, penguins, slippers, socks",
+    "before": "behind, beside, inside, under, near, beneath, above, past, around, on top of",
+    "opening": "closing, sneezing, burping, dancing, yodeling, juggling, wiggling, napping, singing, snoring, waving, winking, grinning, giggling, sparkling, sweating",
+    "to": "for, from, with, at, by, near, like, beside, behind, without",
+    "the": "my, your, a, Grandma's, the stinky, the soggy, the giant, the sleepy, the hairy, the silly, the squeaky, the fancy",
+    "sun": "bun, hot cross bun, cinnamon bun, moon, pizza, pancake, meatball, donut, cookie, lemon, cheese, hamster, penguin, disco ball, potato, onion",
+    "above": "below, nearby, upstairs, downstairs, outside, inside, sideways, backwards, next door, on Tuesday, in the bath, over there"
+  },
+  auld: {
+    "should": "could, would, might, must, will, can, shall, may, did, won't",
+    "auld": "old, bold, cold, gold, moldy, stinky, soggy, cheesy, sneezy, grumpy, wobbly, hairy, sticky, smelly, squishy, crusty",
+    "acquaintance": "pajamas, potatoes, bananas, tomatoes, spaghetti, salami, piñata, umbrella, flamingo, avocado, armadillo, broccoli, macaroni, accordion, kazoo, sardines",
+    "be": "get, feel, seem, look, stay, sound, smell, go, turn, grow, taste, become",
+    "forgot": "a lot, a knot, a pot, a dot, a spot, a tot, hot, not, forgot-ish, eaten, licked, tickled, sneezed on, buttered, pickled, juggled",
+    "and": "plus, but, then, so, and then, while, yet, and also",
+    "never": "always, sometimes, often, clever, whatever, however, rarely, secretly, sneakily, loudly, backwards, twice",
+    "brought": "bought, caught, taught, thought, fought, sought, got, flung, tossed, kicked, licked, carried, dragged, pickled, launched, mailed",
+    "to": "into, onto, under, behind, past, inside, beside, toward, around, beyond",
+    "mind": "behind, rind, grind, find, kind, wind, nose, toes, lunch, bed, school, the bath, the zoo, a sandwich, my sock, the fridge",
+    "lang": "long, strong, wrong, ding-dong, ping-pong, sing-song, stinky, soggy, cheesy, sneezy, grumpy, wobbly, hairy, sticky, smelly, squishy",
+    "syne": "time, sign, wine-gum, pine, line, spine, dime, slime, lime, mime, rhyme, nine, vine, pie, swine, shine"
+  }
+};
+
+
+// Song art for Mad Libs Piano: an illustrated scene behind "Your song" for each song,
+// shown when the Art toggle is on. Each scene is flat SVG drawn in its own fixed colours
+// (it is a picture, so it looks the same in light and dark mode), with the lyric colours
+// chosen to read on top of it. Scenes keep their busy parts to the right and bottom so the
+// words on the left stay clear.
+
+const ART = (() => {
+  // a small seeded random, so every visit draws the same stars and confetti
+  function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+  const W = 800, H = 320;
+  const wrap = (bg, body) => `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMaxYMax slice" aria-hidden="true">${bg}${body}</svg>`;
+  const sky = (id, a, b) => `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#${id})"/>`;
+  const star = (x, y, r, c) => `<path d="M${x} ${y - r}L${x + r * .28} ${y - r * .28}L${x + r} ${y}L${x + r * .28} ${y + r * .28}L${x} ${y + r}L${x - r * .28} ${y + r * .28}L${x - r} ${y}L${x - r * .28} ${y - r * .28}Z" fill="${c}"/>`;
+  const dots = (seed, n, x0, x1, y0, y1, f) => { const r = rnd(seed); let s = ""; for (let i = 0; i < n; i++) s += f(x0 + r() * (x1 - x0), y0 + r() * (y1 - y0), r(), i); return s; };
+  const hill = (y, amp, c, phase = 0) => { let d = `M0 ${H}L0 ${y}`; for (let x = 0; x <= W; x += 40) d += `L${x} ${(y + Math.sin(x / 130 + phase) * amp).toFixed(1)}`; return `<path d="${d}L${W} ${H}Z" fill="${c}"/>`; };
+  const cloud = (x, y, s, c) => `<g fill="${c}"><ellipse cx="${x}" cy="${y}" rx="${36 * s}" ry="${16 * s}"/><ellipse cx="${x - 22 * s}" cy="${y + 4 * s}" rx="${22 * s}" ry="${12 * s}"/><ellipse cx="${x + 24 * s}" cy="${y + 5 * s}" rx="${24 * s}" ry="${11 * s}"/><ellipse cx="${x + 2 * s}" cy="${y - 10 * s}" rx="${20 * s}" ry="${14 * s}"/></g>`;
+  const pine = (x, y, h, c) => `<path d="M${x} ${y - h}L${x + h * .32} ${y - h * .45}L${x + h * .16} ${y - h * .45}L${x + h * .42} ${y}L${x - h * .42} ${y}L${x - h * .16} ${y - h * .45}L${x - h * .32} ${y - h * .45}Z" fill="${c}"/>`;
+  const flake = (x, y, r, o) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(1 + r * 2.6).toFixed(1)}" fill="#fff" opacity="${(.45 + o * .5).toFixed(2)}"/>`;
+  const light = { ink: "#1b1a2e", sub: "#3d3a52", silly: "#b0306a", glow: "rgba(255,255,255,.75)" };
+  const dark = { ink: "#fbf7ee", sub: "#d9d3e6", silly: "#ff9cc6", glow: "rgba(0,0,0,.55)" };
+
+  const scenes = {
+    twinkle: { ...dark, svg: () => wrap(sky("tw", "#0c1534", "#27407a"),
+      dots(7, 70, 0, W, 0, H * .8, (x, y, r) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(r * 1.6 + .4).toFixed(1)}" fill="#fff" opacity="${(.35 + r * .6).toFixed(2)}"/>`) +
+      star(560, 90, 26, "#ffe27a") + star(690, 160, 14, "#fff2b8") + star(470, 200, 10, "#fff2b8") + star(740, 60, 9, "#fff2b8") +
+      `<circle cx="700" cy="130" r="34" fill="#fff4cf"/><circle cx="718" cy="120" r="32" fill="#1c2c5c"/>` +
+      `<path d="M600 230l24-22 24 22-24 34z" fill="#9fe7ff" opacity=".9"/><path d="M600 230h48M612 230l12 34 12-34" stroke="#e6f9ff" stroke-width="2" fill="none"/>` +
+      hill(290, 10, "#0b1129")) },
+    row: { ...light, svg: () => wrap(sky("rw", "#bfe6ff", "#e9f7ff"),
+      `<circle cx="720" cy="125" r="34" fill="#ffd45c"/>` + cloud(520, 70, 1, "#fff") + cloud(300, 40, .7, "#fff") +
+      hill(200, 18, "#8fd18c") + hill(225, 12, "#6cbf73", 2) +
+      `<path d="M0 250 C200 230 420 270 800 245 L800 320 L0 320Z" fill="#4aa3df"/><path d="M0 270 C220 255 430 292 800 268" stroke="#bfe6ff" stroke-width="3" fill="none" opacity=".8"/>` +
+      `<g transform="translate(560 238)"><path d="M-60 0h120l-18 22h-84z" fill="#a0522d"/><path d="M-40 -6l-26 40M40 -6l26 40" stroke="#5b3417" stroke-width="5"/><circle cx="0" cy="-22" r="12" fill="#ffcf9e"/><rect x="-12" y="-12" width="24" height="16" rx="5" fill="#e4572e"/></g>`) },
+    grace: { ...light, svg: () => wrap(sky("gr", "#ffd9a8", "#fff3e0"),
+      `<g opacity=".55">${Array.from({ length: 14 }, (_, i) => { const a = Math.PI * (i / 13); return `<path d="M640 300L${(640 + Math.cos(a) * 700).toFixed(0)} ${(300 - Math.sin(a) * 700).toFixed(0)}L${(640 + Math.cos(a + .08) * 700).toFixed(0)} ${(300 - Math.sin(a + .08) * 700).toFixed(0)}Z" fill="#fff6c9"/>`; }).join("")}</g>` +
+      `<circle cx="640" cy="300" r="70" fill="#ffb347"/>` + hill(270, 14, "#e8a27a") + hill(292, 10, "#c97b63", 1.5) +
+      `<path d="M560 180q14-14 28 0q14-14 28 0" stroke="#6b3e2e" stroke-width="4" fill="none"/><path d="M650 150q10-10 20 0q10-10 20 0" stroke="#6b3e2e" stroke-width="3" fill="none"/>`) },
+    clementine: { ...light, svg: () => wrap(sky("cl", "#ffb46b", "#ffe2b0"),
+      `<circle cx="560" cy="115" r="40" fill="#fff0b3"/>` +
+      `<path d="M380 320V180h70l20-40h90l20 40h40v140z" fill="#c8553d"/><path d="M620 320V150h60l15-30h70l20 30h35v170z" fill="#a8432f"/>` +
+      `<path d="M500 320v-60a35 35 0 0170 0v60z" fill="#3a1d14"/><path d="M490 262h90" stroke="#6b3a24" stroke-width="8"/>` +
+      `<path d="M330 320v-80M330 270h-18v-26M330 280h18v-24" stroke="#3f8f4f" stroke-width="12" stroke-linecap="round" fill="none"/>` +
+      `<g transform="translate(720 300)"><path d="M-20 0l6-18h28l6 18z" fill="#c7a17a"/><path d="M-12-18c0-10 24-10 24 0" fill="#e4c14b"/></g>` + hill(306, 4, "#d98c53")) },
+    range: { ...light, svg: () => wrap(sky("rg", "#8fd0ff", "#e6f5ff"),
+      cloud(460, 60, 1.1, "#fff") + cloud(700, 110, .8, "#fff") + `<circle cx="620" cy="125" r="26" fill="#ffd45c"/>` +
+      hill(220, 6, "#b9a36b", .5) + hill(240, 8, "#d8bf63", 1) +
+      `<g fill="#5a3b22"><ellipse cx="560" cy="250" rx="46" ry="26"/><circle cx="604" cy="246" r="18"/><rect x="528" y="262" width="9" height="26"/><rect x="580" y="262" width="9" height="26"/><path d="M612 232l10-10M600 230l-2-12" stroke="#5a3b22" stroke-width="5"/></g>` +
+      `<g fill="#b97a3c"><ellipse cx="700" cy="262" rx="24" ry="11"/><circle cx="724" cy="250" r="7"/><path d="M684 270v18M714 270v18" stroke="#b97a3c" stroke-width="4"/><path d="M724 244l6-14M727 245l10-12" stroke="#5a3b22" stroke-width="2.5"/></g>` +
+      `<path d="M380 320 L410 236 M392 280 l28-10" stroke="#8a6a3a" stroke-width="3"/>`) },
+    shenandoah: { ...dark, svg: () => wrap(sky("sh", "#3c3f7a", "#e58b6b"),
+      `<circle cx="640" cy="210" r="46" fill="#ffd08a"/>` + hill(190, 26, "#4b4f8c") + hill(220, 22, "#373b6e", 1.2) + hill(250, 14, "#262a54", 2.4) +
+      `<path d="M300 320 C420 300 520 280 640 262 C700 254 760 252 800 252 L800 274 C700 280 580 296 480 320Z" fill="#f2a46e" opacity=".85"/>` +
+      `<g transform="translate(560 288)"><path d="M-34 0h68l-10 12h-48z" fill="#1a1c3a"/><path d="M0 0v-46l26 34z" fill="#fff3e0"/></g>`) },
+    birthday: { ...light, svg: () => wrap(sky("bd", "#ffe3f1", "#fff7e0"),
+      dots(11, 45, 430, W, 60, H, (x, y, r, i) => `<rect x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="7" height="12" rx="2" fill="${["#ff6b9a", "#ffc93c", "#4fc3f7", "#7bd389", "#b388ff"][i % 5]}" transform="rotate(${(r * 180).toFixed(0)} ${x.toFixed(0)} ${y.toFixed(0)})" opacity=".8"/>`) +
+      [["#ff6b9a", 470, 90], ["#4fc3f7", 540, 60], ["#ffc93c", 610, 100], ["#7bd389", 700, 70]].map(([c, x, y]) => `<path d="M${x} ${y + 40}q-6 40 6 90" stroke="#888" stroke-width="1.5" fill="none"/><ellipse cx="${x}" cy="${y}" rx="28" ry="36" fill="${c}"/><path d="M${x - 4} ${y + 36}h8l-4 6z" fill="${c}"/>`).join("") +
+      `<g transform="translate(600 300)"><rect x="-90" y="-60" width="180" height="60" rx="8" fill="#ffb6c9"/><rect x="-90" y="-60" width="180" height="16" rx="8" fill="#fff"/><rect x="-70" y="-110" width="140" height="50" rx="8" fill="#ffd7a8"/><rect x="-70" y="-110" width="140" height="12" rx="6" fill="#fff"/>${[-40, 0, 40].map(x => `<rect x="${x - 4}" y="-140" width="8" height="30" fill="#4fc3f7"/><path d="M${x} -152q8 8 0 14q-8-6 0-14z" fill="#ffb300"/>`).join("")}</g>`) },
+    jingle: { ...dark, svg: () => wrap(sky("jb", "#0e2a4a", "#3d6e9c"),
+      dots(5, 80, 0, W, 0, H, (x, y, r, i) => flake(x, y, r, (i * 37 % 10) / 10)) + hill(250, 16, "#eef4fb") + hill(275, 10, "#dce8f5", 2) +
+      pine(470, 250, 90, "#1f5a3e") + pine(740, 260, 120, "#1a4d35") +
+      `<g transform="translate(600 238)"><path d="M-70 0h110q20 0 24-24" stroke="#c0392b" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M-80 10h150" stroke="#e8c15a" stroke-width="5" stroke-linecap="round"/><rect x="-66" y="-40" width="90" height="40" rx="10" fill="#c0392b"/><circle cx="-30" cy="-44" r="12" fill="#ffd166"/></g>` +
+      `<g transform="translate(470 200)">${[0, 1, 2].map(i => `<circle cx="${i * 16}" cy="${(i % 2) * 6}" r="8" fill="#ffd166" stroke="#b8860b" stroke-width="2"/>`).join("")}</g>`) },
+    macdonald: { ...light, svg: () => wrap(sky("md", "#a8dcff", "#e9f7ff"),
+      `<circle cx="740" cy="120" r="30" fill="#ffd45c"/>` + cloud(400, 60, .9, "#fff") + hill(240, 8, "#8bcf6e") +
+      `<g transform="translate(560 250)"><path d="M-70 0V-80l70-50 70 50V0z" fill="#c8372d"/><path d="M-70-80l70-50 70 50" stroke="#fff" stroke-width="6" fill="none"/><rect x="-26" y="-56" width="52" height="56" fill="#fff"/><path d="M-26-56l52 56M26-56l-52 56" stroke="#c8372d" stroke-width="5"/><rect x="-14" y="-108" width="28" height="22" fill="#fff"/></g>` +
+      `<g transform="translate(700 270)"><ellipse cx="0" cy="0" rx="40" ry="22" fill="#fff"/><circle cx="-12" cy="-6" r="8" fill="#222"/><circle cx="14" cy="4" r="9" fill="#222"/><ellipse cx="44" cy="-12" rx="16" ry="13" fill="#fff"/><ellipse cx="52" cy="-6" rx="8" ry="6" fill="#ffb6c1"/><path d="M-26 18v18M26 18v18" stroke="#fff" stroke-width="7"/></g>` +
+      `<path d="M360 290h440M360 270h440" stroke="#d9b07a" stroke-width="6"/>${[380, 440, 500, 640, 760].map(x => `<rect x="${x}" y="258" width="8" height="42" fill="#c9965a"/>`).join("")}`) },
+    merry: { ...dark, svg: () => wrap(sky("mx", "#1d1530", "#3b2a55"),
+      dots(9, 60, 0, W, 0, H, (x, y, r, i) => flake(x, y, r, (i * 53 % 10) / 10)) + hill(285, 8, "#f1eef8") +
+      `<g transform="translate(600 290)">${[[0, -220, 70], [0, -160, 95], [0, -95, 120]].map(([x, y, w]) => `<path d="M${x} ${y}L${x + w} ${y + 90}H${x - w}Z" fill="#2e8b57"/>`).join("")}<rect x="-14" y="-6" width="28" height="22" fill="#6b3e26"/>${star(0, -228, 18, "#ffd700")}${[[-40, -120, "#ff5c5c"], [30, -150, "#4fc3f7"], [-20, -70, "#ffd166"], [55, -60, "#ff9cc6"], [-60, -40, "#7bd389"], [10, -100, "#ff5c5c"]].map(([x, y, c]) => `<circle cx="${x}" cy="${y}" r="8" fill="${c}"/>`).join("")}</g>` +
+      `<g transform="translate(720 290)"><rect x="-26" y="-30" width="52" height="30" fill="#e74c3c"/><rect x="-4" y="-30" width="8" height="30" fill="#ffd166"/></g><g transform="translate(470 290)"><rect x="-22" y="-24" width="44" height="24" fill="#4fc3f7"/><rect x="-22" y="-14" width="44" height="6" fill="#fff"/></g>`) },
+    mary: { ...light, svg: () => wrap(sky("my", "#c9ecff", "#f3fbff"),
+      cloud(380, 70, .8, "#fff") + `<circle cx="745" cy="115" r="26" fill="#ffe066"/>` + hill(235, 10, "#a8e08a") + hill(262, 8, "#8fd17a", 1.7) +
+      `<g transform="translate(640 210)"><rect x="-56" y="-50" width="112" height="70" fill="#e85d4a"/><path d="M-66-50L0-96l66 46z" fill="#7a3b2e"/><rect x="-14" y="-12" width="28" height="32" fill="#7a3b2e"/><rect x="-6" y="-120" width="12" height="28" fill="#7a3b2e"/><path d="M0-120h20v10H0" fill="#ffd166"/></g>` +
+      `<g transform="translate(520 280)"><g fill="#fff">${[[-20, 0], [0, -8], [20, 0], [-10, 8], [10, 8], [0, 4]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="16"/>`).join("")}</g><ellipse cx="36" cy="-4" rx="12" ry="10" fill="#3d3d3d"/><circle cx="40" cy="-6" r="2" fill="#fff"/><path d="M-16 18v14M12 18v14" stroke="#3d3d3d" stroke-width="5"/></g>` +
+      dots(4, 16, 360, 800, 280, 315, (x, y, r, i) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="4" fill="${["#ff8fab", "#ffd166", "#fff"][i % 3]}"/>`)) },
+    spider: { ...light, svg: () => wrap(sky("sp", "#cfe6f5", "#f3f9ee"),
+      `<circle cx="700" cy="120" r="34" fill="#ffd45c"/>` + cloud(560, 70, 1, "#fff") + cloud(470, 105, .7, "#eef4fa") +
+      dots(21, 26, 430, 620, 110, 230, (x, y) => `<path d="M${x.toFixed(0)} ${y.toFixed(0)}l-3 9" stroke="#7fb3e0" stroke-width="2.4" stroke-linecap="round"/>`) +
+      hill(275, 8, "#9fd08a") + `<rect x="640" y="150" width="26" height="150" fill="#9aa7b4"/><rect x="630" y="140" width="46" height="18" rx="4" fill="#7f8c99"/><path d="M653 300q0 14 24 14h40v-18h-40" fill="#7f8c99"/>` +
+      `<path d="M653 158v52" stroke="#555" stroke-width="1.5"/><g transform="translate(653 222)"><ellipse rx="11" ry="9" fill="#333"/><circle cy="-10" r="6" fill="#333"/><path d="M-10-4l-12-8M-10 2l-14 0M-10 6l-12 9M10-4l12-8M10 2l14 0M10 6l12 9" stroke="#333" stroke-width="2.4" stroke-linecap="round"/><circle cx="-2" cy="-11" r="1.6" fill="#fff"/><circle cx="2.5" cy="-11" r="1.6" fill="#fff"/></g>`) },
+    london: { ...light, svg: () => wrap(sky("ld", "#c9d6e3", "#eef2f6"),
+      cloud(480, 70, 1, "#fff") + `<path d="M0 262h800v58H0z" fill="#6f8fa8"/><path d="M0 272c120-8 240 8 360 0s240-8 440 0" stroke="#b9cbd9" stroke-width="3" fill="none"/>` +
+      `<g fill="#6b6f7a"><rect x="470" y="120" width="44" height="150"/><rect x="660" y="120" width="44" height="150"/><path d="M466 120l26-34 26 34zM656 120l26-34 26 34z"/><rect x="514" y="150" width="146" height="10"/><path d="M380 230h420v14H380z"/></g>` +
+      `<g fill="#9ea6b4">${[0, 1, 2, 3].map(i => `<rect x="${478 + i * 0}" y="${140 + i * 30}" width="28" height="14" rx="7"/><rect x="${668}" y="${140 + i * 30}" width="28" height="14" rx="7"/>`).join("")}</g>` +
+      `<path d="M514 244q73-70 146 0" stroke="#4d5260" stroke-width="5" fill="none"/>`) },
+    yankee: { ...light, svg: () => wrap(sky("yk", "#dff0ff", "#fffaf0"),
+      `<g>${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<path d="M${400 + i * 52} 20l26 38 26-38z" fill="${["#c0392b", "#fff", "#2d5aa0"][i % 3]}" stroke="#d9d9d9"/>`).join("")}<path d="M396 20h420" stroke="#8a6a3a" stroke-width="3"/></g>` +
+      hill(265, 10, "#a5d78f") +
+      `<g transform="translate(620 250)"><ellipse rx="56" ry="26" fill="#a0673a"/><path d="M42-10l30-34 14 6-24 40z" fill="#a0673a"/><circle cx="80" cy="-42" r="13" fill="#a0673a"/><path d="M74-50l-6-16M84-50l2-16" stroke="#6b4423" stroke-width="5"/><path d="M-40 18v34M-14 22v30M18 22v30M42 18v34" stroke="#6b4423" stroke-width="8"/><path d="M-56-6q-20 10-12 40" stroke="#4a2f17" stroke-width="7" fill="none"/></g>` +
+      `<g transform="translate(560 150) rotate(-20)"><path d="M0 0q40-30 90-6-50 18-90 6z" fill="#fff" stroke="#bbb"/><path d="M0 0h96" stroke="#999" stroke-width="2"/></g>`) },
+    sleeping: { ...dark, svg: () => wrap(sky("sl", "#141a3c", "#3a2e5c"),
+      dots(31, 50, 0, W, 0, H * .7, (x, y, r) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(r * 1.4 + .4).toFixed(1)}" fill="#fff" opacity="${(.3 + r * .6).toFixed(2)}"/>`) +
+      `<circle cx="720" cy="80" r="30" fill="#fff4cf"/><circle cx="734" cy="72" r="28" fill="#1d2248"/>` +
+      `<g fill="#2a2450"><rect x="520" y="110" width="80" height="210"/><path d="M510 110l50-60 50 60z"/></g><path d="M545 160a15 15 0 0130 0v22h-30z" fill="#ffd166"/><circle cx="560" cy="186" r="4" fill="#ffd166"/>` +
+      `<g font-family="Figtree, sans-serif" font-weight="700" fill="#d9d3e6" opacity=".85"><text x="640" y="200" font-size="22">z</text><text x="662" y="176" font-size="28">z</text><text x="690" y="146" font-size="36">Z</text></g>` +
+      hill(300, 6, "#120f26")) },
+    farmer: { ...light, svg: () => wrap(sky("fm", "#bfe3ff", "#fff8e6"),
+      `<circle cx="720" cy="120" r="28" fill="#ffd45c"/>` + cloud(480, 70, .9, "#fff") + hill(225, 20, "#9ccf7a", .4) + hill(255, 14, "#7fbf65", 2) +
+      `<g transform="translate(560 270)"><circle cy="-62" r="14" fill="#ffcf9e"/><path d="M-26-74h52l-8-10h-36z" fill="#d9a441"/><rect x="-14" y="-50" width="28" height="40" rx="6" fill="#3d7bc4"/><path d="M-8-10v30M8-10v30" stroke="#5a3b22" stroke-width="7"/><path d="M14-40l26-16" stroke="#8a6a3a" stroke-width="4"/></g>` +
+      `<g transform="translate(700 280)"><path d="M0 0l40-24 40 24-40 18z" fill="#ffd54a"/><path d="M0 0v16l40 18 40-18V0" fill="#f2c02e"/><circle cx="22" cy="2" r="4" fill="#e6ac12"/><circle cx="52" cy="-6" r="5" fill="#e6ac12"/></g>`) },
+    scarborough: { ...dark, svg: () => wrap(sky("sc", "#2f4f5f", "#9cb8b8"),
+      `<circle cx="660" cy="130" r="40" fill="#f3efe0" opacity=".85"/>` + hill(210, 16, "#3e6262", .8) +
+      `<path d="M380 320V230q60-30 120-20t110-10 190 0V320z" fill="#5d7f6b"/><path d="M0 270h800v50H0z" fill="#2b4a58" opacity=".7"/>` +
+      `<g transform="translate(470 285)" stroke="#2e5d3a" stroke-width="3" fill="#6ba36f">${[0, 1, 2, 3, 4].map(i => `<path d="M${i * 10} 0q${-8 + i * 4} -30 ${-4 + i * 3} -60" fill="none"/><ellipse cx="${i * 10 - 6 + i * 3}" cy="-40" rx="5" ry="9"/>`).join("")}</g>` +
+      `<g transform="translate(700 260)"><path d="M0 0v-90l18 10v80z" fill="#c9c2b0"/><path d="M-4-90l11-14 11 14z" fill="#8d6e63"/></g>`) },
+    saints: { ...dark, svg: () => wrap(sky("st", "#2a1a4a", "#6a3d8a"),
+      dots(41, 40, 380, W, 20, 200, (x, y, r, i) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(2 + r * 3).toFixed(1)}" fill="${["#ffd166", "#7bd389", "#ff9cc6"][i % 3]}" opacity=".8"/>`) +
+      `<g transform="translate(560 200) rotate(-12)"><path d="M0 0h120l40-26v66l-40-26H0z" fill="#ffcf3f"/><rect x="18" y="-10" width="10" height="20" fill="#e0a800"/><rect x="40" y="-10" width="10" height="20" fill="#e0a800"/><rect x="62" y="-10" width="10" height="20" fill="#e0a800"/><circle cx="-6" cy="7" r="7" fill="#e0a800"/></g>` +
+      `<g fill="#ffd166" font-family="Georgia, serif" font-size="40"><text x="470" y="120">♪</text><text x="720" y="90">♫</text><text x="660" y="300">♪</text></g>` +
+      hill(300, 6, "#1d1233")) },
+    daisy: { ...light, svg: () => wrap(sky("dy", "#d7efff", "#fbfff0"),
+      `<circle cx="720" cy="110" r="28" fill="#ffd45c"/>` + cloud(480, 70, .9, "#fff") + hill(250, 10, "#a8dc8f") +
+      dots(17, 24, 380, W, 262, 315, (x, y) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})">${[0, 60, 120, 180, 240, 300].map(a => `<ellipse rx="3" ry="7" fill="#fff" transform="rotate(${a}) translate(0 -6)"/>`).join("")}<circle r="3.4" fill="#ffc93c"/></g>`) +
+      `<g transform="translate(560 220)" fill="none" stroke="#2d5aa0" stroke-width="5"><circle cx="0" cy="40" r="30"/><circle cx="170" cy="40" r="30"/><path d="M0 40l40-44h90l40 44M40-4l20 44h50l20-44M60 40l-6-50M110 40l-6-50"/><path d="M48-16h16M98-16h16M164-14l12-14" stroke-linecap="round"/></g>`) },
+    joy: { ...light, svg: () => wrap(sky("jy", "#ffe9b0", "#fff7e8"),
+      `<g opacity=".5">${Array.from({ length: 12 }, (_, i) => { const a = Math.PI * (i / 11); return `<path d="M640 320L${(640 + Math.cos(a) * 700).toFixed(0)} ${(320 - Math.sin(a) * 700).toFixed(0)}L${(640 + Math.cos(a + .1) * 700).toFixed(0)} ${(320 - Math.sin(a + .1) * 700).toFixed(0)}Z" fill="#fff4c4"/>`; }).join("")}</g>` +
+      `<circle cx="640" cy="320" r="64" fill="#ffb347"/>` + hill(285, 8, "#c6e3a0") +
+      dots(9, 18, 400, W, 250, 310, (x, y, r, i) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})"><path d="M0 0v18" stroke="#5c9b4f" stroke-width="2"/>${[0, 72, 144, 216, 288].map(a => `<ellipse rx="4" ry="7" fill="${["#ff6b9a", "#b388ff", "#ffc93c"][i % 3]}" transform="rotate(${a}) translate(0 -6)"/>`).join("")}<circle r="3" fill="#fff4c4"/></g>`)) },
+    auld: { ...dark, svg: () => wrap(sky("al", "#0d1430", "#2b2350"),
+      [[520, 90, "#ffd166"], [660, 70, "#ff9cc6"], [740, 150, "#7bd389"], [590, 170, "#9fd4ff"]].map(([x, y, c]) => `<g stroke="${c}" stroke-width="3" stroke-linecap="round">${Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return `<path d="M${(x + Math.cos(a) * 10).toFixed(0)} ${(y + Math.sin(a) * 10).toFixed(0)}L${(x + Math.cos(a) * 34).toFixed(0)} ${(y + Math.sin(a) * 34).toFixed(0)}"/>`; }).join("")}</g>`).join("") +
+      `<g transform="translate(450 250)"><circle r="44" fill="#f3efe0"/><circle r="44" fill="none" stroke="#c9a227" stroke-width="5"/><path d="M0 0V-32M0 0l20-10" stroke="#222" stroke-width="5" stroke-linecap="round"/></g>` + hill(300, 6, "#090d22")) },
+  };
+  // Key art: colours for the white and black keys, and a small picture (a 24x24 SVG shape)
+  // that sits at the top of each white key and repeats faintly as a pattern.
+  const K = (white, whiteDown, black, blackDown, line, ink, inkDark, silly, sillyDark, note, motifColor, motifDark, motif) =>
+    ({ white, whiteDown, black, blackDown, line, ink, inkDark, silly, sillyDark, note, motifColor, motifDark, motif });
+  const STAR = "<path d='M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.6z'/>";
+  const keys = {
+    twinkle: K("#eef1fb", "#d9def3", "#101a3d", "#26346a", "#c5cbe6", "#141a33", "#e8ecff", "#9b2a6b", "#ffb8dc", "#6a7290", "#e0b100", "#ffe27a", STAR),
+    row: K("#eef8ff", "#d6ecfb", "#1f4f7a", "#2f6a9c", "#bcd8ec", "#10283d", "#e6f4ff", "#a8326b", "#ffc2de", "#5a7a92", "#3b8fd1", "#9fd4ff",
+      "<path d='M2 13c3-4 5-4 8 0s5 4 8 0 4-3 4-3v6c-3 3-5 3-8 0s-5-3-8 0-4 3-4 3z'/>"),
+    grace: K("#fff6e8", "#f4e3c6", "#5a2e22", "#7a4434", "#ead6b3", "#2e1a12", "#ffeedd", "#a82d5c", "#ffc0d6", "#8a6e55", "#e89a2c", "#ffcf7a",
+      "<circle cx='12' cy='12' r='5'/><path d='M11 1h2v4h-2zM11 19h2v4h-2zM1 11h4v2H1zM19 11h4v2h-4zM4.2 5.6l1.4-1.4 2.8 2.8-1.4 1.4zM15.6 17l1.4-1.4 2.8 2.8-1.4 1.4zM4.2 18.4l2.8-2.8 1.4 1.4-2.8 2.8zM15.6 7l2.8-2.8 1.4 1.4-2.8 2.8z'/>"),
+    clementine: K("#fff1e2", "#f5dcc0", "#5e2a1c", "#7c3c2a", "#ecceae", "#331a10", "#ffe9d6", "#9e2c55", "#ffbfd3", "#8d6a52", "#d9a017", "#ffd36b",
+      "<path d='M3 17l3-8 6-4 7 4 2 8-8 4z'/>"),
+    range: K("#fbf5e4", "#efe4c4", "#4a3420", "#654a30", "#e3d6b0", "#2b1e10", "#fff1d9", "#a3305e", "#ffc1d8", "#8b7a5a", "#9a6a35", "#e8c58f",
+      "<path d='M5 3h3.5v9a3.5 3.5 0 007 0V3H19v9a7 7 0 01-14 0z'/>"),
+    shenandoah: K("#f1effa", "#dedaf0", "#262a54", "#3a3f78", "#cfcae4", "#1c1d3a", "#f0eeff", "#a8306a", "#ffb9d9", "#6d6a8f", "#e5866a", "#ffb48f",
+      "<path d='M11 2v14H4zM13 5l6 11h-6zM2 18h20l-3 4H5z'/>"),
+    birthday: K("#fff4f8", "#fbdde8", "#5b2a5e", "#76407a", "#f2cddb", "#2e1630", "#fff0fb", "#a3215c", "#ffd25e", "#8f6f86", "#ff6b9a", "#ffc93c",
+      "<ellipse cx='12' cy='9' rx='6' ry='7.5'/><path d='M10.5 16.2h3l-1.5 2zM11.4 18h1.2v5h-1.2z'/>"),
+    jingle: K("#f2f7fc", "#dce8f5", "#0e2a4a", "#1d4570", "#c9d9ea", "#0f2236", "#eef6ff", "#b02a3a", "#ff9aa6", "#5f7590", "#c0392b", "#ffd166",
+      "<path d='M12 2a1.5 1.5 0 011.5 1.5v.7A6 6 0 0118 10v5l2 3H4l2-3v-5a6 6 0 014.5-5.8v-.7A1.5 1.5 0 0112 2zM9.5 19h5a2.5 2.5 0 01-5 0z'/>"),
+    macdonald: K("#fbf8ee", "#efe8d2", "#6b1f1a", "#8c2c25", "#e3dbc0", "#2a1d12", "#fff1ea", "#a3285a", "#ffc3d7", "#87775c", "#c8372d", "#ffd0c8",
+      "<path fill-rule='evenodd' d='M2 10L12 3l10 7v11H2zM9 21v-7h6v7z'/>"),
+    merry: K("#f4f9f4", "#dcecdc", "#2a1d40", "#3e2d5c", "#cfe0cf", "#14261a", "#f2ecff", "#b02a3a", "#ffd166", "#5e7a63", "#2e8b57", "#7bd389",
+      "<path d='M12 1l5 7h-3l4 6h-3l4 6H5l4-6H6l4-6H7zM11 20h2v3h-2z'/>"),
+    mary: K("#f7fbf2", "#e3f0d6", "#4a3a36", "#655047", "#d6e6c6", "#1e2a14", "#fff6ee", "#a62c62", "#ffc4dc", "#6c7d5d", "#a99686", "#f3ede5",
+      "<circle cx='8' cy='12' r='4'/><circle cx='12' cy='9.5' r='4'/><circle cx='15.5' cy='12' r='4'/><circle cx='11.5' cy='14' r='4'/><ellipse cx='20' cy='10' rx='2.6' ry='2.1'/><path d='M8 16h1.6v5H8zM14 16h1.6v5H14z'/>"),
+    spider: K("#f3f7f2", "#dfe9db", "#2f3b45", "#46566a", "#cfdccb", "#1a2620", "#eef6ff", "#a62c62", "#ffc2de", "#647660", "#333333", "#c9d3dc",
+      "<ellipse cx='12' cy='13' rx='4' ry='3.4'/><circle cx='12' cy='8.5' r='2.4'/><path d='M8.5 11L3 7.5M8.5 13H2.5M8.5 15l-5 4M15.5 11L21 7.5M15.5 13h6M15.5 15l5 4M12 6V1' stroke='currentColor' stroke-width='1.4' fill='none'/>"),
+    london: K("#f1f3f6", "#dde2e9", "#3a3f4b", "#525868", "#cdd3dc", "#1d212a", "#eef0f5", "#a62c62", "#ffc2de", "#6b7280", "#6b6f7a", "#c9ced8",
+      "<path d='M2 20h20v2H2zM4 6h3v14H4zM17 6h3v14h-3zM3.5 6L5.5 2l2 4zM16.5 6l2-4 2 4zM7 9h10v1.6H7zM7 18q5-7 10 0v1H7z'/>"),
+    yankee: K("#fbf7ef", "#efe6d2", "#1f3d72", "#2d5aa0", "#e6dcc6", "#1d1f2b", "#eef3ff", "#b02a3a", "#ffc2cc", "#7d7462", "#b02a3a", "#ffffff",
+      "<path d='M3 20C8 9 15 4 21 3c-2 6-7 13-18 17z'/><path d='M3 20L19 5' stroke='#fff' stroke-width='1' fill='none'/>"),
+    sleeping: K("#eef0f8", "#d9ddee", "#1d2248", "#2e3570", "#cdd2e6", "#151834", "#f0eeff", "#9b2a6b", "#ffb8dc", "#6a7090", "#8a7fd0", "#fff4cf",
+      "<path d='M15 3a9 9 0 100 18 7.5 7.5 0 010-18z'/>"),
+    farmer: K("#fbfaee", "#efecd2", "#5a6b2a", "#728836", "#e3e0c0", "#262a12", "#f6ffe6", "#a3285a", "#ffc3d7", "#7d7c5c", "#d9a441", "#ffd54a",
+      "<path d='M11 22V8h2v14zM12 2c2 2 2 5 0 7-2-2-2-5 0-7zM12 9c3 0 5 2 5 4-3 0-5-2-5-4zM12 9c-3 0-5 2-5 4 3 0 5-2 5-4zM12 14c3 0 5 2 5 4-3 0-5-2-5-4zM12 14c-3 0-5 2-5 4 3 0 5-2 5-4z'/>"),
+    scarborough: K("#f1f6f4", "#dbe8e3", "#2b4a58", "#3d6475", "#cadfd8", "#16262c", "#e9f6f6", "#a62c62", "#ffc4dc", "#5f7a74", "#4f8a5b", "#b8e0bf",
+      "<path d='M12 22V10M12 14c-4 0-6-3-6-6 4 0 6 3 6 6zM12 11c4 0 6-3 6-6-4 0-6 3-6 6zM12 18c4 0 6-3 6-5-4 0-6 2-6 5z'/>"),
+    saints: K("#f6f0fb", "#e6dbf2", "#3a1f5e", "#53308a", "#dccce8", "#1f1230", "#fff3d1", "#a3215c", "#ffd166", "#7a6890", "#c9a227", "#ffd166",
+      "<path d='M9 3v12.3A3.5 3.5 0 1011 18V7l8-2v8.3A3.5 3.5 0 1021 16V1z'/>"),
+    daisy: K("#f7fbf2", "#e3f0d6", "#2d5aa0", "#3d6fbf", "#d6e6c6", "#1e2a14", "#eef4ff", "#a62c62", "#ffc4dc", "#6c7d5d", "#e6b800", "#ffffff",
+      "<g transform='translate(12 12)'><ellipse rx='3' ry='7' transform='translate(0 -5)'/><ellipse rx='3' ry='7' transform='rotate(60) translate(0 -5)'/><ellipse rx='3' ry='7' transform='rotate(120) translate(0 -5)'/><ellipse rx='3' ry='7' transform='rotate(180) translate(0 -5)'/><ellipse rx='3' ry='7' transform='rotate(240) translate(0 -5)'/><ellipse rx='3' ry='7' transform='rotate(300) translate(0 -5)'/></g>"),
+    joy: K("#fff8ea", "#f5e8c8", "#7a3b5c", "#94507a", "#eedcb6", "#2e1a12", "#fff0f6", "#a82d5c", "#ffd25e", "#8a6e55", "#ff6b9a", "#ffc93c",
+      "<path d='M12 21C5 15 2 12 2 8a5 5 0 0110-1 5 5 0 0110 1c0 4-3 7-10 13z'/>"),
+    auld: K("#f0f0f8", "#dcdcee", "#14183a", "#232a5c", "#cfd0e4", "#141630", "#f0eeff", "#9b2a6b", "#ffd166", "#6a6d90", "#c9a227", "#ffd166",
+      "<path d='M12 1l2 8 8-2-6 6 6 6-8-2-2 8-2-8-8 2 6-6-6-6 8 2z'/>"),
+  };
+  for (const id in scenes) scenes[id].keys = keys[id];
+  return scenes;
+})();
+
+
+// Grammar for Mad Libs Piano: when you swap the subject of a line ("I" → "Bigfoot"),
+// the verb that goes with it changes to match ("wonder" → "wonders", "am" → "is").
+// Used by the page while you play, and by vocab.js to list the verb forms to record.
+
+const GRAMMAR = (() => {
+  // the real words that start a clause as its subject
+  const SUBJECTS = new Set(["i", "you", "we", "they", "he", "she", "it", "ye"]);
+  const VERB_TAGS = new Set(["V", "LINK", "LINKPAST", "VS"]);
+  const lower = w => w.toLowerCase();
+  const keepCase = (from, to) => from[0] && from[0] === from[0].toUpperCase() && from[0] !== from[0].toLowerCase() ? to[0].toUpperCase() + to.slice(1) : to;
+
+  // Who is the subject? "I", a group ("you", "the elves", "my socks"), or one other thing ("Bigfoot", "the dog").
+  function subjectClass(word) {
+    const w = lower(word).trim();
+    if (w === "i") return "I";
+    if (["you", "we", "they", "ye"].includes(w)) return "pl";
+    if (["he", "she", "it"].includes(w)) return "3s";
+    const last = w.split(/\s+/).pop();
+    if (/^(everybody|everyone|nobody|somebody|someone|anybody)$/.test(last)) return "3s";
+    if (/^(people|children|mice|geese|police|elves|reindeer|deer|sheep|fish|feet|teeth|men|women)$/.test(last)) return "pl";
+    if (/[^s'u]s$/.test(last)) return "pl";
+    return "3s";
+  }
+
+  // Mark which words of a song agree with a subject: the verbs after a subject pronoun in the same line.
+  function markAgreement(tokens) {
+    let line = -1, subject = false;
+    tokens.forEach((t, i) => {
+      if (t.line !== line) { line = t.line; subject = false; }
+      if (t.tag === "PRON" && SUBJECTS.has(t.key)) { subject = true; t.subject = true; return; }
+      const prev = tokens[i - 1];
+      const verb = VERB_TAGS.has(t.tag) || (t.tag === "MODAL" && t.key === "have");
+      const helped = prev && prev.line === t.line && (prev.tag === "TO" || (prev.tag === "MODAL" && prev.key !== "have"));
+      // a question puts the verb before its own subject ("are you sleeping"), so it isn't about the subject before it
+      const next = tokens[i + 1], asks = next && next.line === t.line && next.tag === "PRON" && SUBJECTS.has(next.key);
+      if (subject && verb && !helped && !asks) t.agree = true;
+    });
+    return tokens;
+  }
+
+  function thirdPerson(v) {
+    const w = lower(v);
+    if (w === "have") return "has";
+    if (w === "do") return "does";
+    if (w === "go") return "goes";
+    if (/[^aeiou]y$/.test(w)) return v.slice(0, -1) + "ies";
+    if (/(s|sh|ch|x|z|o)$/.test(w)) return v + "es";
+    return v + "s";
+  }
+  // Change a verb (or a short verb phrase) to fit the subject class. A past-tense word only
+  // changes between "was" and "were".
+  function inflect(word, cls, tag) {
+    if (!cls) return word;
+    const w = lower(word);
+    if (tag === "LINKPAST" || tag === "VED") return ["was", "were"].includes(w) ? keepCase(word, cls === "pl" ? "were" : "was") : word;
+    if (["am", "is", "are"].includes(w)) return keepCase(word, cls === "I" ? "am" : cls === "3s" ? "is" : "are");
+    if (["was", "were"].includes(w)) return keepCase(word, cls === "pl" ? "were" : "was");
+    if (["have", "has"].includes(w)) return keepCase(word, cls === "3s" ? "has" : "have");
+    if (["aren't", "isn't"].includes(w)) return keepCase(word, cls === "3s" ? "isn't" : "aren't");
+    if (["weren't", "wasn't"].includes(w)) return keepCase(word, cls === "pl" ? "weren't" : "wasn't");
+    if (/'/.test(w) || w === "ain't") return word; // other short forms ("can't", "won't") stay as they are
+    if (cls !== "3s") return word;
+    const parts = word.split(" ");
+    // "sneeze on" → "sneezes on", "belly flop" → "belly flops", "high-five" → "high-fives"
+    const particle = parts.length > 1 && /^(on|at|to|up|down|out|in|off|about|over)$/i.test(parts[1]);
+    const i = particle ? 0 : parts.length - 1;
+    parts[i] = thirdPerson(parts[i]);
+    return parts.join(" ");
+  }
+  return { subjectClass, markAgreement, inflect };
+})();
+
+
+const VOICE_BANK = { sr: 16000, words: {} };
+
+// ---------- Keyboard layout ----------
+const LOW = 48, HIGH = 72; // C3 .. C5, 25 keys
+const NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+const BLACK = new Set([1, 3, 6, 8, 10]);
+const PC_KEYS = { z:48, s:49, x:50, d:51, c:52, v:53, g:54, b:55, h:56, n:57, j:58, m:59, ",":60,
+  q:60, "2":61, w:62, "3":63, e:64, r:65, "5":66, t:67, "6":68, y:69, "7":70, u:71, i:72 };
+const MIDI_TO_PC = {}; for (const [k, v] of Object.entries(PC_KEYS)) if (!(v in MIDI_TO_PC) && k !== ",") MIDI_TO_PC[v] = k.toUpperCase();
+const KEYS = []; for (let m = LOW; m <= HIGH; m++) KEYS.push(m);
+const NK = KEYS.length;
+
+// ---------- Words ----------
+const keyOf = w => w.toLowerCase().replace(/[’]/g, "'").replace(/[^a-zñé' \-]/g, "").replace(/[\s'\-]+$/, "").replace(/^[\s\-]+/, "");
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+function syllables(w) {
+  return w.toLowerCase().split(/[\s\-]+/).reduce((n, p) => {
+    const s = p.replace(/[^a-z]/g, "").replace(/e$/, "").replace(/(?:[^laeiouy]es|ed)$/, "");
+    return n + Math.max(1, (s.match(/[aeiouy]+/g) || []).length);
+  }, 0);
+}
+const splitList = s => s.split(",").map(x => x.trim()).filter(Boolean);
+function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+// ---------- Song engine ----------
+const S = { song: null, tokens: [], lines: [], pos: 0, assign: [], sung: [[]], guide: true, guideNote: null, laps: 0 };
+
+function parse(song) {
+  const tokens = [], lines = [];
+  song.lyrics.split("\n").forEach((ln, li) => {
+    const parts = ln.trim().split(/\s+/);
+    lines.push(parts.map(p => p.split("|")[0]));
+    parts.forEach((p, wi) => {
+      const [raw, tag] = p.split("|");
+      const disp = raw.replace(/[.,;:!?]+$/, "").replace(/’/g, "'");
+      const m = song.melody[li][wi], notes = Array.isArray(m) ? m : [m];
+      tokens.push({ disp, key: keyOf(disp), tag, line: li, end: wi === parts.length - 1, note: notes[0], notes });
+    });
+  });
+  return { tokens: GRAMMAR.markAgreement(tokens), lines };
+}
+
+// Silly words for this spot in the song, best first: the ones written for this exact word,
+// then ones written for other words of the same kind in this song (so they still fit the
+// song's world), then the general list for that part of speech.
+function sillyWords(tok) {
+  const alts = ALTS[S.song.id] || {};
+  const own = splitList(alts[tok.key + "|" + tok.tag] || alts[tok.key] || "");
+  const kin = [];
+  for (const t of S.tokens) if (t.tag === tok.tag && t.key !== tok.key) kin.push(...splitList(alts[t.key + "|" + t.tag] || alts[t.key] || ""));
+  const seen = new Set([tok.key]), out = [];
+  for (const group of [shuffle(own), shuffle(kin), shuffle(SILLY[tok.tag].slice())])
+    for (const w of group) { const k = keyOf(w); if (!seen.has(k)) { seen.add(k); out.push(w); } }
+  return out;
+}
+
+// Stretch words: a word sung over several notes of the tune. After its first note every key
+// sings the next piece of the word you picked, and the green key is the tune's next note.
+function syllableText(word, n) {
+  // split between vowel groups: one consonant goes with the next syllable, a cluster is shared ("twin|kle", "lit|tle", "dia|mond")
+  // a final "e" after a consonant is silent ("ice", "where"), except in "-le" ("twinkle")
+  const v = [...word.matchAll(/[aeiouy]+/gi)].filter(m => !(/^e$/i.test(m[0]) && /[^aeiouyl]$/i.test(word.slice(0, m.index)) && !/[a-z]/i.test(word[m.index + 1] || "") && /[aeiouy]/i.test(word.slice(Math.max(0, word.lastIndexOf(" ", m.index) + 1), m.index)))), parts = [];
+  let start = 0;
+  for (let g = 0; g + 1 < v.length; g++) {
+    const e1 = v[g].index + v[g][0].length, s2 = v[g + 1].index, cl = word.slice(e1, s2), brk = cl.search(/[\s\-]/);
+    // a space or hyphen is always the break; otherwise a consonant pair that can start a syllable moves on together
+    const cut = brk >= 0 ? e1 + brk + 1 : cl.length <= 1 ? e1 : /^(bl|br|cl|cr|dr|fl|fr|gl|gr|kl|pl|pr|sc|sk|sl|sm|sn|sp|st|sw|tr|tw|ch|sh|th|wh|ph|tl|dl|ck)$/i.test(cl.slice(-2)) ? s2 - 2 : s2 - 1;
+    parts.push(word.slice(start, cut)); start = cut;
+  }
+  parts.push(word.slice(start));
+  let P = parts.filter(p => p.trim());
+  if (!P.length) P = [word];
+  while (P.length > n) { const b = P.pop(); P[P.length - 1] += b; }
+  P = P.map(p => p.trim().replace(/-$/, ""));
+  const last = P[P.length - 1].replace(/([^aeiouyl])e$/i, "$1"), hold = "~" + ((last.match(/[aeiouy]+[^aeiouy]*$/i) || [last])[0]);
+  while (P.length < n) P.push(hold);
+  return P.map((p, i) => i === 0 || p.startsWith("~") ? p : "-" + p);
+}
+function deal() {
+  const t = S.tokens[S.pos];
+  if (S.cont) {
+    // the green key finishes the word on the tune's next note; every other key is a new silly word
+    // short words first, since each one has to fit on a single note: "birth-cat"
+    const fit = w => t.agree && S.subj ? GRAMMAR.inflect(w, S.subj, t.tag) : w;
+    const c = S.cont, silly = sillyWords(t).map(fit).filter(w => keyOf(w) !== keyOf(c.word)).map((w, i) => [w, i])
+      .sort((a, b) => Math.min(syllables(a[0]), 3) - Math.min(syllables(b[0]), 3) || a[1] - b[1]).map(x => x[0]);
+    S.guideNote = t.notes[c.i];
+    const order = KEYS.map((m, k) => k).filter(k => KEYS[k] !== S.guideNote)
+      .sort((a, b) => Math.abs(KEYS[a] - S.guideNote) - Math.abs(KEYS[b] - S.guideNote) || Math.random() - 0.5);
+    S.assign = KEYS.map(m => m === S.guideNote ? { word: c.parts[c.i], kind: c.kind, cont: true } : null);
+    order.forEach((k, i) => S.assign[k] = { word: silly[i % silly.length], kind: "silly" });
+    return;
+  }
+  S.guideNote = t.note;
+  const fit = w => t.agree && S.subj ? GRAMMAR.inflect(w, S.subj, t.tag) : w;
+  const silly = sillyWords(t).map(fit).filter((w, i, a) => a.indexOf(w) === i && keyOf(w) !== keyOf(fit(t.disp)));
+  // the keys closest to the green one get the best words, since that's where your hand is
+  const order = KEYS.map((m, k) => k).filter(k => KEYS[k] !== t.note)
+    .sort((a, b) => Math.abs(KEYS[a] - t.note) - Math.abs(KEYS[b] - t.note) || Math.random() - 0.5);
+  S.assign = KEYS.map(m => m === t.note ? { word: fit(t.disp), kind: "real" } : null);
+  order.forEach((k, i) => S.assign[k] = { word: silly[i % silly.length], kind: "silly" });
+}
+
+function sing(k) {
+  const a = S.assign[k], t = S.tokens[S.pos];
+  if (!a) return null;
+  const n = opts.stretch ? t.notes.length : 1;
+  if (S.cont && !a.cont) { // a new word finishes the stretched one: "birth" + "cat" = "birth-cat"
+    const c = S.cont, line = S.sung[S.sung.length - 1], last = line[line.length - 1];
+    const sungSoFar = c.parts.slice(0, c.i).map(p => p.replace(/^[-~]/, "")).join("");
+    if (last) { last.word = (line.length === 1 ? cap(sungSoFar) : sungSoFar) + "-" + a.word; last.kind = "silly"; }
+    S.cont = null;
+    return finishWord(t, a.word, "silly", { part: 0, of: 1 });
+  }
+  if (S.cont) { // the next piece of a stretched word
+    const c = S.cont, i = c.i;
+    c.i++;
+    if (c.i >= n) { S.cont = null; return finishWord(t, c.word, c.kind, { part: i, of: n }); }
+    deal();
+    return { word: c.word, shown: a.word, kind: c.kind, part: i, of: n };
+  }
+  if (n > 1) {
+    S.cont = { word: a.word, kind: a.kind, i: 1, parts: syllableText(a.word, n) };
+    const line = S.sung[S.sung.length - 1];
+    line.push({ word: line.length === 0 ? cap(a.word) : a.word, kind: a.kind, pos: POS_NAMES[t.tag] });
+    deal();
+    return { word: a.word, shown: S.cont.parts[0], kind: a.kind, part: 0, of: n };
+  }
+  const line = S.sung[S.sung.length - 1];
+  line.push({ word: line.length === 0 ? cap(a.word) : a.word, kind: a.kind, pos: POS_NAMES[t.tag] });
+  return finishWord(t, a.word, a.kind, { part: 0, of: 1 });
+}
+function finishWord(t, word, kind, piece) {
+  const line = S.sung[S.sung.length - 1];
+  if (t.subject) S.subj = GRAMMAR.subjectClass(word);
+  if (t.end) S.subj = null;
+  S.pos++;
+  let finished = false;
+  if (S.pos >= S.tokens.length) { S.pos = 0; S.laps++; finished = true; }
+  if (t.end || line.length >= 14) S.sung.push([]);
+  if (finished) S.sung.push({ done: true }, []);
+  if (S.sung.length > 60) S.sung.splice(0, S.sung.length - 60);
+  deal();
+  return { word, shown: word, kind, finished, ...piece };
+}
+
+// Each song's recorded words live in their own file next to the page, fetched when the song is picked.
+const voiceLoads = {};
+function loadVoice(id) {
+  if (!voiceLoads[id]) voiceLoads[id] = fetch(`voice/${id}.json`).then(r => { if (!r.ok) throw 0; return r.json(); })
+    .then(b => { Object.assign(VOICE_BANK.words, b.words); })
+    .catch(() => { delete voiceLoads[id]; if (S.song && S.song.id === id) setStatus("Couldn't load the voice for this song. Check your connection and pick the song again."); });
+  return voiceLoads[id];
+}
+// Start over changes with the moment: nothing to undo yet, playing, or the song just ended.
+function setRestart(state) {
+  const b = $("clear");
+  if (b.dataset.state === state) return;
+  b.dataset.state = state; b.disabled = state === "idle";
+  $("end-strip").hidden = state !== "done";
+}
+function loadSong(song) {
+  S.song = song;
+  setRestart("idle");
+  loadVoice(song.id);
+  Object.assign(S, parse(song), { pos: 0, sung: [[]], laps: 0, cont: null, subj: null });
+  deal();
+  renderAll();
+}
+
+// ---------- Audio ----------
+let ctx = null, master = null, voiceBus = null, pianoBus = null;
+const opts = { voice: "sing", piano: true, stretch: false };
+function audio() {
+  if (!ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+    const comp = ctx.createDynamicsCompressor();
+    master = ctx.createGain(); master.gain.value = 0.7;
+    master.connect(comp); comp.connect(ctx.destination);
+    // Voice: trim rumble, ease a little mud, lift the consonant range so words are easy to make out.
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 120;
+    const mud = ctx.createBiquadFilter(); mud.type = "peaking"; mud.frequency.value = 280; mud.Q.value = 1; mud.gain.value = -2.5;
+    const pres = ctx.createBiquadFilter(); pres.type = "peaking"; pres.frequency.value = 3200; pres.Q.value = 0.9; pres.gain.value = 4;
+    voiceBus = ctx.createGain(); voiceBus.gain.value = 1.1;
+    voiceBus.connect(hp); hp.connect(mud); mud.connect(pres); pres.connect(master);
+    // Piano: soft and dark, kept out of the voice's range, and it dips whenever a word starts.
+    const plp = ctx.createBiquadFilter(); plp.type = "lowpass"; plp.frequency.value = 1400; plp.Q.value = 0.5;
+    pianoBus = ctx.createGain(); pianoBus.gain.value = 1;
+    pianoBus.connect(plp); plp.connect(master);
+  }
+  if (ctx.state === "suspended") ctx.resume();
+  return ctx;
+}
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+// A soft, felt-like piano an octave below the voice: rounder tone, gentler attack, no bright overtones.
+function piano(f, vol) {
+  f = f / 2;
+  const t = ctx.currentTime, g = ctx.createGain(), lp = ctx.createBiquadFilter();
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0008, t + 2.2);
+  lp.type = "lowpass"; lp.frequency.setValueAtTime(Math.min(f * 5, 2400), t); lp.frequency.exponentialRampToValueAtTime(f * 1.6, t + 0.9);
+  [[1, "triangle", 1], [2, "sine", 0.22], [1.002, "sine", 0.3]].forEach(([mul, type, v]) => {
+    const o = ctx.createOscillator(), og = ctx.createGain();
+    o.type = type; o.frequency.value = f * mul; og.gain.value = v;
+    o.connect(og); og.connect(lp); o.start(t); o.stop(t + 2.3);
+  });
+  lp.connect(g); g.connect(pianoBus);
+}
+
+// ---------- Voice: recorded words, re-pitched with TD-PSOLA ----------
+// Each word was recorded once with the Kokoro neural voice (16 kHz), with a pitch mark on
+// every glottal pulse. To sing it, we place one grain per pulse at the key's period instead
+// of the original one, so the pitch changes while the vowels and consonants stay put.
+const IMA_STEPS = [7,8,9,10,11,12,13,14,16,17,19,21,23,25,28,31,34,37,41,45,50,55,60,66,73,80,88,97,107,118,130,143,157,173,190,209,230,253,279,307,337,371,408,449,494,544,598,658,724,796,876,963,1060,1166,1282,1411,1552,1707,1878,2066,2272,2499,2749,3024,3327,3660,4026,4428,4871,5358,5894,6484,7132,7845,8630,9493,10442,11487,12635,13899,15289,16818,18500,20350,22385,24623,27086,29794,32767];
+const IMA_IDX = [-1, -1, -1, -1, 2, 4, 6, 8];
+const VSR = VOICE_BANK.sr, VHOP = 80;
+const decoded = new Map();
+function b64(s) { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+function wordData(word) {
+  const key = keyOf(word);
+  if (decoded.has(key)) return decoded.get(key);
+  const e = VOICE_BANK.words[key];
+  if (!e) return null;
+  const [n, a, m] = e, bytes = b64(a), x = new Float32Array(n);
+  let pred = 0, idx = 0;
+  for (let i = 0; i < n; i++) {
+    const code = i & 1 ? bytes[i >> 1] >> 4 : bytes[i >> 1] & 15;
+    let step = IMA_STEPS[idx], vp = step >> 3;
+    if (code & 4) vp += step; if (code & 2) vp += step >> 1; if (code & 1) vp += step >> 2;
+    pred += code & 8 ? -vp : vp; pred = pred < -32768 ? -32768 : pred > 32767 ? 32767 : pred;
+    idx += IMA_IDX[code & 7]; idx = idx < 0 ? 0 : idx > 88 ? 88 : idx;
+    x[i] = pred / 32768;
+  }
+  const mb = b64(m), marks = [];
+  let t = 0;
+  for (let i = 0; i + 2 < mb.length; i += 3) { t += mb[i] | (mb[i + 1] << 8); marks.push({ t, P: mb[i + 2] }); }
+  const d = { x, marks };
+  decoded.set(key, d);
+  return d;
+}
+function psola(d, f0) {
+  const { x, marks: M } = d;
+  if (!M.length) return x;
+  let voicedLen = 0; for (const m of M) if (m.P) voicedLen += m.P;
+  // stretch the voiced part so short words still last long enough to be heard as a sung note
+  const want = (x.length < 0.3 * VSR ? 0.4 : 0.55) * VSR, other = x.length - voicedLen;
+  const s = voicedLen > 0 ? Math.max(1, Math.min(2.4, (want - other) / voicedLen)) : 1;
+  const out = new Float32Array(Math.ceil(x.length * s) + 1200);
+  const tEnd = M[M.length - 1].t + VHOP;
+  let ta = M[0].t, ts = ta, i = 0;
+  while (ta <= tEnd && ts < out.length - 600) {
+    while (i + 1 < M.length && Math.abs(M[i + 1].t - ta) <= Math.abs(M[i].t - ta)) i++;
+    const m = M[i], voiced = m.P > 0, Pin = voiced ? m.P : VHOP;
+    let Pout = Pin;
+    if (voiced) {
+      const sec = ts / VSR, depth = sec > 0.22 ? 0.012 * Math.min(1, (sec - 0.22) / 0.25) : 0;
+      Pout = VSR / (f0 * (1 + depth * Math.sin(2 * Math.PI * 5.3 * sec)));
+    }
+    const gain = voiced ? Math.min(2.2, Pout / Pin) : 1, c = Math.round(ts);
+    for (let k = -Pin + 1; k < Pin; k++) {
+      const j = m.t + k, o = c + k;
+      if (j < 0 || j >= x.length || o < 0) continue;
+      out[o] += x[j] * gain * 0.5 * (1 + Math.cos(Math.PI * k / Pin));
+    }
+    ts += Pout; ta += voiced ? Pout / s : Pout;
+  }
+  const len = Math.min(out.length, Math.ceil(ts) + 200);
+  const y = out.subarray(0, len), f = Math.min(320, len);
+  for (let k = 0; k < f; k++) y[len - 1 - k] *= k / f;
+  return y;
+}
+function toBuffer(y) {
+  // upsample 2x so every browser accepts the buffer's sample rate
+  const buf = ctx.createBuffer(1, y.length * 2, VSR * 2), ch = buf.getChannelData(0);
+  for (let i = 0; i < y.length; i++) { const a = y[i], b = i + 1 < y.length ? y[i + 1] : 0; ch[2 * i] = a; ch[2 * i + 1] = (a + b) / 2; }
+  return buf;
+}
+const voiceCache = new Map();
+// Cut a recorded word into n pieces for a stretched word: aim for even spacing across the
+// sounding part, then slide each cut to the quietest moment nearby (usually a syllable break).
+// A short word sung over more notes than it has syllables just gets its vowel shared out.
+function wordPiece(d, i, n) {
+  if (n === 1) return d;
+  d.cuts = d.cuts || {};
+  if (!d.cuts[n]) {
+    const { x } = d, H = 160, E = [];
+    for (let a = 0; a < x.length; a += H) { let e = 0; for (let j = a; j < Math.min(x.length, a + H); j++) e += x[j] * x[j]; E.push(e); }
+    const peak = Math.max(...E), on = E.findIndex(e => e > peak * 0.02), off = E.length - 1 - [...E].reverse().findIndex(e => e > peak * 0.02);
+    const span = Math.max(1, off - on), cuts = [0];
+    for (let k = 1; k < n; k++) {
+      const target = on + span * k / n, w = Math.max(1, Math.floor(span / n * 0.35));
+      let best = Math.round(target), be = Infinity;
+      for (let f = Math.round(target - w); f <= Math.round(target + w); f++) if (f > cuts[cuts.length - 1] / H + 1 && f < off && E[f] < be) { be = E[f]; best = f; }
+      cuts.push(best * H);
+    }
+    cuts.push(x.length);
+    d.cuts[n] = cuts;
+  }
+  const a = d.cuts[n][i], b = d.cuts[n][i + 1], x = d.x.slice(a, b), f = Math.min(80, x.length >> 2);
+  for (let k = 0; k < f; k++) { x[k] *= k / f; x[x.length - 1 - k] *= k / f; }
+  return { x, marks: d.marks.filter(m => m.t >= a && m.t < b).map(m => ({ t: m.t - a, P: m.P })) };
+}
+function voiceBuffer(word, midi, style, part = 0, of = 1) {
+  const key = keyOf(word) + "|" + (style === "sing" ? midi : "spoken") + "|" + part + "/" + of;
+  if (voiceCache.has(key)) return voiceCache.get(key);
+  const whole = wordData(word);
+  if (!whole) return null;
+  const d = wordPiece(whole, part, of);
+  const buf = toBuffer(style === "sing" ? psola(d, hz(midi)) : d.x);
+  if (voiceCache.size > 400) voiceCache.delete(voiceCache.keys().next().value);
+  voiceCache.set(key, buf);
+  return buf;
+}
+// Words ring out: a new word doesn't cut off the last one. Earlier words keep going a little
+// quieter, and once three are sounding the oldest fades away so fast playing stays clear.
+const voices = [];
+function speak(word, midi, part = 0, of = 1) {
+  if (opts.voice === "off" || !ctx) return;
+  const buf = voiceBuffer(word, midi, opts.voice, part, of);
+  if (!buf) return;
+  const t = ctx.currentTime;
+  while (voices.length >= 3) {
+    const { g, src } = voices.shift();
+    g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + 0.08);
+    try { src.stop(t + 0.09); } catch (_) {}
+  }
+  voices.forEach(({ g }) => { g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(g.gain.value * 0.55, t + 0.06); });
+  const src = ctx.createBufferSource(), g = ctx.createGain();
+  src.buffer = buf; g.gain.value = 0.9;
+  // Speak: plays the recording as spoken; keys above middle C only nudge it a little higher.
+  if (opts.voice === "speak") src.playbackRate.value = Math.pow(2, Math.max(0, midi - 60) / 48);
+  src.connect(g); g.connect(voiceBus); src.start();
+  // the piano steps back while the word is heard
+  const pg = pianoBus.gain; pg.cancelScheduledValues(t); pg.setValueAtTime(pg.value, t); pg.linearRampToValueAtTime(0.45, t + 0.03); pg.linearRampToValueAtTime(1, t + 0.55);
+  const v = { g, src };
+  voices.push(v);
+  src.onended = () => { const i = voices.indexOf(v); if (i >= 0) voices.splice(i, 1); };
+}
+
+// ---------- Mobile audio unlock ----------
+// Phones only start audio inside a tap, and iPhones mute Web Audio when the silent switch
+// is on unless the page is playing media. A silent looping <audio> puts the page in
+// media playback mode so the piano is heard with the switch on.
+function silentWav() {
+  const n = 800, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+  const str = (o, s) => [...s].forEach((c, i) => (b[o + i] = c.charCodeAt(0)));
+  str(0, "RIFF"); v.setUint32(4, 36 + n, true); str(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); str(36, "data"); v.setUint32(40, n, true);
+  b.fill(128, 44);
+  let s = ""; b.forEach(c => (s += String.fromCharCode(c)));
+  return "data:audio/wav;base64," + btoa(s);
+}
+let unlocked = false, mediaEl = null;
+function unlock() {
+  const c = audio();
+  if (!c) return;
+  if (!unlocked) {
+    unlocked = true;
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (_) {}
+    try { mediaEl = new Audio(silentWav()); mediaEl.loop = true; mediaEl.setAttribute("playsinline", ""); mediaEl.play().catch(() => {}); } catch (_) {}
+    const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0);
+  }
+  if (c.state !== "running") c.resume();
+}
+["pointerdown", "touchstart", "touchend", "click", "keydown"].forEach(ev => window.addEventListener(ev, unlock, { capture: true, passive: true }));
+
+// ---------- Playing ----------
+const held = new Set();
+function noteOn(midi) {
+  const k = midi - LOW;
+  if (k < 0 || k >= NK || held.has(midi)) return;
+  const res = sing(k);
+  if (!res) return;
+  const c = audio();
+  if (c && opts.piano) piano(hz(midi), 0.26);
+  speak(res.word, midi, res.part, res.of);
+  held.add(midi);
+  keyEls[k].classList.add("down");
+  const next = S.tokens[S.pos], nextLabel = S.cont ? `${S.cont.parts[S.cont.i]} or a new ${POS_NAMES[next.tag]}` : POS_NAMES[next.tag];
+  nowEl.innerHTML = `<b>${esc(res.shown)}</b> on ${NAMES[midi % 12]}${Math.floor(midi / 12) - 1} · next: <span class="pos">${esc(nextLabel)}</span>`;
+  setRestart(res.finished ? "done" : "playing");
+  setStatus("");
+  renderSung(); renderKeys(true); renderSource();
+}
+function noteOff(midi) {
+  held.delete(midi);
+  const el = keyEls[midi - LOW]; if (el) el.classList.remove("down");
+}
+
+// ---------- Rendering ----------
+const $ = id => document.getElementById(id);
+const kb = $("kb"), sungEl = $("sung"), nowEl = $("now"), srcEl = $("src"), statusEl = $("status");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const keyEls = [];
+function buildKeyboard() {
+  const whites = KEYS.filter(m => !BLACK.has(m % 12)).length;
+  let wi = 0;
+  KEYS.forEach((m, k) => {
+    const el = document.createElement("div");
+    const black = BLACK.has(m % 12);
+    el.className = "key " + (black ? "black" : "white");
+    el.setAttribute("role", "button"); el.tabIndex = -1;
+    if (black) { const w = 100 / whites; el.style.left = `calc(${wi * w}% - ${w * 0.31}%)`; el.style.width = `${w * 0.62}%`; }
+    else wi++;
+    el.innerHTML = `<span class="ki" aria-hidden="true"></span><span class="kw"></span><span class="kn">${NAMES[m % 12]}${Math.floor(m / 12) - 1}${MIDI_TO_PC[m] ? `<i>${MIDI_TO_PC[m]}</i>` : ""}</span>`;
+    el.addEventListener("pointerdown", e => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (_) {} noteOn(m); });
+    const up = () => noteOff(m);
+    el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("lostpointercapture", up);
+    kb.appendChild(el); keyEls.push(el);
+  });
+  const hand = document.createElement("div");
+  hand.className = "hand"; hand.id = "hand"; hand.hidden = true; hand.setAttribute("aria-hidden", "true");
+  hand.innerHTML = `<span class="ripple"></span><svg viewBox="0 0 40 52"><g transform="rotate(180 20 26)"><path d="M14 6a4 4 0 018 0v16l1-.4a4 4 0 015 2.6l.3.9a4 4 0 015.5 2.9 4 4 0 015 3.5V40c0 7-5 11-12 11h-4c-5 0-8-2-10.5-6L3 33.5a4 4 0 016.3-4.9L14 33z" fill="#fff" stroke="#1d1a17" stroke-width="2.4" stroke-linejoin="round"/><path d="M22 22v9M28.3 25v7M33.8 28.4V34" stroke="#1d1a17" stroke-width="2" stroke-linecap="round"/></g></svg>`;
+  kb.appendChild(hand);
+}
+// During Auto play, a hand moves to each key and taps it.
+// First the hand glides over the key (the words stay put), then it taps, then the note plays.
+function moveHand(midi) {
+  const el = keyEls[midi - LOW], hand = $("hand"); if (!el || !hand) return;
+  // the fingertip rests just above the word, so the whole word stays readable
+  const kw = el.querySelector(".kw"), kbBox = kb.getBoundingClientRect(), wBox = kw.getBoundingClientRect();
+  const top = Math.max(hand.offsetHeight - 4, wBox.top - kbBox.top - 10);
+  if (hand.hidden) { hand.style.transition = "none"; }
+  hand.style.left = (el.offsetLeft + el.offsetWidth / 2) + "px";
+  hand.style.top = top + "px";
+  if (hand.hidden) { hand.hidden = false; void hand.offsetWidth; hand.style.transition = ""; }
+  hand.classList.remove("tap");
+}
+function tapHand() {
+  const hand = $("hand"); if (!hand) return;
+  void hand.offsetWidth; hand.classList.add("tap");
+}
+function renderKeys(animate) {
+  KEYS.forEach((m, k) => {
+    const a = S.assign[k], span = keyEls[k].querySelector(".kw");
+    const word = a ? a.word.replace(/^([A-Za-z])-$/, "$1") : "";
+    const changed = span.textContent !== word;
+    span.textContent = word;
+    span.className = "kw " + (a ? a.kind : "") + (word.replace(/[^A-Za-z]/g, "").length === 1 ? " letter" : "");
+    keyEls[k].classList.toggle("guide", S.guide && S.guideNote === m);
+    keyEls[k].setAttribute("aria-label", `${NAMES[m % 12]}${Math.floor(m / 12) - 1}: ${word}`);
+    if (animate && changed) { span.classList.remove("changed"); void span.offsetWidth; span.classList.add("changed"); }
+  });
+  keepGuideInView();
+}
+// On narrow screens the keyboard scrolls sideways; slide it so the green key stays visible.
+function keepGuideInView() {
+  const wrap = kb.parentElement;
+  if (!S.guide || S.guideNote === null || wrap.scrollWidth <= wrap.clientWidth + 1) return;
+  const el = keyEls[S.guideNote - LOW]; if (!el) return;
+  const left = el.offsetLeft, right = left + el.offsetWidth, pad = el.offsetWidth * 1.5;
+  let target = null;
+  if (left - pad < wrap.scrollLeft) target = left - pad;
+  else if (right + pad > wrap.scrollLeft + wrap.clientWidth) target = right + pad - wrap.clientWidth;
+  if (target === null) return;
+  const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  wrap.scrollTo({ left: Math.max(0, target), behavior: smooth ? "smooth" : "auto" });
+}
+function renderSung() {
+  const lines = S.sung.filter(l => l.done || l.length);
+  if (!lines.length) { sungEl.innerHTML = `<p class="placeholder">Your song appears here, one word per note.</p>`; return; }
+  const last = lines.length - 1 - [...lines].reverse().findIndex(l => !l.done);
+  sungEl.innerHTML = lines.map((l, li) => l.done ? `<p class="done">— the end —</p>` : `<p>${l.map((w, wi) =>
+    `<span class="w ${w.kind}${li === last && wi === l.length - 1 ? " fresh" : ""}"${w.kind === "silly" ? ` data-pos="${esc(w.pos)}"` : ""}>${esc(w.word)}</span>`).join("")}</p>`).join("");
+  sungEl.scrollTop = sungEl.scrollHeight;
+}
+function renderSource() {
+  $("src-title").textContent = S.song.title;
+  $("src-credit").textContent = S.song.credit;
+  let i = 0;
+  srcEl.innerHTML = S.lines.map(words => `<p>${words.map(raw => {
+    const cls = i === S.pos ? "cur" : i < S.pos ? "past" : ""; i++;
+    return `<span class="${cls}">${esc(raw)}</span>`;
+  }).join(" ")}</p>`).join("");
+}
+function renderSongs() {
+  const sel = $("song");
+  if (!sel.options.length) sel.innerHTML = SONGS.map(s => `<option value="${s.id}">${esc(s.title)}</option>`).join("");
+  sel.value = S.song.id;
+}
+function renderAll() {
+  renderSongs(); renderKeys(false); renderSung(); renderSource(); renderArt();
+  nowEl.innerHTML = `Press any key to begin · first word: <span class="pos">${esc(POS_NAMES[S.tokens[0].tag])}</span>`;
+}
+function setStatus(t) { statusEl.textContent = t; }
+// Song art: an illustrated scene behind your song, and the song's colours and pictures on the keys.
+const artOn = true;
+function renderArt() {
+  const stage = $("stage"), layer = $("art-layer"), a = artOn && S.song && ART[S.song.id];
+  stage.classList.toggle("art", !!a);
+  kb.classList.toggle("art", !!(a && a.keys));
+  if (!a) { layer.innerHTML = ""; delete layer.dataset.song; delete kb.dataset.song; keyEls.forEach(el => el.querySelector(".ki").innerHTML = ""); return; }
+  if (a.keys && kb.dataset.song !== S.song.id) {
+    const k = a.keys, svgURL = (fill, op) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='${fill}' opacity='${op}' transform='translate(6 6) scale(.5)'>${k.motif}</g></svg>`)}")`;
+    const vars = { "--k-white": k.white, "--k-white-down": k.whiteDown, "--k-black": k.black, "--k-black-down": k.blackDown, "--k-line": k.line,
+      "--k-ink": k.ink, "--k-ink-dark": k.inkDark, "--k-silly": k.silly, "--k-silly-dark": k.sillyDark, "--k-note": k.note,
+      "--k-pattern": svgURL(k.motifColor, .16), "--k-pattern-dark": svgURL(k.motifDark, .22) };
+    for (const [n, v] of Object.entries(vars)) kb.style.setProperty(n, v);
+    const icon = `<svg viewBox="0 0 24 24"><g fill="${k.motifColor}">${k.motif}</g></svg>`;
+    keyEls.forEach(el => el.querySelector(".ki").innerHTML = icon);
+    kb.dataset.song = S.song.id;
+  }
+  if (layer.dataset.song !== S.song.id) { layer.innerHTML = a.svg(); layer.dataset.song = S.song.id; }
+  stage.style.setProperty("--art-ink", a.ink); stage.style.setProperty("--art-sub", a.sub);
+  stage.style.setProperty("--art-silly", a.silly); stage.style.setProperty("--art-glow", a.glow);
+  stage.style.setProperty("--art-scrim", a.glow.replace(/[\d.]+\)$/, m => (parseFloat(m) * 0.6).toFixed(2) + ")"));
+}
+
+
+// ---------- Auto play ----------
+// Plays the tune by itself: a few real words, then a detour onto a silly key or two, and back,
+// the way the piano is most fun to play.
+let autoTimer = null;
+function stopAuto() {
+  if (!autoTimer) return;
+  clearTimeout(autoTimer); autoTimer = null;
+  [...held].forEach(noteOff);
+  $("hand").hidden = true;
+  $("auto").querySelector(".ico").textContent = "▶"; $("auto").querySelector(".lbl").textContent = "Auto play";
+}
+function startAuto() {
+  if (autoTimer) { stopAuto(); return; }
+  if (S.pos !== 0 || S.cont) loadSong(S.song);
+  $("auto").querySelector(".ico").textContent = "■"; $("auto").querySelector(".lbl").textContent = "Stop";
+  let prev = null, silly = false, run = 2 + Math.floor(Math.random() * 2);
+  const choose = () => {
+    const target = S.guideNote, starting = !S.cont;
+    if (starting) {
+      if (run <= 0) { silly = !silly; run = silly ? 1 + Math.floor(Math.random() * 2) : 2 + Math.floor(Math.random() * 3); }
+      run--;
+    }
+    if (silly && starting) { // a key a step or two from the real note, so the tune stays recognisable
+      const near = [-2, -1, 1, 2].map(d => target + d).filter(x => x >= LOW && x <= HIGH);
+      return pick(near);
+    }
+    return target;
+  };
+  // each note: the hand is already resting above the next word, holds there so you can read it, then taps
+  const step = () => {
+    const m = choose(), t = S.tokens[S.pos];
+    moveHand(m);
+    autoTimer = setTimeout(() => {
+      if (prev !== null) noteOff(prev);
+      tapHand(); noteOn(m); prev = m;
+      if (S.pos === 0 && !S.cont) { autoTimer = setTimeout(() => { noteOff(prev); autoTimer = 1; stopAuto(); }, 900); return; }
+      const lineEnd = !S.cont && t.end && S.tokens[S.pos] !== t;
+      autoTimer = setTimeout(step, lineEnd ? 420 : 140); // the keys change, then the hand heads for the next word
+    }, S.cont ? 380 : 560);
+  };
+  step();
+}
+$("auto").addEventListener("click", startAuto);
+
+// ---------- Wiring ----------
+$("song").addEventListener("change", e => {
+  stopAuto();
+  loadSong(SONGS.find(x => x.id === e.target.value)); setStatus("");
+});
+
+function setStretch(on) {
+  opts.stretch = on;
+  $("stretch").value = on ? "1" : "0";
+}
+$("stretch").addEventListener("change", e => {
+  if ((e.target.value === "1") === opts.stretch) return;
+  setStretch(e.target.value === "1");
+  try { localStorage.setItem("madlibs-stretch", opts.stretch ? "1" : "0"); } catch (_) {}
+  if (S.cont) { S.cont = null; S.pos = (S.pos + 1) % S.tokens.length; } // finish a half-sung word
+  deal(); renderKeys(true);
+  setStatus(opts.stretch ? "Each key now sings one syllable. This is a beta: some songs only split some words." : "Each key sings a whole word again.");
+});
+try { if (localStorage.getItem("madlibs-stretch") === "1") setStretch(true); } catch (_) {}
+$("clear").addEventListener("click", () => { stopAuto(); loadSong(S.song); setStatus(""); });
+$("end-strip").addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  stopAuto();
+  if (b.dataset.act === "next") loadSong(SONGS[(SONGS.indexOf(S.song) + 1) % SONGS.length]);
+  else loadSong(S.song);
+  setStatus("");
+});
+
+window.addEventListener("keydown", e => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  const m = PC_KEYS[e.key.toLowerCase()];
+  if (m !== undefined) { e.preventDefault(); noteOn(m); }
+});
+window.addEventListener("keyup", e => { const m = PC_KEYS[e.key.toLowerCase()]; if (m !== undefined) noteOff(m); });
+window.addEventListener("blur", () => [...held].forEach(noteOff));
+
+
+window.MadLibsPianoDebug = { S, loadVoice, wordPiece, syllableText, wordData, psola, sillyWords, syllables, keyOf };
+buildKeyboard();
+loadSong(SONGS[0]);
+})();
+</script>
