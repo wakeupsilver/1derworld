@@ -642,7 +642,7 @@ const prevPos = new THREE.Vector3();
 let zoneTick = 0, ambTick = 0, whaleTick = 12, ventTick = 0, cullTick = 0;
 const rollLoop = () => loops.hub.find(l => l.id === 'roll');
 
-let simTime = 0, demoFrozen = false;
+let simTime = 0, demoFrozen = false, lastTruckCut = 0;
 function frame() {
   requestAnimationFrame(frame);
   if (testing) return;
@@ -739,7 +739,10 @@ function tick(dt, draw = true) {
   // audio listener follows the camera
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
   audio.setListener(camera.position, fwd, up);
-  if (current === street) audio.musicFilter && audio.musicFilter.frequency.setTargetAtTime(street.insideTruck(player.pos) ? 2600 : 650, audio.now, 0.3);
+  if (current === street && audio.musicFilter) {   // music muffled outside the truck, clearer inside (only when that changes)
+    const f = street.insideTruck(player.pos) ? 2600 : 650;
+    if (f !== lastTruckCut) { lastTruckCut = f; audio.musicFilter.frequency.cancelScheduledValues(audio.now); audio.musicFilter.frequency.setTargetAtTime(f, audio.now, 0.3); }
+  } else lastTruckCut = 0;
 
   if (draw) composer.render();
 }

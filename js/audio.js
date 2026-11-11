@@ -53,14 +53,18 @@ export class AudioEngine {
     const g = v => { const n = ctx.createGain(); n.gain.value = v; return n; };
 
     // master chain: buses -> glue comp -> limiter -> analyser -> out
-    this.out = g(this.volume);
+    this.out = g(this.volume * 0.8);
     const glue = ctx.createDynamicsCompressor();
     glue.threshold.value = -16; glue.ratio.value = 3.5; glue.knee.value = 8; glue.attack.value = 0.004; glue.release.value = 0.22;
     const lim = ctx.createDynamicsCompressor();
     lim.threshold.value = -2.5; lim.ratio.value = 20; lim.knee.value = 0; lim.attack.value = 0.001; lim.release.value = 0.08;
     this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 1024; this.analyser.smoothingTimeConstant = 0.7;
     this.fft = new Uint8Array(this.analyser.frequencyBinCount);
-    this.out.connect(glue); glue.connect(lim); lim.connect(this.analyser); this.analyser.connect(ctx.destination);
+    // final safety: a soft clipper (tanh) so a big moment can never hard-clip and crackle
+    const soft = ctx.createWaveShaper(), curve = new Float32Array(2048);
+    for (let i = 0; i < curve.length; i++) { const v = i / (curve.length - 1) * 2 - 1; curve[i] = Math.tanh(v * 1.2) / Math.tanh(1.2); }
+    soft.curve = curve; soft.oversample = '2x';
+    this.out.connect(glue); glue.connect(lim); lim.connect(soft); soft.connect(this.analyser); this.analyser.connect(ctx.destination);
 
     // reverb (generated stereo impulse) and ping-pong delay sends
     this.reverb = ctx.createConvolver(); this.reverb.buffer = this.impulse(2.0, 2.4); // shorter impulse = lighter on the audio thread
@@ -124,26 +128,32 @@ export class AudioEngine {
 
   // ---------- mixing ----------
   setMix(name, fade = 0.8) {
+    if (this.ready && name === this.mixName && this._mixApplied === name && !this._mixDirty) return;
     this.mixName = name;
     if (!this.ready) return;
+    this._mixApplied = name; this._mixDirty = false;
     const m = MIXES[name] || MIXES.hub, t = this.ctx.currentTime;
     for (const k of Object.keys(this.layers)) this.layers[k].gain.setTargetAtTime(m[k], t, fade / 3);
     this.music.gain.setTargetAtTime(this.muted ? 0 : m.music, t, fade / 3);
     this.musicFilter.frequency.setTargetAtTime(m.cutoff, t, fade / 3);
   }
 
-  setVolume(v) { this.volume = v; if (this.ready) this.out.gain.setTargetAtTime(this.muted ? 0 : v, this.ctx.currentTime, 0.05); }
-  toggleMute() { this.muted = !this.muted; this.setVolume(this.volume); this.setMix(this.mixName, 0.1); return this.muted; }
+  setVolume(v) { this.volume = v; if (this.ready) this.out.gain.setTargetAtTime(this.muted ? 0 : v * 0.8, this.ctx.currentTime, 0.05); }
+  toggleMute() { this.muted = !this.muted; this.setVolume(this.volume); this._mixDirty = true; this.setMix(this.mixName, 0.1); return this.muted; }
   suspend() { if (this.ready) { this.wantSuspended = true; this.ctx.suspend(); } }
   resume() { if (this.ready) { this.wantSuspended = false; this.ctx.resume(); } }
 
   // ---------- listener ----------
   setListener(pos, fwd, up) {
     if (!this.ready) return;
-    const L = this.ctx.listener, t = this.ctx.currentTime;
+    // set values directly (no automation events): queuing 6 setTargetAtTime calls per frame piled up
+    // events on the audio thread and caused crackles over time
+    const L = this.ctx.listener, k = pos.x + pos.y * 7 + pos.z * 13 + fwd.x * 3 + fwd.y * 5 + fwd.z * 11;
+    if (Math.abs(k - (this._lk || 0)) < 1e-3) return;
+    this._lk = k;
     if (L.positionX) {
-      L.positionX.setTargetAtTime(pos.x, t, 0.02); L.positionY.setTargetAtTime(pos.y, t, 0.02); L.positionZ.setTargetAtTime(pos.z, t, 0.02);
-      L.forwardX.setTargetAtTime(fwd.x, t, 0.02); L.forwardY.setTargetAtTime(fwd.y, t, 0.02); L.forwardZ.setTargetAtTime(fwd.z, t, 0.02);
+      L.positionX.value = pos.x; L.positionY.value = pos.y; L.positionZ.value = pos.z;
+      L.forwardX.value = fwd.x; L.forwardY.value = fwd.y; L.forwardZ.value = fwd.z;
       L.upX.value = up.x; L.upY.value = up.y; L.upZ.value = up.z;
     } else { L.setPosition(pos.x, pos.y, pos.z); L.setOrientation(fwd.x, fwd.y, fwd.z, up.x, up.y, up.z); }
   }
@@ -237,6 +247,10 @@ export class AudioEngine {
         dst.set(src.subarray(0, len));
         for (let i = 0; i < tail && i < len; i++) dst[i] += src[len + i];
       }
+      let peak = 0; for (let c = 0; c < 2; c++) { const d = loop.getChannelData(c); for (let i = 0; i < d.length; i += 3) { const v = Math.abs(d[i]); if (v > peak) peak = v; } }
+      const k = peak > 0.32 ? 0.32 / peak : 1;
+      if (k < 1) for (let c = 0; c < 2; c++) { const d = loop.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] *= k; }
+      this.stemPeaks = { ...(this.stemPeaks || {}), [name]: +(peak.toFixed(3)) };
       this.stems[name] = loop;
     }
   }
@@ -514,7 +528,8 @@ export class AudioEngine {
     };
     build();
     const handle = { out, panner: p, src, pos: pos.clone ? pos.clone() : pos, max: opts.max || 80, connected: true,
-      setGain: (v, tc = 0.1) => out.gain.setTargetAtTime(v, ctx.currentTime, tc),
+      last: null,
+      setGain(v, tc = 0.1) { if (this.last !== null && Math.abs(v - this.last) < 0.01) return; this.last = v; out.gain.cancelScheduledValues(ctx.currentTime); out.gain.setTargetAtTime(v, ctx.currentTime, tc); },
       // disconnect loops that are out of earshot so the audio thread doesn't render them
       setActive(on) {
         if (on === this.connected) return;

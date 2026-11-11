@@ -1,0 +1,177 @@
+/* Style lab, round 2: the original layout, made fun with three moves only —
+   colour, round friendly type, and a little bounce. No textures, no tilt, no tape.
+   html:root[data-style] outranks the page's dark-mode :root rules, so each look sets its own colours. */
+
+/* ---------- shared by every fun look ---------- */
+html:root[data-style] {
+  color-scheme: light;
+  --display: "Fredoka", system-ui, sans-serif; --body: "Nunito", system-ui, sans-serif; --mono: "Nunito", system-ui, sans-serif;
+  --ease-pop: cubic-bezier(.34, 1.56, .64, 1);
+  --guide: #22b45a;
+}
+/* each note has its own colour (C red, D orange, E yellow, F blue, G purple, A pink, B teal); the keyboard starts on C */
+html[data-style] .kb > .key:nth-child(12n+1)  { --kc: #ff5a5f; --kp: #ffd0d2; }
+html[data-style] .kb > .key:nth-child(12n+3)  { --kc: #ff9f1c; --kp: #ffe0b8; }
+html[data-style] .kb > .key:nth-child(12n+5)  { --kc: #ffcf33; --kp: #fff1b0; }
+html[data-style] .kb > .key:nth-child(12n+6)  { --kc: #3d9bff; --kp: #cfe4ff; }
+html[data-style] .kb > .key:nth-child(12n+8)  { --kc: #8b5cf6; --kp: #e2d6ff; }
+html[data-style] .kb > .key:nth-child(12n+10) { --kc: #ff5fb8; --kp: #ffd3ec; }
+html[data-style] .kb > .key:nth-child(12n+12) { --kc: #14b8b0; --kp: #c4f1ee; }
+
+html[data-style] h1 { font-weight: 700; letter-spacing: -0.01em; }
+html[data-style] h1 em { font-style: normal; }
+html[data-style] .label { font-family: var(--display); font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: none; }
+html[data-style] .w.silly::after, html[data-style] .now .pos { font-family: var(--body); font-weight: 700; letter-spacing: .02em; }
+html[data-style] .kw { font-family: var(--display); font-weight: 600; }
+html[data-style] .sung { font-family: var(--display); font-weight: 500; }
+html[data-style] .source h2, html[data-style] .how h2 { font-family: var(--display); font-weight: 700; }
+html[data-style] .src { font-family: var(--body); }
+
+/* round, chunky controls */
+html[data-style] .btn, html[data-style] .pick select, html[data-style] .chip { font-family: var(--display); font-weight: 600; font-size: 15px; border-radius: 999px; }
+html[data-style] .song-pick select { font-size: 17px; }
+html[data-style] .keys-pick select { padding-left: 16px; }
+html[data-style] .btn { padding-inline: 16px; transition: transform .12s var(--ease-pop); }
+html[data-style] .btn:hover:not(:disabled) { transform: translateY(-2px); }
+html[data-style] .btn:active:not(:disabled) { transform: translateY(1px) scale(.97); }
+html[data-style] .stage, html[data-style] .end-strip { border-radius: 20px; }
+
+/* keys squish when pressed, and the guide dot bobs */
+html[data-style] .key { transition: transform .1s var(--ease-pop), background-color .1s; }
+html[data-style] .key.white.down { transform: translateY(3px); }
+html[data-style] .key.black.down { transform: translateY(2px); }
+html[data-style] .key.white, html[data-style] .kb.art .key.white { border-radius: 0 0 12px 12px; }
+html[data-style] .key.black, html[data-style] .kb.art .key.black { border-radius: 0 0 9px 9px; }
+html[data-style] .key.guide::after { animation: bob .7s ease-in-out infinite alternate; }
+@keyframes bob { to { transform: translateY(-4px) scale(1.15); } }
+
+/* each new sung word pops in; a silly one wiggles too */
+html[data-style] .w.fresh { animation: pop .45s var(--ease-pop); }
+html[data-style] .w.silly.fresh { animation: pop .45s var(--ease-pop), wiggle .5s ease-in-out .3s; }
+@keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes wiggle { 25% { transform: rotate(-7deg); } 50% { transform: rotate(6deg); } 75% { transform: rotate(-3deg); } }
+html[data-style] .end-strip { animation: pop .5s var(--ease-pop); }
+
+/* room for the switcher */
+html[data-style] .wrap { padding-bottom: 96px; }
+
+/* =========================================================
+   RAINBOW — white page, every white key wears its note's colour along the bottom
+   ========================================================= */
+html:root[data-style="rainbow"] {
+  --paper: #ffffff; --stage: #f4f4fb; --ink: #1d1b2c; --muted: #6a6880; --line: #dddbe8;
+  --brass: #8b5cf6; --silly: #ff3d7f; --ivory: #ffffff; --ivory-down: #f6f5fb;
+  --ebony: #1d1b2c; --ebony-down: #3a3752; --key-ink: #1d1b2c; --key-ink-on-ebony: #ffffff;
+  --key-silly: #e8246b; --key-silly-on-ebony: #ff9cc2; --chip: #ffffff; --key-note: #8a889e; --key-hint: #b3b1c4;
+}
+html[data-style="rainbow"] h1 em {
+  background: linear-gradient(90deg, #ff5a5f, #ff9f1c, #ffcf33, #22b45a, #3d9bff, #8b5cf6, #ff5fb8);
+  -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .04em;
+}
+html[data-style="rainbow"] .btn.silly { background: #ff3d7f; }
+html[data-style="rainbow"] .song-pick select, html[data-style="rainbow"] .keys-pick select, html[data-style="rainbow"] .btn.restart { border: 2px solid var(--ink); }
+html[data-style="rainbow"] .song-pick::before { color: #ff3d7f; }
+html[data-style="rainbow"] .key.white, html[data-style="rainbow"] .kb.art .key.white {
+  background: color-mix(in srgb, var(--kc) 7%, #fff); border-color: var(--line);
+  box-shadow: inset 0 -14px 0 var(--kc); padding-bottom: 20px;
+}
+html[data-style="rainbow"] .key.white.down, html[data-style="rainbow"] .kb.art .key.white.down {
+  background: color-mix(in srgb, var(--kc) 30%, #fff); box-shadow: inset 0 -8px 0 var(--kc);
+}
+html[data-style="rainbow"] .key.black, html[data-style="rainbow"] .kb.art .key.black { background: var(--ebony); box-shadow: 0 3px 0 rgb(0 0 0 / .2); }
+html[data-style="rainbow"] .key.black.down, html[data-style="rainbow"] .kb.art .key.black.down { background: var(--ebony-down); }
+html[data-style="rainbow"] .key.white.guide, html[data-style="rainbow"] .kb.art .key.white.guide { background: #c9f2d6; }
+html[data-style="rainbow"] .key.black.guide, html[data-style="rainbow"] .kb.art .key.black.guide { background: var(--guide); }
+
+/* =========================================================
+   CANDY — soft pink page, every white key a pastel sweet, the guide key bright green
+   ========================================================= */
+html:root[data-style="candy"] {
+  --paper: #fff5fa; --stage: #ffffff; --ink: #3a1f3d; --muted: #8a6a8c; --line: #f3d6e6;
+  --brass: #ff5fb8; --silly: #e8246b; --ivory: #ffffff; --ivory-down: #fff;
+  --ebony: #4a2a52; --ebony-down: #6d4a76; --key-ink: #3a1f3d; --key-ink-on-ebony: #ffffff;
+  --key-silly: #d4145c; --key-silly-on-ebony: #ffb3d4; --chip: #ffffff; --key-note: #8a6a8c; --key-hint: #b99bbb;
+}
+html[data-style="candy"] h1 em { color: #ff5fb8; }
+html[data-style="candy"] .btn { background: var(--ink); }
+html[data-style="candy"] .btn.silly { background: #ff5fb8; }
+html[data-style="candy"] .btn.restart { background: #fff; border: 2px solid #f3c2dc; color: var(--ink); }
+html[data-style="candy"] .song-pick select, html[data-style="candy"] .keys-pick select { border: 2px solid #f3c2dc; }
+html[data-style="candy"] .song-pick::before { color: #ff5fb8; }
+html[data-style="candy"] .kb { gap: 4px; }
+html[data-style="candy"] .key.white, html[data-style="candy"] .kb.art .key.white {
+  background: var(--kp); border: 0; margin-right: 0; border-radius: 0 0 16px 16px;
+  box-shadow: inset 0 -7px 0 color-mix(in srgb, var(--kc) 35%, var(--kp));
+}
+html[data-style="candy"] .key.white.down, html[data-style="candy"] .kb.art .key.white.down {
+  background: color-mix(in srgb, var(--kc) 40%, var(--kp)); box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--kc) 50%, var(--kp));
+}
+html[data-style="candy"] .key.black, html[data-style="candy"] .kb.art .key.black { background: var(--ebony); box-shadow: 0 3px 0 rgb(58 31 61 / .25); }
+html[data-style="candy"] .key.black.down, html[data-style="candy"] .kb.art .key.black.down { background: var(--ebony-down); }
+html[data-style="candy"] .key.white.guide, html[data-style="candy"] .kb.art .key.white.guide { background: var(--guide); box-shadow: inset 0 -7px 0 #17904a; }
+html[data-style="candy"] .key.black.guide, html[data-style="candy"] .kb.art .key.black.guide { background: var(--guide); }
+html[data-style="candy"] .key.white.guide .kw, html[data-style="candy"] .key.white.guide .kn,
+html[data-style="candy"] .kb.art .key.white.guide .kw, html[data-style="candy"] .kb.art .key.white.guide .kn { color: #fff; }
+html[data-style="candy"] .key.white.guide::after { background: #fff; box-shadow: 0 0 0 3px rgb(255 255 255 / .4); }
+html[data-style="candy"] .kb.art .key.white .kw:not(.silly) { color: var(--ink); }
+html[data-style="candy"] .kb.art .key.white .kw.silly { color: #d4145c; }
+html[data-style="candy"] .kb.art .key.black .kw:not(.silly) { color: #fff; }
+html[data-style="candy"] .stage { box-shadow: 0 2px 0 #f3d6e6; }
+html[data-style="candy"] .stage.art { box-shadow: none; }
+
+/* =========================================================
+   SUNSHINE — one big yellow, white toy shapes with thick black outlines
+   ========================================================= */
+html:root[data-style="sunshine"] {
+  --paper: #ffd84d; --stage: #ffffff; --ink: #1f1a10; --muted: #5c4d1e; --line: #1f1a10;
+  --brass: #1f1a10; --silly: #e8246b; --ivory: #ffffff; --ivory-down: #fff4c2;
+  --ebony: #1f1a10; --ebony-down: #4a4030; --key-ink: #1f1a10; --key-ink-on-ebony: #ffffff;
+  --key-silly: #e8246b; --key-silly-on-ebony: #ffa3c6; --chip: #ffffff; --key-note: #7a6c48; --key-hint: #a89a74;
+  --edge: 3px solid #1f1a10; --lift: 0 4px 0 #1f1a10;
+}
+html[data-style="sunshine"] h1 em { color: #fff; -webkit-text-stroke: 7px #1f1a10; paint-order: stroke fill; }
+html[data-style="sunshine"] .btn, html[data-style="sunshine"] .pick select { border: var(--edge); box-shadow: var(--lift); }
+html[data-style="sunshine"] .btn:active:not(:disabled) { box-shadow: 0 1px 0 #1f1a10; transform: translateY(3px); }
+html[data-style="sunshine"] .btn.silly { background: #ff5a5f; color: #fff; }
+html[data-style="sunshine"] .btn.restart { background: #fff; border: var(--edge); }
+html[data-style="sunshine"] .btn.ghost { background: #fff; border: var(--edge); }
+html[data-style="sunshine"] .song-pick::before { color: #ff5a5f; }
+html[data-style="sunshine"] .kb-wrap { padding: 2px 4px 10px; }
+html[data-style="sunshine"] .kb { background: #fff; border: var(--edge); border-radius: 18px; overflow: hidden; box-shadow: var(--lift); }
+html[data-style="sunshine"] .key.white, html[data-style="sunshine"] .kb.art .key.white {
+  background: #fff; border: 0; border-right: 3px solid #1f1a10; margin-right: 0; border-radius: 0; box-shadow: none;
+}
+html[data-style="sunshine"] .key.white:last-child { border-right: 0; }
+html[data-style="sunshine"] .key.white.down, html[data-style="sunshine"] .kb.art .key.white.down { background: #fff4c2; transform: none; }
+html[data-style="sunshine"] .key.black, html[data-style="sunshine"] .kb.art .key.black { background: #1f1a10; border-radius: 0 0 10px 10px; box-shadow: none; }
+html[data-style="sunshine"] .key.black.down, html[data-style="sunshine"] .kb.art .key.black.down { background: #4a4030; transform: none; }
+html[data-style="sunshine"] .key.white.guide, html[data-style="sunshine"] .kb.art .key.white.guide { background: #9be8b4; }
+html[data-style="sunshine"] .key.black.guide, html[data-style="sunshine"] .kb.art .key.black.guide { background: var(--guide); }
+html[data-style="sunshine"] .key.guide::after { background: #1f1a10; box-shadow: 0 0 0 3px #fff; }
+html[data-style="sunshine"] .kb.art .key.white .kw:not(.silly) { color: var(--ink); }
+html[data-style="sunshine"] .kb.art .key.white .kw.silly { color: #e8246b; }
+html[data-style="sunshine"] .kb.art .key.black .kw:not(.silly) { color: #fff; }
+html[data-style="sunshine"] .stage, html[data-style="sunshine"] .end-strip { border: var(--edge); box-shadow: var(--lift); }
+html[data-style="sunshine"] .source, html[data-style="sunshine"] .how {
+  background: #fff; border: var(--edge); border-radius: 20px; padding: 16px 20px; box-shadow: var(--lift);
+}
+html[data-style="sunshine"] .legend span::before { box-shadow: 0 0 0 2px #1f1a10; }
+html[data-style="sunshine"] .now, html[data-style="sunshine"] .status, html[data-style="sunshine"] .legend { color: var(--ink); font-weight: 600; }
+
+/* ---------- the switcher ---------- */
+.style-lab {
+  position: fixed; z-index: 100; left: 50%; bottom: max(14px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px; padding: 6px; max-width: calc(100vw - 24px); box-sizing: border-box; overflow-x: auto;
+  background: #1b1b1b; color: #fff; border-radius: 999px; box-shadow: 0 8px 24px rgb(0 0 0 / .3);
+  font: 600 13px/1 system-ui, -apple-system, sans-serif;
+}
+.style-lab > span { padding: 0 8px 0 10px; opacity: .65; white-space: nowrap; }
+.style-lab button { font: inherit; color: #fff; background: transparent; border: 0; border-radius: 999px; padding: 9px 14px; cursor: pointer; white-space: nowrap; }
+.style-lab button:hover { background: rgb(255 255 255 / .12); }
+.style-lab button[aria-pressed="true"] { background: #ffd84d; color: #1b1b1b; }
+@media (max-width: 520px) { .style-lab > span { display: none; } .style-lab { font-size: 12px; gap: 2px; } .style-lab button { padding: 8px 9px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-style] .w.fresh, html[data-style] .w.silly.fresh, html[data-style] .end-strip, html[data-style] .key.guide::after { animation: none !important; }
+  html[data-style] .btn, html[data-style] .key { transition: none !important; }
+}

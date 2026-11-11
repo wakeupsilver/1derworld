@@ -1,3 +1,69 @@
+// space.js
+// Outer space, drawn per pixel from the viewing direction. Any surface with this material
+// behaves like a window: stars, a nebula and a ringed planet that stay put as you walk.
+import * as THREE from 'three';
+const shared = { time: { value: 0 } };
+const fragment = `
+varying vec3 vWorld;
+uniform float time;
+float h(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+vec3 rotY(vec3 d, float a) { float c = cos(a), s = sin(a); return vec3(c * d.x + s * d.z, d.y, -s * d.x + c * 
+vec3 space(vec3 d) {
+  vec3 col = mix(vec3(0.03, 0.04, 0.16), vec3(0.11, 0.05, 0.27), d.y * 0.5 + 0.5);
+  // Nebula: a few soft waves in pink and teal.
+  vec3 q = rotY(d, time * 0.004);
+  float n1 = sin(q.x * 3.1 + sin(q.y * 4.3) * 1.4) * sin(q.z * 2.6 + q.y * 1.7);
+  float n2 = sin(q.z * 4.4 + sin(q.x * 3.7)) * sin(q.y * 3.2 - q.x * 1.1);
+  col += vec3(0.95, 0.28, 0.72) * smoothstep(0.25, 1.0, n1) * 0.38;
+  col += vec3(0.1, 0.75, 0.8) * smoothstep(0.35, 1.0, n2) * 0.3;
+  // Stars at two sizes, gently twinkling.
+  vec3 c1 = floor(q * 190.0);
+  float s1 = step(0.9935, h(c1));
+  col += s1 * (0.65 + 0.35 * sin(time * 2.0 + h(c1 + 1.0) * 40.0));
+  vec3 c2 = floor(q * 60.0);
+  float s2 = step(0.997, h(c2)) * smoothstep(0.42, 0.0, length(fract(q * 60.0) - 0.5));
+  col += s2 * mix(vec3(1.0, 0.85, 0.5), vec3(0.6, 0.8, 1.0), h(c2 + 2.0)) * 1.6;
+  // A ringed planet ahead of the ship, and a small moon.
+  vec3 pd = normalize(vec3(0.32, 0.2, -1.0));
+  vec3 u = normalize(cross(pd, vec3(0.0, 1.0, 0.0)));
+  vec3 v = cross(u, pd);
+  float R = 0.2;
+  vec2 xy = vec2(dot(d, u), dot(d, v)) / R;
+  float front = dot(d, pd);
+  vec2 rp = vec2(xy.x * 0.94 + xy.y * 0.34, (-xy.x * 0.34 + xy.y * 0.94) * 4.2);
+  float rr = length(rp);
+  float ring = smoothstep(1.35, 1.42, rr) * smoothstep(2.15, 2.05, rr) * (0.75 + 0.25 * sin(rr * 30.0));
+  vec3 ringCol = vec3(1.0, 0.8, 0.5) * ring;
+  float r2 = dot(xy, xy);
+  if (front > 0.0) {
+    if (rp.y > 0.0) col = mix(col, ringCol, ring * 0.85);   // back half of the ring
+    if (r2 < 1.0) {
+      vec3 nrm = normalize(vec3(xy, sqrt(1.0 - r2)));
+      float light = clamp(dot(nrm, normalize(vec3(-0.55, 0.45, 0.7))), 0.0, 1.0);
+      float band = sin(xy.y * 13.0 + sin(xy.x * 4.0 + time * 0.05) * 1.2);
+      vec3 base = mix(vec3(1.0, 0.45, 0.35), vec3(1.0, 0.78, 0.35), band * 0.5 + 0.5);
+      base = mix(base, vec3(0.55, 0.35, 0.95), smoothstep(0.4, 1.0, xy.y));
+      col = base * (0.18 + 0.95 * light) + vec3(0.4, 0.5, 1.0) * pow(1.0 - nrm.z, 3.0) * 0.6;
+    }
+    if (rp.y <= 0.0) col = mix(col, ringCol, ring * 0.9);   // front half
+    col += vec3(0.5, 0.4, 1.0) * smoothstep(1.35, 1.0, sqrt(r2)) * step(1.0, r2) * 0.25;   // glow
+  }
+  vec3 md = normalize(vec3(-0.75, 0.42, -0.6));
+  float mc = dot(d, md);
+  float mr = sqrt(max(0.0, 1.0 - mc * mc)) / 0.045;
+  if (mc > 0.0 && mr < 1.0) {
+    float shade = 0.35 + 0.65 * smoothstep(-0.6, 0.8, dot(normalize(d - md * mc), normalize(vec3(-1.0, 0.4, 0.
+    col = vec3(0.78, 0.86, 1.0) * shade;
+  }
+  return col;
+}
+void main() { gl_FragColor = vec4(space(normalize(vWorld - cameraPosition)), 1.0); }`;
+const vertex = 'varying vec3 vWorld; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; 
+/** A material that shows space through whatever it's put on. */
+export function spaceMaterial() {
+  return new THREE.ShaderMaterial({ uniforms: { time: shared.time }, vertexShader: vertex, fragmentShader: fra
+}
+export function tickSpace(t) { shared.time.value = t; }
 // atlas.js
 // One big texture holding every project's thumbnail, filled in as images arrive.
 // All thumbnail surfaces (floor, disco ball, quilt, dream) sample this with per-instance UVs.
@@ -1051,99 +1117,4 @@ export function buildFloor(ctx, room, blocked) {
   const writeAll = () => {
     cells.forEach((_, i) => writeTile(i));
     withProject.forEach((_, k) => writeThumb(k));
-    ringCells.forEach((_, k) => writeRing(k));
-    tiles.instanceMatrix.needsUpdate = true;
-    thumbs.instanceMatrix.needsUpdate = true;
-    if (rings) rings.instanceMatrix.needsUpdate = true;
-  };
-  writeAll();
-  const cellAt = (x, z) => {
-    const c = Math.floor((x + room.width / 2) / stepX);
-    const r = Math.floor((room.depth / 2 - z) / stepZ);
-    return c >= 0 && c < cols && r >= 0 && r < rows ? grid[r * cols + c] : null;
-  };
-  const indexOfCell = new Map(cells.map((c, i) => [c, i]));
-  let hover = null;
-  const tint = (cell, amount) => {
-    const i = indexOfCell.get(cell);
-    tiles.setColorAt(i, color.copy(baseColors[i]).lerp(new THREE.Color('#ffffff'), amount));
-    tiles.instanceColor.needsUpdate = true;
-  };
-  const setHoverCell = (cell) => {
-    if (hover === cell) return;
-    if (hover) tint(hover, 0);
-    hover = cell;
-    if (hover) tint(hover, 0.55);
-  };
-  // Invisible plane: cheaper to pick against than 1000+ instanced boxes.
-  const proxy = new THREE.Mesh(new THREE.PlaneGeometry(room.width, room.depth).rotateX(-Math.PI / 2), new THRE
-  proxy.visible = false;
-  proxy.userData.pick = {
-    hover(hit) {
-      const cell = cellAt(hit.point.x, hit.point.z);
-      setHoverCell(cell?.project ? cell : null);
-      return cell?.project ? { project: cell.project } : null;
-    },
-    leave() { setHoverCell(null); },
-    click(hit) {
-      const cell = cellAt(hit.point.x, hit.point.z);
-      if (cell?.project) ui.openProject(cell.project);
-    },
-  };
-  scene.add(proxy);
-  let underfoot = null;
-  let animating = false;
-  const pressed = new Set();
-  return {
-    proxy,
-    cellAt,
-    cells,
-    /** Raise tiles by value (0..1 of the tallest), or flatten with null. */
-    setHeights(valueOf) {
-      for (const c of cells) c.target = c.project && valueOf ? valueOf(c.project) * 1.35 : 0;
-      animating = true;
-    },
-    update(dt, t, camera) {
-      if (gems) {
-        gemCells.forEach((_, k) => writeGem(k, t));
-        gems.instanceMatrix.needsUpdate = true;
-      }
-      const cell = camera.position.y < 2.2 ? cellAt(camera.position.x, camera.position.z) : null;
-      if (cell !== underfoot) {
-        underfoot = cell;
-        if (cell?.project) {
-          sound.step(cell.project.index / Math.max(1, projects.length - 1));
-          cell.press = 0.035;
-          pressed.add(cell);
-          tint(cell, 0.4);
-          ctx.onStep?.(cell.project);
-        }
-      }
-      for (const c of pressed) {
-        if (c === underfoot) continue;
-        c.press = Math.max(0, c.press - dt * 0.12);
-        if (c.press === 0) { pressed.delete(c); if (c !== hover) tint(c, 0); }
-      }
-      let changed = pressed.size > 0;
-      if (animating) {
-        let still = false;
-        for (const c of cells) {
-          const d = c.target - c.h;
-          if (Math.abs(d) > 0.002) { c.h += d * (1 - Math.exp(-dt * 5)); still = true; } else c.h = c.target;
-        }
-        animating = still;
-        changed = true;
-        for (const f of flags) f.s.position.y = f.cell.h + 0.26;
-      }
-      if (changed) writeAll();
-    },
-  };
-}
-// ui.js
-// Everything that's HTML rather than 3D: hover card, project sheet, lists, HUD.
-import { api, assetURL, avatarImage, BUNDLE, el, initialAvatar, isPlaceholder, longDate, num, plural, setThumb
-const $ = (id) => document.getElementById(id);
-function statRow(p) {
-  return el('div', { class: 'stats' },
-    el('span', { style: { '--c': '#3aa0ff' }, text: `${num(p.views)} views` }),
-    el('span', { style: { '--c': '#
+ 

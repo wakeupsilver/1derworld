@@ -1,12 +1,12 @@
 // make-lab.js
-// Makes style-lab.html: a copy of the built index.html with the JoyLabz looks and a switcher added.
+// Makes style-lab.html: a copy of the built index.html with the fun looks and a switcher added.
 // index.html itself is not changed. Run again after rebuilding index.html:  node style-lab/make-lab.js
 const fs = require("fs"), path = require("path");
 const dir = path.join(__dirname, "..");
 let html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
 const head = `
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400..700&family=Nunito:wght
-<link rel="stylesheet" href="style-lab/joylabz.css">
+<link rel="stylesheet" href="style-lab/fun.css">
 <title>Mad Libs Piano – Style lab</title>`;
 const i = html.indexOf("</style>");
 if (i < 0) throw new Error("index.html has no </style>");
@@ -18,7 +18,7 @@ console.log("wrote style-lab.html");
 // switcher.js
 // Style lab switcher: sets <html data-style="..."> and remembers the pick in this browser.
 (() => {
-  const looks = [["original", "Original"], ["stickers", "Stickers"], ["notebook", "Notebook"], ["cardboard", "
+  const looks = [["original", "Original"], ["rainbow", "Rainbow"], ["candy", "Candy"], ["sunshine", "Sunshine"
   const root = document.documentElement;
   const fromUrl = new URLSearchParams(location.search).get("style");
   let saved = null;
@@ -30,14 +30,14 @@ console.log("wrote style-lab.html");
   bar.innerHTML = "<span>Style lab</span>" + looks.map(([id, name]) => `<button type="button" data-look="${id}
   document.body.appendChild(bar);
   const set = id => {
-    if (!looks.some(l => l[0] === id)) id = "stickers";
+    if (!looks.some(l => l[0] === id)) id = "rainbow";
     if (id === "original") root.removeAttribute("data-style"); else root.setAttribute("data-style", id);
     bar.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.look === id)))
     try { localStorage.setItem("mlp-style", id); } catch (e) {}
   };
   // a click shouldn't leave focus on the switcher, so the letter keys keep playing the piano
   bar.addEventListener("click", e => { const b = e.target.closest("button"); if (b) { set(b.dataset.look); b.b
-  set(fromUrl || saved || "stickers");
+  set(fromUrl || saved || "rainbow");
 })();
 // build.js
 // Builds the page: index.html (template + song data + silly words) and voice/<song>.json,
@@ -305,244 +305,158 @@ def main():
     print("wrote", out_path, os.path.getsize(out_path))
 if __name__ == "__main__":
     main()
-// joylabz.css
-/* Style lab: JoyLabz looks for Mad Libs Piano, layered over the real page.
-   Colours and fonts come from Sticker Arcade (ui-core.css + design-refs):
-   red pen #e01b1b, orange #ff7420, green #00ae3c, blue #0f6deb, purple #9f44fb,
-   gold #e3b448, kraft #c69c6d, graph paper #bfd5ea / #dfeaf5, sticker pastels.
-   Three points on the "material dial": stickers -> notebook -> cardboard.
-   html:root[data-style] outranks the page's dark-mode :root rules, so every look stays light. */
-/* ---------- shared by all three lab looks ---------- */
-html:root[data-style="stickers"], html:root[data-style="notebook"], html:root[data-style="cardboard"] { color-
-html[data-style="stickers"] .label, html[data-style="notebook"] .label, html[data-style="cardboard"] .label {
-  font-size: 15px; letter-spacing: 0; text-transform: none;
+// fun.css
+/* Style lab, round 2: the original layout, made fun with three moves only —
+   colour, round friendly type, and a little bounce. No textures, no tilt, no tape.
+   html:root[data-style] outranks the page's dark-mode :root rules, so each look sets its own colours. */
+/* ---------- shared by every fun look ---------- */
+html:root[data-style] {
+  color-scheme: light;
+  --display: "Fredoka", system-ui, sans-serif; --body: "Nunito", system-ui, sans-serif; --mono: "Nunito", syst
+  --ease-pop: cubic-bezier(.34, 1.56, .64, 1);
+  --guide: #22b45a;
 }
-html[data-style="stickers"] .w.silly::after, html[data-style="notebook"] .w.silly::after, html[data-style="car
-html[data-style="stickers"] .now .pos, html[data-style="notebook"] .now .pos, html[data-style="cardboard"] .no
-  font-size: 12px; text-transform: none; letter-spacing: 0;
-}
-html[data-style="stickers"] .kn, html[data-style="notebook"] .kn, html[data-style="cardboard"] .kn { font-size
-html[data-style] .key.white:last-child { margin-right: 0; }
-/* room for the switcher at the bottom */
+/* each note has its own colour (C red, D orange, E yellow, F blue, G purple, A pink, B teal); the keyboard st
+html[data-style] .kb > .key:nth-child(12n+1)  { --kc: #ff5a5f; --kp: #ffd0d2; }
+html[data-style] .kb > .key:nth-child(12n+3)  { --kc: #ff9f1c; --kp: #ffe0b8; }
+html[data-style] .kb > .key:nth-child(12n+5)  { --kc: #ffcf33; --kp: #fff1b0; }
+html[data-style] .kb > .key:nth-child(12n+6)  { --kc: #3d9bff; --kp: #cfe4ff; }
+html[data-style] .kb > .key:nth-child(12n+8)  { --kc: #8b5cf6; --kp: #e2d6ff; }
+html[data-style] .kb > .key:nth-child(12n+10) { --kc: #ff5fb8; --kp: #ffd3ec; }
+html[data-style] .kb > .key:nth-child(12n+12) { --kc: #14b8b0; --kp: #c4f1ee; }
+html[data-style] h1 { font-weight: 700; letter-spacing: -0.01em; }
+html[data-style] h1 em { font-style: normal; }
+html[data-style] .label { font-family: var(--display); font-size: 13px; font-weight: 600; letter-spacing: .02e
+html[data-style] .w.silly::after, html[data-style] .now .pos { font-family: var(--body); font-weight: 700; let
+html[data-style] .kw { font-family: var(--display); font-weight: 600; }
+html[data-style] .sung { font-family: var(--display); font-weight: 500; }
+html[data-style] .source h2, html[data-style] .how h2 { font-family: var(--display); font-weight: 700; }
+html[data-style] .src { font-family: var(--body); }
+/* round, chunky controls */
+html[data-style] .btn, html[data-style] .pick select, html[data-style] .chip { font-family: var(--display); fo
+html[data-style] .song-pick select { font-size: 17px; }
+html[data-style] .keys-pick select { padding-left: 16px; }
+html[data-style] .btn { padding-inline: 16px; transition: transform .12s var(--ease-pop); }
+html[data-style] .btn:hover:not(:disabled) { transform: translateY(-2px); }
+html[data-style] .btn:active:not(:disabled) { transform: translateY(1px) scale(.97); }
+html[data-style] .stage, html[data-style] .end-strip { border-radius: 20px; }
+/* keys squish when pressed, and the guide dot bobs */
+html[data-style] .key { transition: transform .1s var(--ease-pop), background-color .1s; }
+html[data-style] .key.white.down { transform: translateY(3px); }
+html[data-style] .key.black.down { transform: translateY(2px); }
+html[data-style] .key.white, html[data-style] .kb.art .key.white { border-radius: 0 0 12px 12px; }
+html[data-style] .key.black, html[data-style] .kb.art .key.black { border-radius: 0 0 9px 9px; }
+html[data-style] .key.guide::after { animation: bob .7s ease-in-out infinite alternate; }
+@keyframes bob { to { transform: translateY(-4px) scale(1.15); } }
+/* each new sung word pops in; a silly one wiggles too */
+html[data-style] .w.fresh { animation: pop .45s var(--ease-pop); }
+html[data-style] .w.silly.fresh { animation: pop .45s var(--ease-pop), wiggle .5s ease-in-out .3s; }
+@keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes wiggle { 25% { transform: rotate(-7deg); } 50% { transform: rotate(6deg); } 75% { transform: rotate
+html[data-style] .end-strip { animation: pop .5s var(--ease-pop); }
+/* room for the switcher */
 html[data-style] .wrap { padding-bottom: 96px; }
 /* =========================================================
-   1. STICKERS — graph paper, die-cut stickers, red pen
+   RAINBOW — white page, every white key wears its note's colour along the bottom
    ========================================================= */
-html:root[data-style="stickers"] {
-  --paper: #fffefa; --stage: #ffffff; --ink: #1b1b1b; --muted: #55534d; --line: #cfc9bf;
-  --brass: #ffd600; --silly: #e01b1b; --ivory: #ffffff; --ivory-down: #fff1a6;
-  --ebony: #222338; --ebony-down: #54556c; --key-ink: #1b1b1b; --key-ink-on-ebony: #ffffff;
-  --key-silly: #e01b1b; --key-silly-on-ebony: #ffa3a3; --chip: #ffffff; --guide: #00ae3c;
-  --key-note: #8a8580; --key-hint: #b5b0a8;
-  --display: "Permanent Marker", cursive; --body: "Fredoka", system-ui, sans-serif; --mono: "Patrick Hand", cu
-  --sticker-edge: 0 0 0 4px #fff, 0 0 0 5px rgb(0 0 0 / .08), 0 4px 8px 4px rgb(23 18 15 / .14);
-  --sheen: linear-gradient(160deg, rgb(255 255 255 / .55) 0 28%, rgb(255 255 255 / 0) 29%);
-  --tape: rgb(240 222 170 / .88);
+html:root[data-style="rainbow"] {
+  --paper: #ffffff; --stage: #f4f4fb; --ink: #1d1b2c; --muted: #6a6880; --line: #dddbe8;
+  --brass: #8b5cf6; --silly: #ff3d7f; --ivory: #ffffff; --ivory-down: #f6f5fb;
+  --ebony: #1d1b2c; --ebony-down: #3a3752; --key-ink: #1d1b2c; --key-ink-on-ebony: #ffffff;
+  --key-silly: #e8246b; --key-silly-on-ebony: #ff9cc2; --chip: #ffffff; --key-note: #8a889e; --key-hint: #b3b1
 }
-html[data-style="stickers"], html[data-style="stickers"] body,
-html[data-style="notebook"], html[data-style="notebook"] body {
-  background-color: #fffefa;
-  background-image: linear-gradient(#bfd5ea 1px, transparent 1px), linear-gradient(90deg, #bfd5ea 1px, transpa
-    linear-gradient(#dfeaf5 1px, transparent 1px), linear-gradient(90deg, #dfeaf5 1px, transparent 1px);
-  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+html[data-style="rainbow"] h1 em {
+  background: linear-gradient(90deg, #ff5a5f, #ff9f1c, #ffcf33, #22b45a, #3d9bff, #8b5cf6, #ff5fb8);
+  -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .04em;
 }
-html[data-style="stickers"] body { font-size: 16px; }
-html[data-style="stickers"] h1 { font-size: clamp(38px, 7vw, 60px); transform: rotate(-1.5deg); }
-html[data-style="stickers"] h1 em { font-style: normal; display: inline-block; transform: rotate(-4deg) transl
-html[data-style="stickers"] h1::first-line { background: linear-gradient(transparent 58%, rgb(255 214 0 / .55)
-/* every control is a sticker: pastel face, white die-cut edge, a little sheen */
-html[data-style="stickers"] .btn, html[data-style="stickers"] .pick select, html[data-style="stickers"] .chip 
-  font-family: var(--body); font-weight: 600; border: 0; border-radius: 12px; color: var(--ink);
-  box-shadow: var(--sticker-edge); margin: 4px;
+html[data-style="rainbow"] .btn.silly { background: #ff3d7f; }
+html[data-style="rainbow"] .song-pick select, html[data-style="rainbow"] .keys-pick select, html[data-style="r
+html[data-style="rainbow"] .song-pick::before { color: #ff3d7f; }
+html[data-style="rainbow"] .key.white, html[data-style="rainbow"] .kb.art .key.white {
+  background: color-mix(in srgb, var(--kc) 7%, #fff); border-color: var(--line);
+  box-shadow: inset 0 -14px 0 var(--kc); padding-bottom: 20px;
 }
-html[data-style="stickers"] .btn { background: #c6e6d0 var(--sheen); }
-html[data-style="stickers"] .btn.silly { background: #e01b1b var(--sheen); color: #fff; }
-html[data-style="stickers"] .btn.restart { background: #c6e6d0 var(--sheen); border: 0; }
-html[data-style="stickers"] .btn.ghost { background: #d9cdef var(--sheen); }
-html[data-style="stickers"] .song-pick select, html[data-style="stickers"] .keys-pick select {
-  background-color: #c6dcf3; border: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3C
-  background-repeat: no-repeat, no-repeat; background-position: right 12px center, 0 0; background-size: 12px 
+html[data-style="rainbow"] .key.white.down, html[data-style="rainbow"] .kb.art .key.white.down {
+  background: color-mix(in srgb, var(--kc) 30%, #fff); box-shadow: inset 0 -8px 0 var(--kc);
 }
-html[data-style="stickers"] .keys-pick select { background-color: #d9cdef; }
-html[data-style="stickers"] .song-pick::before { color: #e01b1b; left: 17px; }
-html[data-style="stickers"] .btn:hover, html[data-style="stickers"] .pick select:hover { transform: rotate(-1.
-html[data-style="stickers"] .btn:active { transform: translateY(1px); }
-/* the keyboard is one big sticker sheet */
-html[data-style="stickers"] .kb-wrap { padding: 10px 10px 16px; }
-html[data-style="stickers"] .kb { background: #fff; border-radius: 16px; box-shadow: var(--sticker-edge); }
-html[data-style="stickers"] .key.white, html[data-style="stickers"] .kb.art .key.white {
-  background: #fff; border: 2px solid var(--ink); border-radius: 0 0 12px 12px; margin-right: -2px;
-  box-shadow: inset 0 -9px 0 #ece8df;
-}
-html[data-style="stickers"] .key.white:first-child { border-top-left-radius: 12px; }
-html[data-style="stickers"] .key.white.down, html[data-style="stickers"] .kb.art .key.white.down { background:
-html[data-style="stickers"] .key.black, html[data-style="stickers"] .kb.art .key.black {
-  background: #222338; border-radius: 0 0 9px 9px; box-shadow: 0 4px 0 rgb(0 0 0 / .25), inset 0 -6px 0 #3b3b4
-}
-html[data-style="stickers"] .key.black.down, html[data-style="stickers"] .kb.art .key.black.down { background:
-html[data-style="stickers"] .key.white.guide, html[data-style="stickers"] .kb.art .key.white.guide { backgroun
-html[data-style="stickers"] .key.black.guide, html[data-style="stickers"] .kb.art .key.black.guide { backgroun
-html[data-style="stickers"] .kb.art .key.white .kw, html[data-style="stickers"] .kb.art .key.guide .kw { color
-html[data-style="stickers"] .kb.art .key.black .kw { color: #fff; }
-html[data-style="stickers"] .kb.art .key.white .kw.silly { color: #e01b1b; }
-html[data-style="stickers"] .kb.art .key.black .kw.silly { color: #ffa3a3; }
-/* the song is a sheet taped to the page */
-html[data-style="stickers"] .stage, html[data-style="cardboard"] .stage { overflow: visible; }
-html[data-style="stickers"] .art-layer, html[data-style="cardboard"] .art-layer { overflow: hidden; border-rad
-html[data-style="stickers"] .stage {
-  background: #fff; border-radius: 4px; transform: rotate(-.5deg); box-shadow: 0 8px 0 rgb(23 18 15 / .12), 0 
-}
-html[data-style="stickers"] .stage.art { background: transparent; }
-html[data-style="stickers"] .stage::before, html[data-style="cardboard"] .stage::before {
-  content: ""; position: absolute; z-index: 3; top: -13px; left: 50%; width: 120px; height: 26px; margin-left:
-  background: var(--tape, rgb(240 222 170 / .88)); transform: rotate(-3deg); box-shadow: 0 1px 2px rgb(0 0 0 /
-}
-html[data-style="stickers"] .end-strip { background: #fff6c2; border-radius: 12px; box-shadow: var(--sticker-e
-html[data-style="stickers"] .source, html[data-style="stickers"] .how {
-  background: #fff; padding: 16px 20px; border-radius: 4px; box-shadow: 0 6px 0 rgb(23 18 15 / .1), 0 1px 3px 
-}
-html[data-style="stickers"] .how { transform: rotate(.6deg); background: #fff8d6; }
-html[data-style="stickers"] .source h2, html[data-style="stickers"] .how h2 { font-size: 26px; }
-html[data-style="stickers"] .src { font-family: var(--body); font-size: 17px; }
-html[data-style="stickers"] .src span.cur { outline-color: #00ae3c; background: rgb(255 214 0 / .45); }
+html[data-style="rainbow"] .key.black, html[data-style="rainbow"] .kb.art .key.black { background: var(--ebony
+html[data-style="rainbow"] .key.black.down, html[data-style="rainbow"] .kb.art .key.black.down { background: v
+html[data-style="rainbow"] .key.white.guide, html[data-style="rainbow"] .kb.art .key.white.guide { background:
+html[data-style="rainbow"] .key.black.guide, html[data-style="rainbow"] .kb.art .key.black.guide { background:
 /* =========================================================
-   2. NOTEBOOK — ink drawn on graph paper, highlighter, red pen
+   CANDY — soft pink page, every white key a pastel sweet, the guide key bright green
    ========================================================= */
-html:root[data-style="notebook"] {
-  --paper: #fffefa; --stage: transparent; --ink: #1b1b1b; --muted: #55534d; --line: #1b1b1b;
-  --brass: #e01b1b; --silly: #e01b1b; --ivory: rgb(255 254 250 / .55); --ivory-down: rgb(255 214 0 / .55);
-  --ebony: #1b1b1b; --ebony-down: #55534d; --key-ink: #1b1b1b; --key-ink-on-ebony: #fffefa;
-  --key-silly: #e01b1b; --key-silly-on-ebony: #ff9a9a; --chip: rgb(255 254 250 / .7); --guide: #00ae3c;
-  --key-note: #55534d; --key-hint: #8a8580;
-  --display: "Permanent Marker", cursive; --body: "Patrick Hand", cursive; --mono: "Patrick Hand", cursive;
-  --wobble: 255px 15px 225px 15px / 15px 225px 15px 255px;
-  --wobble-key: 2px 3px 14px 10px / 3px 2px 12px 16px;
-  --hi: rgb(255 214 0 / .5);
+html:root[data-style="candy"] {
+  --paper: #fff5fa; --stage: #ffffff; --ink: #3a1f3d; --muted: #8a6a8c; --line: #f3d6e6;
+  --brass: #ff5fb8; --silly: #e8246b; --ivory: #ffffff; --ivory-down: #fff;
+  --ebony: #4a2a52; --ebony-down: #6d4a76; --key-ink: #3a1f3d; --key-ink-on-ebony: #ffffff;
+  --key-silly: #d4145c; --key-silly-on-ebony: #ffb3d4; --chip: #ffffff; --key-note: #8a6a8c; --key-hint: #b99b
 }
-html[data-style="notebook"] body { font-size: 18px; }
-html[data-style="notebook"] h1 { font-size: clamp(38px, 7vw, 58px); }
-html[data-style="notebook"] h1 em { font-style: normal; text-decoration: underline wavy #e01b1b 3px; text-unde
-html[data-style="notebook"] .btn, html[data-style="notebook"] .pick select, html[data-style="notebook"] .chip,
-  font-family: var(--body); font-size: 18px; font-weight: 400; color: var(--ink); background-color: transparen
-  border: 2px solid var(--ink); border-radius: var(--wobble);
+html[data-style="candy"] h1 em { color: #ff5fb8; }
+html[data-style="candy"] .btn { background: var(--ink); }
+html[data-style="candy"] .btn.silly { background: #ff5fb8; }
+html[data-style="candy"] .btn.restart { background: #fff; border: 2px solid #f3c2dc; color: var(--ink); }
+html[data-style="candy"] .song-pick select, html[data-style="candy"] .keys-pick select { border: 2px solid #f3
+html[data-style="candy"] .song-pick::before { color: #ff5fb8; }
+html[data-style="candy"] .kb { gap: 4px; }
+html[data-style="candy"] .key.white, html[data-style="candy"] .kb.art .key.white {
+  background: var(--kp); border: 0; margin-right: 0; border-radius: 0 0 16px 16px;
+  box-shadow: inset 0 -7px 0 color-mix(in srgb, var(--kc) 35%, var(--kp));
 }
-html[data-style="notebook"] .song-pick select { font-size: 20px; }
-html[data-style="notebook"] .btn.silly { color: #e01b1b; border-color: #e01b1b; border-width: 2.5px; }
-html[data-style="notebook"] .btn.restart { background: transparent; }
-html[data-style="notebook"] .btn:hover, html[data-style="notebook"] .pick select:hover, html[data-style="noteb
-  background-color: var(--hi);
+html[data-style="candy"] .key.white.down, html[data-style="candy"] .kb.art .key.white.down {
+  background: color-mix(in srgb, var(--kc) 40%, var(--kp)); box-shadow: inset 0 -3px 0 color-mix(in srgb, var(
 }
-html[data-style="notebook"] .kb { background: transparent; }
-html[data-style="notebook"] .key.white, html[data-style="notebook"] .kb.art .key.white {
-  background: rgb(255 254 250 / .55); border: 2px solid var(--ink); border-top: 0; border-radius: var(--wobble
-}
-html[data-style="notebook"] .key.white.down, html[data-style="notebook"] .kb.art .key.white.down { background:
-html[data-style="notebook"] .key.black, html[data-style="notebook"] .kb.art .key.black {
-  background: #1b1b1b; border-radius: var(--wobble-key); box-shadow: none;
-}
-html[data-style="notebook"] .key.black.down, html[data-style="notebook"] .kb.art .key.black.down {
-  background: repeating-linear-gradient(45deg, #1b1b1b 0 3px, #55534d 3px 6px);
-}
-html[data-style="notebook"] .key.white.guide, html[data-style="notebook"] .kb.art .key.white.guide { backgroun
-html[data-style="notebook"] .key.black.guide, html[data-style="notebook"] .kb.art .key.black.guide { backgroun
-html[data-style="notebook"] .kw { font-family: var(--body); font-weight: 400; font-size: 21px; }
-html[data-style="notebook"] .black .kw { font-size: 16px; }
-html[data-style="notebook"] .key.guide .kw { font-weight: 400; }
-html[data-style="notebook"] .kb.art .key.white .kw, html[data-style="notebook"] .kb.art .key.guide .kw { color
-html[data-style="notebook"] .kb.art .key.black .kw { color: #fffefa; }
-html[data-style="notebook"] .kb.art .key.white .kw.silly { color: #e01b1b; }
-html[data-style="notebook"] .kb.art .key.white .ki { display: none; }
-html[data-style="notebook"] .stage { border: 2px solid var(--ink); border-radius: 6px 14px 8px 18px / 16px 6px
-html[data-style="notebook"] .sung { font-family: var(--body); font-size: clamp(26px, 3.6vw, 36px); }
-html[data-style="notebook"] .w.silly { font-weight: 400; }
-html[data-style="notebook"] .w.silly::after { border-top-color: #e01b1b; }
-html[data-style="notebook"] .end-strip { background: var(--hi); border-radius: 3px; font-family: var(--body); 
-html[data-style="notebook"] .source h2, html[data-style="notebook"] .how h2 { font-size: 26px; }
-html[data-style="notebook"] .src { font-family: var(--body); font-size: 19px; }
-html[data-style="notebook"] .src span.cur { outline: 0; background: var(--hi); }
-html[data-style="notebook"] .how b { font-weight: 400; background: var(--hi); padding: 0 2px; }
+html[data-style="candy"] .key.black, html[data-style="candy"] .kb.art .key.black { background: var(--ebony); b
+html[data-style="candy"] .key.black.down, html[data-style="candy"] .kb.art .key.black.down { background: var(-
+html[data-style="candy"] .key.white.guide, html[data-style="candy"] .kb.art .key.white.guide { background: var
+html[data-style="candy"] .key.black.guide, html[data-style="candy"] .kb.art .key.black.guide { background: var
+html[data-style="candy"] .key.white.guide .kw, html[data-style="candy"] .key.white.guide .kn,
+html[data-style="candy"] .kb.art .key.white.guide .kw, html[data-style="candy"] .kb.art .key.white.guide .kn {
+html[data-style="candy"] .key.white.guide::after { background: #fff; box-shadow: 0 0 0 3px rgb(255 255 255 / .
+html[data-style="candy"] .kb.art .key.white .kw:not(.silly) { color: var(--ink); }
+html[data-style="candy"] .kb.art .key.white .kw.silly { color: #d4145c; }
+html[data-style="candy"] .kb.art .key.black .kw:not(.silly) { color: #fff; }
+html[data-style="candy"] .stage { box-shadow: 0 2px 0 #f3d6e6; }
+html[data-style="candy"] .stage.art { box-shadow: none; }
 /* =========================================================
-   3. CARDBOARD — kraft, cut-out paper, chunky arcade buttons
+   SUNSHINE — one big yellow, white toy shapes with thick black outlines
    ========================================================= */
-html:root[data-style="cardboard"] {
-  --paper: #c69c6d; --stage: #fffaf0; --ink: #2b1a0e; --muted: #5a3d24; --line: #3b2414;
-  --brass: #ff7420; --silly: #e01b1b; --ivory: #fff7e6; --ivory-down: #ffe08a;
-  --ebony: #3b2414; --ebony-down: #6b4a2b; --key-ink: #2b1a0e; --key-ink-on-ebony: #fff7e6;
-  --key-silly: #d4151b; --key-silly-on-ebony: #ffb38a; --chip: #fffaf0; --guide: #00ae3c;
-  --key-note: #8a6a48; --key-hint: #b8997a;
-  --display: "Fredoka", system-ui, sans-serif; --body: "Nunito", system-ui, sans-serif; --mono: "Nunito", syst
-  --edge: #3b2414; --tape: rgb(240 222 170 / .9);
-  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfil
+html:root[data-style="sunshine"] {
+  --paper: #ffd84d; --stage: #ffffff; --ink: #1f1a10; --muted: #5c4d1e; --line: #1f1a10;
+  --brass: #1f1a10; --silly: #e8246b; --ivory: #ffffff; --ivory-down: #fff4c2;
+  --ebony: #1f1a10; --ebony-down: #4a4030; --key-ink: #1f1a10; --key-ink-on-ebony: #ffffff;
+  --key-silly: #e8246b; --key-silly-on-ebony: #ffa3c6; --chip: #ffffff; --key-note: #7a6c48; --key-hint: #a89a
+  --edge: 3px solid #1f1a10; --lift: 0 4px 0 #1f1a10;
 }
-html[data-style="cardboard"], html[data-style="cardboard"] body { background: #c69c6d var(--noise); }
-html[data-style="cardboard"] body { font-size: 16px; }
-html[data-style="cardboard"] h1 {
-  font-weight: 700; font-size: clamp(40px, 7vw, 62px); color: #fffaf0; letter-spacing: 0;
-  -webkit-text-stroke: 9px var(--edge); paint-order: stroke fill; text-shadow: 0 5px 0 var(--edge);
+html[data-style="sunshine"] h1 em { color: #fff; -webkit-text-stroke: 7px #1f1a10; paint-order: stroke fill; }
+html[data-style="sunshine"] .btn, html[data-style="sunshine"] .pick select { border: var(--edge); box-shadow: 
+html[data-style="sunshine"] .btn:active:not(:disabled) { box-shadow: 0 1px 0 #1f1a10; transform: translateY(3p
+html[data-style="sunshine"] .btn.silly { background: #ff5a5f; color: #fff; }
+html[data-style="sunshine"] .btn.restart { background: #fff; border: var(--edge); }
+html[data-style="sunshine"] .btn.ghost { background: #fff; border: var(--edge); }
+html[data-style="sunshine"] .song-pick::before { color: #ff5a5f; }
+html[data-style="sunshine"] .kb-wrap { padding: 2px 4px 10px; }
+html[data-style="sunshine"] .kb { background: #fff; border: var(--edge); border-radius: 18px; overflow: hidden
+html[data-style="sunshine"] .key.white, html[data-style="sunshine"] .kb.art .key.white {
+  background: #fff; border: 0; border-right: 3px solid #1f1a10; margin-right: 0; border-radius: 0; box-shadow:
 }
-html[data-style="cardboard"] h1 em { font-style: normal; color: #ff7420; }
-html[data-style="cardboard"] .now, html[data-style="cardboard"] .status, html[data-style="cardboard"] .legend 
-/* arcade buttons: bright face, thick brown edge, press down */
-html[data-style="cardboard"] .btn, html[data-style="cardboard"] .pick select, html[data-style="cardboard"] .ch
-  font-family: var(--display); font-weight: 600; font-size: 16px; color: var(--ink);
-  border: 3px solid var(--edge); border-radius: 14px; box-shadow: 0 5px 0 var(--edge);
-  transition: transform .06s, box-shadow .06s;
+html[data-style="sunshine"] .key.white:last-child { border-right: 0; }
+html[data-style="sunshine"] .key.white.down, html[data-style="sunshine"] .kb.art .key.white.down { background:
+html[data-style="sunshine"] .key.black, html[data-style="sunshine"] .kb.art .key.black { background: #1f1a10; 
+html[data-style="sunshine"] .key.black.down, html[data-style="sunshine"] .kb.art .key.black.down { background:
+html[data-style="sunshine"] .key.white.guide, html[data-style="sunshine"] .kb.art .key.white.guide { backgroun
+html[data-style="sunshine"] .key.black.guide, html[data-style="sunshine"] .kb.art .key.black.guide { backgroun
+html[data-style="sunshine"] .key.guide::after { background: #1f1a10; box-shadow: 0 0 0 3px #fff; }
+html[data-style="sunshine"] .kb.art .key.white .kw:not(.silly) { color: var(--ink); }
+html[data-style="sunshine"] .kb.art .key.white .kw.silly { color: #e8246b; }
+html[data-style="sunshine"] .kb.art .key.black .kw:not(.silly) { color: #fff; }
+html[data-style="sunshine"] .stage, html[data-style="sunshine"] .end-strip { border: var(--edge); box-shadow: 
+html[data-style="sunshine"] .source, html[data-style="sunshine"] .how {
+  background: #fff; border: var(--edge); border-radius: 20px; padding: 16px 20px; box-shadow: var(--lift);
 }
-html[data-style="cardboard"] .btn:active, html[data-style="cardboard"] .chip:active { transform: translateY(4p
-html[data-style="cardboard"] .btn.silly { background: #ff7420; color: #fff; }
-html[data-style="cardboard"] .btn.restart { background: #0f6deb; color: #fff; border: 3px solid var(--edge); }
-html[data-style="cardboard"] .btn.ghost { background: #e3b448; }
-html[data-style="cardboard"] .btn:not(.silly):not(.restart):not(.ghost) { background: #00ae3c; color: #fff; }
-html[data-style="cardboard"] .song-pick select, html[data-style="cardboard"] .keys-pick select {
-  background-color: #fffaf0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3C
-}
-html[data-style="cardboard"] .song-pick select { font-size: 18px; }
-html[data-style="cardboard"] .keys-pick select { background-color: #e3b448; }
-html[data-style="cardboard"] .song-pick::before { color: #ff7420; }
-html[data-style="cardboard"] .song-pick select:hover, html[data-style="cardboard"] .keys-pick select:hover { f
-/* the keyboard sits in a cardboard tray */
-html[data-style="cardboard"] .kb-wrap { padding: 6px 4px 14px; }
-html[data-style="cardboard"] .kb {
-  background: #8a6440; border: 3px solid var(--edge); border-radius: 16px; padding: 8px 8px 10px;
-  box-shadow: 0 6px 0 var(--edge), inset 0 3px 0 rgb(0 0 0 / .18);
-}
-html[data-style="cardboard"] .key.white, html[data-style="cardboard"] .kb.art .key.white {
-  background: #fff7e6; border: 3px solid var(--edge); border-radius: 4px 4px 12px 12px; margin-right: 3px;
-  box-shadow: inset 0 -9px 0 #ead9b8;
-}
-html[data-style="cardboard"] .key.white.down, html[data-style="cardboard"] .kb.art .key.white.down { backgroun
-html[data-style="cardboard"] .key.black, html[data-style="cardboard"] .kb.art .key.black {
-  background: #3b2414; border: 2px solid #22140a; border-radius: 4px 4px 10px 10px; top: 8px;
-  box-shadow: 0 5px 0 #22140a, inset 0 -7px 0 #5a3a22;
-}
-html[data-style="cardboard"] .key.black.down, html[data-style="cardboard"] .kb.art .key.black.down { backgroun
-html[data-style="cardboard"] .key.white.guide, html[data-style="cardboard"] .kb.art .key.white.guide { backgro
-html[data-style="cardboard"] .key.black.guide, html[data-style="cardboard"] .kb.art .key.black.guide { backgro
-html[data-style="cardboard"] .kw { font-family: var(--display); font-weight: 600; }
-html[data-style="cardboard"] .kb.art .key.white .kw, html[data-style="cardboard"] .kb.art .key.guide .kw { col
-html[data-style="cardboard"] .kb.art .key.black .kw { color: #fff7e6; }
-html[data-style="cardboard"] .kb.art .key.white .kw.silly { color: #d4151b; }
-html[data-style="cardboard"] .kb.art .key.black .kw.silly { color: #ffb38a; }
-/* paper cut-outs taped onto the cardboard */
-html[data-style="cardboard"] .stage {
-  background: #fffaf0; border-radius: 3px; transform: rotate(.4deg); box-shadow: 0 5px 0 rgb(59 36 20 / .45);
-}
-html[data-style="cardboard"] .stage.art { background: transparent; }
-html[data-style="cardboard"] .sung { font-family: var(--display); }
-html[data-style="cardboard"] .end-strip {
-  background: #fffaf0; border: 3px solid var(--edge); border-radius: 14px; box-shadow: 0 5px 0 var(--edge); fo
-}
-html[data-style="cardboard"] .source, html[data-style="cardboard"] .how {
-  background: #fffaf0; padding: 16px 20px; border-radius: 3px; box-shadow: 0 5px 0 rgb(59 36 20 / .45);
-}
-html[data-style="cardboard"] .source { transform: rotate(-.4deg); }
-html[data-style="cardboard"] .how { transform: rotate(.5deg); }
-html[data-style="cardboard"] .source h2, html[data-style="cardboard"] .how h2 { font-family: var(--display); f
-html[data-style="cardboard"] .src { font-family: var(--body); }
-html[data-style="cardboard"] .stage .label, html[data-style="cardboard"] .source .label, html[data-style="card
-/* ---------- the switcher itself ---------- */
+html[data-style="sunshine"] .legend span::before { box-shadow: 0 0 0 2px #1f1a10; }
+html[data-style="sunshine"] .now, html[data-style="sunshine"] .status, html[data-style="sunshine"] .legend { c
+/* ---------- the switcher ---------- */
 .style-lab {
   position: fixed; z-index: 100; left: 50%; bottom: max(14px, env(safe-area-inset-bottom, 0px)); transform: tr
   display: flex; align-items: center; gap: 4px; padding: 6px; max-width: calc(100vw - 24px); box-sizing: borde
@@ -550,14 +464,13 @@ html[data-style="cardboard"] .stage .label, html[data-style="cardboard"] .source
   font: 600 13px/1 system-ui, -apple-system, sans-serif;
 }
 .style-lab > span { padding: 0 8px 0 10px; opacity: .65; white-space: nowrap; }
-.style-lab button {
-  font: inherit; color: #fff; background: transparent; border: 0; border-radius: 999px; padding: 9px 14px; cur
-}
+.style-lab button { font: inherit; color: #fff; background: transparent; border: 0; border-radius: 999px; padd
 .style-lab button:hover { background: rgb(255 255 255 / .12); }
-.style-lab button[aria-pressed="true"] { background: #ffd600; color: #1b1b1b; }
+.style-lab button[aria-pressed="true"] { background: #ffd84d; color: #1b1b1b; }
 @media (max-width: 520px) { .style-lab > span { display: none; } .style-lab { font-size: 12px; gap: 2px; } .st
 @media (prefers-reduced-motion: reduce) {
-  html[data-style] .btn, html[data-style] .pick select, html[data-style] .key { transition: none !important; }
+  html[data-style] .w.fresh, html[data-style] .w.silly.fresh, html[data-style] .end-strip, html[data-style] .k
+  html[data-style] .btn, html[data-style] .key { transition: none !important; }
 }
 // data.js
 // Song and word data for Mad Libs Piano. All song lyrics are in the public domain.
@@ -744,4 +657,86 @@ The|DET lamb|N was|LINKPAST sure|ADJ to|TO go.|V` },
   { id: "spider", title: "The Itsy Bitsy Spider", credit: "Traditional, printed by 1910",
     melody: [[55, [60, 60, 60, 62], [64, 64], 64, 62, 60, [62, 64], 60], [64, 64, 65, 67, 67, 65, 64, [65, 67]
       [60, 60, 62, 64, 64, 62, 60, 62, 64, 60], [55, 55, [60, 60, 60, 62], [64, 64], 64, 62, 60, 62, [64, 60]]
-    lyrics: `The|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET water|
+    lyrics: `The|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET water|N spout.|N
+Down|ADV came|VED the|DET rain|N and|CONJ washed|VED the|DET spider|N out.|ADV
+Out|ADV came|VED the|DET sun|N and|CONJ dried|VED up|ADV all|DET the|DET rain,|N
+And|CONJ the|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET spout|N again.|ADV` },
+  { id: "london", title: "London Bridge Is Falling Down", credit: "Traditional English rhyme, 1700s",
+    melody: [[[67, 69], 67, 65, [64, 65], 67], [[62, 64], 65, [64, 65], 67], [[67, 69], 67, 65, [64, 65], 67],
+      [67, 69, 67, 65, 64, 65, 67], [62, 64, 65, 64, 65, 67], [67, 69, 67, 65, 64, 65, 67], [62, 67, [64, 60]]
+    lyrics: `London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
+Falling|VING down,|ADV falling|VING down,|ADV
+London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
+My|POSS fair|ADJ lady!|N
+Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
+Sticks|NS and|CONJ stones,|NS sticks|NS and|CONJ stones,|NS
+Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
+My|POSS fair|ADJ lady!|N` },
+  { id: "yankee", title: "Yankee Doodle", credit: "American folk song, 1700s",
+    melody: [[[60, 60], [62, 64], 60, 64, 62], [[55, 60, 60], 62, 64, [60, 59]], [60, 60, [62, 64], 65, 64, 62
+    lyrics: `Yankee|NAME Doodle|NAME went|VED to|PREP town,|N
+A-riding|VING on|PREP a|DET pony,|N
+Stuck|VED a|DET feather|N in|PREP his|POSS cap,|N
+And|CONJ called|VED it|PRON macaroni!|N` },
+  { id: "sleeping", title: "Are You Sleeping (Frère Jacques)", credit: "Traditional French round, 1700s",
+    melody: [[60, 62, [64, 60], 60, 62, [64, 60]], [[64, 65], 67, [64, 65], 67], [[67, 69], 67, 65, [64, 60], 
+    lyrics: `Are|LINK you|PRON sleeping,|VING are|LINK you|PRON sleeping,|VING
+Brother|N John?|NAME Brother|N John?|NAME
+Morning|N bells|NS are|LINK ringing,|VING morning|N bells|NS are|LINK ringing,|VING
+Ding,|INTJ dang,|INTJ dong!|INTJ Ding,|INTJ dang,|INTJ dong!|INTJ` },
+  { id: "farmer", title: "The Farmer in the Dell", credit: "Traditional singing game, 1800s",
+    melody: [[55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 6
+      [55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 64], 62,
+    lyrics: `The|DET farmer|N in|PREP the|DET dell,|N
+The|DET farmer|N in|PREP the|DET dell,|N
+Hi-ho,|INTJ the|DET derry-o,|INTJ
+The|DET farmer|N in|PREP the|DET dell!|N
+The|DET farmer|N takes|VS a|DET wife,|N
+The|DET farmer|N takes|VS a|DET wife,|N
+Hi-ho,|INTJ the|DET derry-o,|INTJ
+The|DET farmer|N takes|VS a|DET wife!|N` },
+  { id: "scarborough", title: "Scarborough Fair", credit: "Traditional English ballad",
+    melody: [[60, 60, [67, 67], 67, [62, 63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72, 72], 70
+      [60, 60, 67, 67, 67, 62, [63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72], 72, 70, 67, [67
+    lyrics: `Are|LINK you|PRON going|VING to|PREP Scarborough|NAME Fair?|NAME
+Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
+Remember|V me|PRON to|PREP one|PRON who|WH lives|VS there,|ADV
+She|PRON once|ADV was|LINKPAST a|DET true|ADJ love|N of|PREP mine.|PRON
+Tell|V her|PRON to|TO make|V me|PRON a|DET cambric|ADJ shirt,|N
+Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
+Without|PREP no|DET seams|NS nor|CONJ needlework,|N
+Then|ADV she'll|IM be|LINK a|DET true|ADJ love|N of|PREP mine.|PRON` },
+  { id: "saints", title: "When the Saints Go Marching In", credit: "Traditional American spiritual and jazz st
+    melody: [[60, 64, 65, 67, 60, [64, 65], 67], [60, 64, 65, 67, 64, [60, 64], 62], [64, 64, 62, 60, 60, 64, 
+    lyrics: `Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
+Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
+Oh|INTJ Lord,|NAME I|PRON want|V to|TO be|V in|PREP that|DET number,|N
+When|WH the|DET saints|NS go|V marching|VING in!|ADV` },
+  { id: "daisy", title: "Daisy Bell (Bicycle Built for Two)", credit: "Words and music by Harry Dacre, 1892",
+    melody: [[[72, 69], [65, 60], 62, 64, 65, [62, 65], 60], [67, 72, [69, 65], 62, 64, 65, 67, 69, 67], [69, 
+      [60, 65, 69, 67, [60, 65], 69, 67], [69, 70, [72, 69, 65], 67, 60, 65]],
+    lyrics: `Daisy,|NAME Daisy,|NAME give|V me|PRON your|POSS answer,|N do!|V
+I'm|IM half|ADV crazy|ADJ all|ADV for|PREP the|DET love|N of|PREP you.|PRON
+It|PRON won't|MODAL be|V a|DET stylish|ADJ marriage,|N
+I|PRON can't|MODAL afford|V a|DET carriage,|N
+But|CONJ you'll|ID look|V sweet|ADJ upon|PREP the|DET seat|N
+Of|PREP a|DET bicycle|N built|VED for|PREP two!|NUM` },
+  { id: "joy", title: "Ode to Joy (Joyful, Joyful)", credit: "Tune by Beethoven, 1824. Words by Henry van Dyke
+    melody: [[[64, 64], [65, 67], 67, [65, 64], 62], [60, 60, [62, 64], 64, 62, 62], [64, [64, 65], 67, 67, [6
+    lyrics: `Joyful,|ADJ joyful,|ADJ we|PRON adore|V thee,|PRON
+God|NAME of|PREP glory,|N Lord|NAME of|PREP love;|N
+Hearts|NS unfold|V like|PREP flowers|NS before|PREP thee,|PRON
+Opening|VING to|PREP the|DET sun|N above.|ADV` },
+  { id: "auld", title: "Auld Lang Syne", credit: "Words by Robert Burns, 1788. Traditional Scottish tune",
+    melody: [[55, 60, [60, 60, 64], 62, [60, 62]], [64, [60, 60], 64, 67, 69], [69, 67, [64, 64, 60], 62, [60,
+    lyrics: `Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
+And|CONJ never|ADV brought|VED to|PREP mind?|N
+Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
+And|CONJ auld|ADJ lang|ADJ syne?|N` }
+// art.js
+// Song art for Mad Libs Piano: an illustrated scene behind "Your song" for each song,
+// shown when the Art toggle is on. Each scene is flat SVG drawn in its own fixed colours
+// (it is a picture, so it looks the same in light and dark mode), with the lyric colours
+// chosen to read on top of it. Scenes keep their busy parts to the right and bottom so the
+// words on the left stay clear.
+const 
