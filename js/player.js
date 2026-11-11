@@ -51,8 +51,9 @@ export class Player {
       down.lastX = e.clientX; down.lastY = e.clientY;
       down.moved += Math.abs(dx) + Math.abs(dy);
       if (down.moved > 6 && this.enabled) {
-        this.yaw += dx * 0.0042;
-        this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch + dy * 0.0042));
+        const sens = e.pointerType === 'touch' ? 0.0065 : 0.0042;
+        this.yaw += dx * sens;
+        this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch + dy * sens));
         this.lookVel.x = -dx;
         this.dragging = true;
         dom.style.cursor = 'grabbing';
@@ -102,13 +103,14 @@ export class Player {
     const w = this.world;
     if (!w) return;
     const k = this.keys;
-    const f = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0);
-    const r = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
+    const tm = this.touchMove || { x: 0, y: 0 };   // on-screen joystick
+    const f = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0) - tm.y;
+    const r = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0) + tm.x;
     // arrows turn (Makey Makey friendly)
     if (this.enabled) {
       this.yaw += ((k.ArrowLeft ? 1 : 0) - (k.ArrowRight ? 1 : 0)) * 2.3 * dt;
     }
-    const run = k.ShiftLeft || k.ShiftRight;
+    const run = k.ShiftLeft || k.ShiftRight || Math.hypot(tm.x, tm.y) > 0.9;
     const fwd = this.forward(), right = new THREE.Vector3(-fwd.z, 0, fwd.x);
     const wish = fwd.multiplyScalar(f).add(right.multiplyScalar(r));
     if (wish.lengthSq() > 1) wish.normalize();

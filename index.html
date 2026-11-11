@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>1derworld</title>
 <link rel="stylesheet" href="css/fonts.css">
 <link rel="stylesheet" href="css/style.css">
@@ -21,7 +21,7 @@
   <canvas id="titleCircuit"></canvas>
   <div class="title-inner"><h1>1DERWORLD</h1><div id="loading">warming up the fryers…</div></div>
 </div>
-<div id="soundPill" hidden>🔊 click anywhere or press any key for sound</div>
+<div id="soundPill" hidden>🔊 click or tap anywhere for sound</div>
 <div id="wordmark" hidden>1DERWORLD</div>
 
 <div id="hud" hidden>
@@ -38,6 +38,8 @@
     <button data-zone="field"><kbd>6</kbd>Prairie</button>
     <button data-zone="mezz"><kbd>7</kbd>Mezz</button>
   </div>
+  <div id="stick" aria-label="move"><div id="knob"></div></div>
+  <button id="jumpBtn" aria-label="jump">⤒</button>
   <div id="corner">
     <button id="btnList" title="All portals (Tab)">◎ Portals <kbd>Tab</kbd></button>
     <button id="btnLens" title="Constructive Lens (L)">⌕ Lens <kbd>L</kbd></button>
@@ -61,6 +63,7 @@
     <ul>
       <li><kbd>W</kbd><kbd>S</kbd>/<kbd>↑</kbd><kbd>↓</kbd> walk · <kbd>←</kbd><kbd>→</kbd> turn · <kbd>A</kbd><kbd>D</kbd> sidestep · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump</li>
       <li>Drag to look around (like the Scratch bedroom) · scroll wheel steps forward and back</li>
+      <li>On a phone: left thumb on the joystick (push to the edge to run), drag anywhere else to look, tap things to use them, ⤒ to jump</li>
       <li><kbd>Click</kbd> anything glowing under the cursor to use it (or <kbd>E</kbd>)</li>
       <li>Walk into a portal to launch that app. <kbd>Esc</kbd> or the ⟵ button comes back.</li>
       <li><kbd>1</kbd>–<kbd>7</kbd> warp between zones · <kbd>Tab</kbd> portal list · <kbd>L</kbd> Constructive Lens · <kbd>M</kbd> mute</li>

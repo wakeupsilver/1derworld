@@ -65,15 +65,16 @@ export async function buildPortals(scene, projects, audio) {
     codeWall.position.set(0, 4.75, 5.3); g.add(codeWall);
 
     // labels
-    const title = label(p.title, 0.62, { font: 'Bungee', color: HEX.cream, glow: p.color, stroke: '#1a0838', size: 110 });
-    title.position.set(0, 5.1, 0.1);
+    // dark pill behind the name, no glow, kept just under the bloom threshold so it stays crisp
+    const title = label(p.title, 0.62, { font: 'Bungee', color: '#fff3e0', bg: 'rgba(18,6,38,0.88)', border: p.color, size: 110, pad: 44, radius: 40, intensity: 0.78 });
+    title.position.set(0, 5.15, 0.15);
     const maxW = 4.8; if (title.geometry.parameters.width > maxW) title.scale.setScalar(maxW / title.geometry.parameters.width);
     g.add(title);
     if (p.tagline) {
       const tl = p.tagline.length > 70 ? p.tagline.slice(0, 68).replace(/\s+\S*$/, '') + '…' : p.tagline;
-      const tag = label(tl, 0.2, { font: 'Fjalla One', color: HEX.cream, size: 64 });
+      const tag = label(tl, 0.22, { font: 'Fjalla One', color: '#fff3e0', bg: 'rgba(18,6,38,0.82)', size: 64, pad: 22, radius: 22, intensity: 0.75 });
       if (tag.geometry.parameters.width > 4.6) tag.scale.setScalar(4.6 / tag.geometry.parameters.width);
-      tag.position.set(0, 4.6, 0.1); g.add(tag);
+      tag.position.set(0, 4.5, 0.15); g.add(tag);
     }
     const kindTxt = { local: 'LIVE · LOCAL', start: 'BOOTS ITS SERVER', url: p.github ? 'GITHUB PAGES' : 'DEV SERVER', external: 'OPENS ON GITHUB' }[p.kind] || '';
     const kind = label(kindTxt, 0.16, { font: 'JetBrains Mono', weight: 800, color: p.color, glow: p.color, size: 56 });
@@ -116,7 +117,7 @@ export async function buildPortals(scene, projects, audio) {
         const s = 1 + P.hover * 0.06 + shared.uBeat.value * 0.03;
         P.frame.scale.set(s, s, 1);
         P.frame.material.emissiveIntensity = 1.4 + P.hover * 2 + shared.uBeat.value * 1.5;
-        P.title.position.y = 5.1 + Math.sin(t * 1.5 + P.i) * 0.08;
+        P.title.position.y = 5.15 + Math.sin(t * 1.5 + P.i) * 0.08;
         for (const r of P.relics) {
           const u = r.userData, a = u.a + t * u.sp;
           r.position.set(Math.cos(a) * 2.9, u.y + Math.sin(t + u.a) * 0.2, Math.sin(a) * 1.4 + 0.4);

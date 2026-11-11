@@ -25,7 +25,9 @@ addEventListener('unhandledrejection', e => report('rejection: ' + (e.reason && 
 const _ce = console.error.bind(console); console.error = (...a) => { report('console.error: ' + a.map(x => x && x.stack || x).join(' ')); _ce(...a); };
 const canvas = $('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+const TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (TOUCH) document.body.classList.add('touch');
+renderer.setPixelRatio(Math.min(devicePixelRatio, TOUCH ? 1 : 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 0.95;
@@ -34,7 +36,7 @@ renderer.localClippingEnabled = true;
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 900);
 const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(new THREE.Scene(), camera);
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.6, 0.5, 0.82);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / (TOUCH ? 3 : 2), innerHeight / (TOUCH ? 3 : 2)), 0.6, 0.5, 0.82);
 const final = new ShaderPass(FinalShader);
 final.uniforms.uTime = shared.uTime;
 composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(final); composer.addPass(new OutputPass());
@@ -279,7 +281,28 @@ player.on('fellOut', () => {
 // ---------- interactions ----------
 const ray = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-addEventListener('mousemove', e => { mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); });
+const setMouse = e => mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+addEventListener('mousemove', setMouse);
+canvas.addEventListener('pointerdown', setMouse);   // touch has no hover, so aim where the finger lands
+
+// ---- on-screen joystick + jump (touch devices) ----
+{
+  const stick = document.getElementById('stick'), knob = document.getElementById('knob'), jump = document.getElementById('jumpBtn');
+  let id = null;
+  const move = e => {
+    const r = stick.getBoundingClientRect(), R = r.width / 2;
+    let x = e.clientX - (r.left + R), y = e.clientY - (r.top + R);
+    const d = Math.hypot(x, y); if (d > R) { x *= R / d; y *= R / d; }
+    knob.style.transform = `translate(${x}px, ${y}px)`;
+    player.touchMove = { x: x / R, y: y / R };
+  };
+  stick.addEventListener('pointerdown', e => { id = e.pointerId; stick.setPointerCapture(id); move(e); e.preventDefault(); });
+  stick.addEventListener('pointermove', e => { if (e.pointerId === id) move(e); });
+  const end = e => { if (e.pointerId !== id) return; id = null; knob.style.transform = ''; player.touchMove = { x: 0, y: 0 }; };
+  stick.addEventListener('pointerup', end); stick.addEventListener('pointercancel', end);
+  jump.addEventListener('pointerdown', e => { player.keys.Space = true; e.preventDefault(); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) jump.addEventListener(ev, () => { player.keys.Space = false; });
+}
 function interactables() {
   const list = current.interact.slice();
   if (current === hub) for (const P of portals.portals) list.push({ obj: P.disc, label: `Enter ${P.p.title}`, dist: 16, action: 'portal', data: P });
@@ -303,14 +326,15 @@ function updateHover() {
     }
   }
   const pr = $('#prompt');
-  if (!hovered && heldTaco) { pr.textContent = 'click · take a bite 🌮'; pr.style.left = (mouse.x + 1) / 2 * innerWidth + 18 + 'px'; pr.style.top = (1 - mouse.y) / 2 * innerHeight + 14 + 'px'; pr.classList.add('on'); }
-  else if (hovered) { pr.textContent = `click · ${hovered.label}`; pr.style.left = (mouse.x + 1) / 2 * innerWidth + 18 + 'px'; pr.style.top = (1 - mouse.y) / 2 * innerHeight + 14 + 'px'; pr.classList.add('on'); }
+  if (!hovered && heldTaco) { pr.textContent = (TOUCH ? 'tap' : 'click') + ' · take a bite 🌮'; pr.style.left = (mouse.x + 1) / 2 * innerWidth + 18 + 'px'; pr.style.top = (1 - mouse.y) / 2 * innerHeight + 14 + 'px'; pr.classList.add('on'); }
+  else if (hovered) { pr.textContent = `${TOUCH ? 'tap' : 'click'} · ${hovered.label}`; pr.style.left = (mouse.x + 1) / 2 * innerWidth + 18 + 'px'; pr.style.top = (1 - mouse.y) / 2 * innerHeight + 14 + 'px'; pr.classList.add('on'); }
   else pr.classList.remove('on');
   if (hovered && hovered !== lastHover) audio.hover();
   lastHover = hovered;
 }
 
-player.on('click', () => { if (mode !== 'world') return; if (hovered && hovered.action !== 'portal' || hovered && !heldTaco) act(hovered); else if (heldTaco) biteTaco(); else if (hovered) act(hovered); });
+player.on('click', () => {
+  if (TOUCH) { rayTick = 0; updateHover(); } if (mode !== 'world') return; if (hovered && hovered.action !== 'portal' || hovered && !heldTaco) act(hovered); else if (heldTaco) biteTaco(); else if (hovered) act(hovered); });
 
 function act(ia) {
   const d = ia.data || {};
@@ -361,7 +385,7 @@ const MEMO_LINES = ['¡Órale! Al pastor, fresh off the trompo.', 'One taco, ext
 function serveTaco() {
   const V = street.vendor;
   if (heldTaco) { toast('finish the one you have first. click to take a bite'); return; }
-  V.userData.serving = 1.2;
+  V.userData.serve(1.2); V.userData.say(2.2);
   const head = V.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 2.5, 0.3));
   fx.pop(MEMO_LINES[Math.floor(Math.random() * MEMO_LINES.length)], head, { size: 0.16, color: HEX.cream, font: 'Fjalla One', life: 2.6, rise: 0.4 });
   audio.tone({ f0: 900, f1: 1300, dur: 0.12, type: 'triangle', v: 0.1 });

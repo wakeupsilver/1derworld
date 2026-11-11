@@ -7,6 +7,7 @@ import { label, circuitWall, tex, stripes, canvas } from './textures.js';
 import { HEX } from './palette.js';
 import { mat, glow, FOODS } from './props.js';
 import { sudsMaterial, vortexMaterial, shared } from './shaders.js';
+import { makeCook } from './people.js';
 
 function asphaltTexture() {
   const c = canvas(1024, 1024), g = c.getContext('2d');
@@ -238,31 +239,8 @@ export function buildStreet() {
   truck.add(washer);
 
   // ---- Memo, working the truck ----
-  const vendor = new THREE.Group();
-  {
-    const skin = mat('#d8a070', { r: 0.6 }), shirt = mat(HEX.blue, { r: 0.6 }), apron = mat('#fff3e0', { r: 0.8 });
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.27, 0.5, 6, 14), shirt); torso.position.y = 1.25; vendor.add(torso);
-    const ap = new THREE.Mesh(new RoundedBoxGeometry(0.46, 0.55, 0.06, 2, 0.03), apron); ap.position.set(0, 1.12, 0.25); vendor.add(ap);
-    const head = new THREE.Group(); head.position.y = 1.93; vendor.add(head);
-    head.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 14), skin));
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.205, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(HEX.red, { r: 0.5 })); cap.position.y = 0.03; head.add(cap);
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 16, 1, false, -Math.PI / 2, Math.PI), mat(HEX.red)); brim.position.set(0, 0.05, 0.16); head.add(brim);
-    for (const sx of [-0.07, 0.07]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), mat('#1a0838')); e.position.set(sx, 0.02, 0.18); head.add(e); }
-    const stache = new THREE.Mesh(new THREE.CapsuleGeometry(0.018, 0.1, 4, 8).rotateZ(Math.PI / 2), mat('#2a1a10')); stache.position.set(0, -0.06, 0.19); head.add(stache);
-    const smile = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.008, 6, 12, Math.PI), mat('#5a1a1a')); smile.position.set(0, -0.1, 0.185); smile.rotation.z = Math.PI; head.add(smile);
-    const arm = side => {
-      const pivot = new THREE.Group(); pivot.position.set(side * 0.33, 1.62, 0); vendor.add(pivot);
-      const a = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.42, 4, 10), shirt); a.position.y = -0.26; pivot.add(a);
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), skin); hand.position.y = -0.55; pivot.add(hand);
-      return { pivot, hand };
-    };
-    const L = arm(-1), R = arm(1);
-    const spat = new THREE.Group(); spat.add(new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.22, 0.02), mat('#3a2a1a'))); const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.01, 0.1), mat('#ddd', { m: 1, r: 0.2 })); blade.position.set(0, -0.12, 0.05); spat.add(blade);
-    spat.position.y = -0.6; R.pivot.add(spat);
-    const name = label('MEMO', 0.12, { font: 'Bungee', color: HEX.cream, bg: HEX.red, size: 60, pad: 14 }); name.position.set(0, 1.3, 0.29); vendor.add(name);
-    vendor.userData = { head, L, R, spat, serving: 0 };
-  }
-  vendor.position.set(-1.3, 0.5, -1.75); vendor.scale.setScalar(1.12);
+  const vendor = makeCook('MEMO');
+  vendor.position.set(-1.3, 0.5, -1.85); vendor.scale.setScalar(1.08);
   truck.add(vendor);
   const memoLight = new THREE.PointLight('#fff0dc', 6, 3.5, 1.2); memoLight.position.set(-1.3, 2.6, -0.9); truck.add(memoLight);
   terrain.wall(-1.75, -0.85, -2.1, -1.4, 2.4);
@@ -295,7 +273,8 @@ export function buildStreet() {
   interact.push({ obj: tacos, label: 'Taco! (plays a note)', dist: 5, action: 'taco', data: { i: 0 } });
   interact.push({ obj: tacos2, label: 'Birria! (plays a note)', dist: 5, action: 'taco', data: { i: 2 } });
 
-  updaters.push((dt, t) => {
+  const tmpV = new THREE.Vector3();
+  updaters.push((dt, t, cam) => {
     doorState.open += (doorState.target - doorState.open) * Math.min(1, dt * 7);
     doorPivot.rotation.y = -doorState.open * 1.9;
     sign.material.color.setScalar(0.85 + (Math.random() < 0.02 ? -0.5 : 0) + Math.sin(t * 3) * 0.1);
@@ -303,12 +282,7 @@ export function buildStreet() {
     knob.rotation.z = t * 2;
     drumPortal.visible = doorState.open > 0.15;
     drumPortal.material.uniforms.uHover.value = doorState.open;
-    const V = vendor.userData;
-    V.serving = Math.max(0, V.serving - dt);
-    if (V.serving > 0) { V.R.pivot.rotation.x += (-1.5 - V.R.pivot.rotation.x) * Math.min(1, dt * 10); V.head.rotation.y = 0; }
-    else { V.R.pivot.rotation.x = -0.6 + Math.sin(t * 6) * 0.35; V.R.pivot.rotation.z = 0.2; V.head.rotation.y = Math.sin(t * 0.7) * 0.4; }
-    V.L.pivot.rotation.x = -0.3 + Math.sin(t * 1.3) * 0.1;
-    vendor.rotation.y = Math.sin(t * 0.5) * 0.15; vendor.position.y = 0.5 + Math.abs(Math.sin(t * 3)) * 0.015;
+    vendor.userData.update(dt, t, cam && cam.position.distanceTo(vendor.getWorldPosition(tmpV)) < 9 ? cam.position : null);
   });
 
   return {
@@ -317,7 +291,7 @@ export function buildStreet() {
     washer, washerFocus: new THREE.Vector3(0.9, 1.27, -2.8),
     doorState,
     soundSpots: { grill: new THREE.Vector3(-1.6, 1.5, -1.1), washer: new THREE.Vector3(0.9, 1.2, -3), generator: new THREE.Vector3(4.6, 0.5, -2.2) },
-    update(dt, t) { updaters.forEach(f => f(dt, t)); },
+    update(dt, t, cam) { updaters.forEach(f => f(dt, t, cam)); },
     insideTruck: p => p.x > -3.6 && p.x < 3.6 && p.z > -3.4 && p.z < -0.6,
   };
 }

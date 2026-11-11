@@ -1,3 +1,44 @@
+// make-lab.js
+// Makes style-lab.html: a copy of the built index.html with the JoyLabz looks and a switcher added.
+// index.html itself is not changed. Run again after rebuilding index.html:  node style-lab/make-lab.js
+const fs = require("fs"), path = require("path");
+const dir = path.join(__dirname, "..");
+let html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+const head = `
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400..700&family=Nunito:wght
+<link rel="stylesheet" href="style-lab/joylabz.css">
+<title>Mad Libs Piano – Style lab</title>`;
+const i = html.indexOf("</style>");
+if (i < 0) throw new Error("index.html has no </style>");
+html = html.slice(0, i + 8) + head + html.slice(i + 8).replace("<title>Mad Libs Piano</title>", "");
+html = html.replace("<title>Mad Libs Piano</title>", "") + `\n<script src="style-lab/switcher.js"></script>\n`
+if (!/<meta charset/i.test(html)) html = `<meta charset="utf-8">\n` + html; // a plain local server doesn't sa
+fs.writeFileSync(path.join(dir, "style-lab.html"), html);
+console.log("wrote style-lab.html");
+// switcher.js
+// Style lab switcher: sets <html data-style="..."> and remembers the pick in this browser.
+(() => {
+  const looks = [["original", "Original"], ["stickers", "Stickers"], ["notebook", "Notebook"], ["cardboard", "
+  const root = document.documentElement;
+  const fromUrl = new URLSearchParams(location.search).get("style");
+  let saved = null;
+  try { saved = localStorage.getItem("mlp-style"); } catch (e) {}
+  const bar = document.createElement("div");
+  bar.className = "style-lab";
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", "Style lab");
+  bar.innerHTML = "<span>Style lab</span>" + looks.map(([id, name]) => `<button type="button" data-look="${id}
+  document.body.appendChild(bar);
+  const set = id => {
+    if (!looks.some(l => l[0] === id)) id = "stickers";
+    if (id === "original") root.removeAttribute("data-style"); else root.setAttribute("data-style", id);
+    bar.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.look === id)))
+    try { localStorage.setItem("mlp-style", id); } catch (e) {}
+  };
+  // a click shouldn't leave focus on the switcher, so the letter keys keep playing the piano
+  bar.addEventListener("click", e => { const b = e.target.closest("button"); if (b) { set(b.dataset.look); b.b
+  set(fromUrl || saved || "stickers");
+})();
 // build.js
 // Builds the page: index.html (template + song data + silly words) and voice/<song>.json,
 // one file of recorded words per song, which the page fetches when that song is picked.
@@ -264,6 +305,260 @@ def main():
     print("wrote", out_path, os.path.getsize(out_path))
 if __name__ == "__main__":
     main()
+// joylabz.css
+/* Style lab: JoyLabz looks for Mad Libs Piano, layered over the real page.
+   Colours and fonts come from Sticker Arcade (ui-core.css + design-refs):
+   red pen #e01b1b, orange #ff7420, green #00ae3c, blue #0f6deb, purple #9f44fb,
+   gold #e3b448, kraft #c69c6d, graph paper #bfd5ea / #dfeaf5, sticker pastels.
+   Three points on the "material dial": stickers -> notebook -> cardboard.
+   html:root[data-style] outranks the page's dark-mode :root rules, so every look stays light. */
+/* ---------- shared by all three lab looks ---------- */
+html:root[data-style="stickers"], html:root[data-style="notebook"], html:root[data-style="cardboard"] { color-
+html[data-style="stickers"] .label, html[data-style="notebook"] .label, html[data-style="cardboard"] .label {
+  font-size: 15px; letter-spacing: 0; text-transform: none;
+}
+html[data-style="stickers"] .w.silly::after, html[data-style="notebook"] .w.silly::after, html[data-style="car
+html[data-style="stickers"] .now .pos, html[data-style="notebook"] .now .pos, html[data-style="cardboard"] .no
+  font-size: 12px; text-transform: none; letter-spacing: 0;
+}
+html[data-style="stickers"] .kn, html[data-style="notebook"] .kn, html[data-style="cardboard"] .kn { font-size
+html[data-style] .key.white:last-child { margin-right: 0; }
+/* room for the switcher at the bottom */
+html[data-style] .wrap { padding-bottom: 96px; }
+/* =========================================================
+   1. STICKERS — graph paper, die-cut stickers, red pen
+   ========================================================= */
+html:root[data-style="stickers"] {
+  --paper: #fffefa; --stage: #ffffff; --ink: #1b1b1b; --muted: #55534d; --line: #cfc9bf;
+  --brass: #ffd600; --silly: #e01b1b; --ivory: #ffffff; --ivory-down: #fff1a6;
+  --ebony: #222338; --ebony-down: #54556c; --key-ink: #1b1b1b; --key-ink-on-ebony: #ffffff;
+  --key-silly: #e01b1b; --key-silly-on-ebony: #ffa3a3; --chip: #ffffff; --guide: #00ae3c;
+  --key-note: #8a8580; --key-hint: #b5b0a8;
+  --display: "Permanent Marker", cursive; --body: "Fredoka", system-ui, sans-serif; --mono: "Patrick Hand", cu
+  --sticker-edge: 0 0 0 4px #fff, 0 0 0 5px rgb(0 0 0 / .08), 0 4px 8px 4px rgb(23 18 15 / .14);
+  --sheen: linear-gradient(160deg, rgb(255 255 255 / .55) 0 28%, rgb(255 255 255 / 0) 29%);
+  --tape: rgb(240 222 170 / .88);
+}
+html[data-style="stickers"], html[data-style="stickers"] body,
+html[data-style="notebook"], html[data-style="notebook"] body {
+  background-color: #fffefa;
+  background-image: linear-gradient(#bfd5ea 1px, transparent 1px), linear-gradient(90deg, #bfd5ea 1px, transpa
+    linear-gradient(#dfeaf5 1px, transparent 1px), linear-gradient(90deg, #dfeaf5 1px, transparent 1px);
+  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+}
+html[data-style="stickers"] body { font-size: 16px; }
+html[data-style="stickers"] h1 { font-size: clamp(38px, 7vw, 60px); transform: rotate(-1.5deg); }
+html[data-style="stickers"] h1 em { font-style: normal; display: inline-block; transform: rotate(-4deg) transl
+html[data-style="stickers"] h1::first-line { background: linear-gradient(transparent 58%, rgb(255 214 0 / .55)
+/* every control is a sticker: pastel face, white die-cut edge, a little sheen */
+html[data-style="stickers"] .btn, html[data-style="stickers"] .pick select, html[data-style="stickers"] .chip 
+  font-family: var(--body); font-weight: 600; border: 0; border-radius: 12px; color: var(--ink);
+  box-shadow: var(--sticker-edge); margin: 4px;
+}
+html[data-style="stickers"] .btn { background: #c6e6d0 var(--sheen); }
+html[data-style="stickers"] .btn.silly { background: #e01b1b var(--sheen); color: #fff; }
+html[data-style="stickers"] .btn.restart { background: #c6e6d0 var(--sheen); border: 0; }
+html[data-style="stickers"] .btn.ghost { background: #d9cdef var(--sheen); }
+html[data-style="stickers"] .song-pick select, html[data-style="stickers"] .keys-pick select {
+  background-color: #c6dcf3; border: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3C
+  background-repeat: no-repeat, no-repeat; background-position: right 12px center, 0 0; background-size: 12px 
+}
+html[data-style="stickers"] .keys-pick select { background-color: #d9cdef; }
+html[data-style="stickers"] .song-pick::before { color: #e01b1b; left: 17px; }
+html[data-style="stickers"] .btn:hover, html[data-style="stickers"] .pick select:hover { transform: rotate(-1.
+html[data-style="stickers"] .btn:active { transform: translateY(1px); }
+/* the keyboard is one big sticker sheet */
+html[data-style="stickers"] .kb-wrap { padding: 10px 10px 16px; }
+html[data-style="stickers"] .kb { background: #fff; border-radius: 16px; box-shadow: var(--sticker-edge); }
+html[data-style="stickers"] .key.white, html[data-style="stickers"] .kb.art .key.white {
+  background: #fff; border: 2px solid var(--ink); border-radius: 0 0 12px 12px; margin-right: -2px;
+  box-shadow: inset 0 -9px 0 #ece8df;
+}
+html[data-style="stickers"] .key.white:first-child { border-top-left-radius: 12px; }
+html[data-style="stickers"] .key.white.down, html[data-style="stickers"] .kb.art .key.white.down { background:
+html[data-style="stickers"] .key.black, html[data-style="stickers"] .kb.art .key.black {
+  background: #222338; border-radius: 0 0 9px 9px; box-shadow: 0 4px 0 rgb(0 0 0 / .25), inset 0 -6px 0 #3b3b4
+}
+html[data-style="stickers"] .key.black.down, html[data-style="stickers"] .kb.art .key.black.down { background:
+html[data-style="stickers"] .key.white.guide, html[data-style="stickers"] .kb.art .key.white.guide { backgroun
+html[data-style="stickers"] .key.black.guide, html[data-style="stickers"] .kb.art .key.black.guide { backgroun
+html[data-style="stickers"] .kb.art .key.white .kw, html[data-style="stickers"] .kb.art .key.guide .kw { color
+html[data-style="stickers"] .kb.art .key.black .kw { color: #fff; }
+html[data-style="stickers"] .kb.art .key.white .kw.silly { color: #e01b1b; }
+html[data-style="stickers"] .kb.art .key.black .kw.silly { color: #ffa3a3; }
+/* the song is a sheet taped to the page */
+html[data-style="stickers"] .stage, html[data-style="cardboard"] .stage { overflow: visible; }
+html[data-style="stickers"] .art-layer, html[data-style="cardboard"] .art-layer { overflow: hidden; border-rad
+html[data-style="stickers"] .stage {
+  background: #fff; border-radius: 4px; transform: rotate(-.5deg); box-shadow: 0 8px 0 rgb(23 18 15 / .12), 0 
+}
+html[data-style="stickers"] .stage.art { background: transparent; }
+html[data-style="stickers"] .stage::before, html[data-style="cardboard"] .stage::before {
+  content: ""; position: absolute; z-index: 3; top: -13px; left: 50%; width: 120px; height: 26px; margin-left:
+  background: var(--tape, rgb(240 222 170 / .88)); transform: rotate(-3deg); box-shadow: 0 1px 2px rgb(0 0 0 /
+}
+html[data-style="stickers"] .end-strip { background: #fff6c2; border-radius: 12px; box-shadow: var(--sticker-e
+html[data-style="stickers"] .source, html[data-style="stickers"] .how {
+  background: #fff; padding: 16px 20px; border-radius: 4px; box-shadow: 0 6px 0 rgb(23 18 15 / .1), 0 1px 3px 
+}
+html[data-style="stickers"] .how { transform: rotate(.6deg); background: #fff8d6; }
+html[data-style="stickers"] .source h2, html[data-style="stickers"] .how h2 { font-size: 26px; }
+html[data-style="stickers"] .src { font-family: var(--body); font-size: 17px; }
+html[data-style="stickers"] .src span.cur { outline-color: #00ae3c; background: rgb(255 214 0 / .45); }
+/* =========================================================
+   2. NOTEBOOK — ink drawn on graph paper, highlighter, red pen
+   ========================================================= */
+html:root[data-style="notebook"] {
+  --paper: #fffefa; --stage: transparent; --ink: #1b1b1b; --muted: #55534d; --line: #1b1b1b;
+  --brass: #e01b1b; --silly: #e01b1b; --ivory: rgb(255 254 250 / .55); --ivory-down: rgb(255 214 0 / .55);
+  --ebony: #1b1b1b; --ebony-down: #55534d; --key-ink: #1b1b1b; --key-ink-on-ebony: #fffefa;
+  --key-silly: #e01b1b; --key-silly-on-ebony: #ff9a9a; --chip: rgb(255 254 250 / .7); --guide: #00ae3c;
+  --key-note: #55534d; --key-hint: #8a8580;
+  --display: "Permanent Marker", cursive; --body: "Patrick Hand", cursive; --mono: "Patrick Hand", cursive;
+  --wobble: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  --wobble-key: 2px 3px 14px 10px / 3px 2px 12px 16px;
+  --hi: rgb(255 214 0 / .5);
+}
+html[data-style="notebook"] body { font-size: 18px; }
+html[data-style="notebook"] h1 { font-size: clamp(38px, 7vw, 58px); }
+html[data-style="notebook"] h1 em { font-style: normal; text-decoration: underline wavy #e01b1b 3px; text-unde
+html[data-style="notebook"] .btn, html[data-style="notebook"] .pick select, html[data-style="notebook"] .chip,
+  font-family: var(--body); font-size: 18px; font-weight: 400; color: var(--ink); background-color: transparen
+  border: 2px solid var(--ink); border-radius: var(--wobble);
+}
+html[data-style="notebook"] .song-pick select { font-size: 20px; }
+html[data-style="notebook"] .btn.silly { color: #e01b1b; border-color: #e01b1b; border-width: 2.5px; }
+html[data-style="notebook"] .btn.restart { background: transparent; }
+html[data-style="notebook"] .btn:hover, html[data-style="notebook"] .pick select:hover, html[data-style="noteb
+  background-color: var(--hi);
+}
+html[data-style="notebook"] .kb { background: transparent; }
+html[data-style="notebook"] .key.white, html[data-style="notebook"] .kb.art .key.white {
+  background: rgb(255 254 250 / .55); border: 2px solid var(--ink); border-top: 0; border-radius: var(--wobble
+}
+html[data-style="notebook"] .key.white.down, html[data-style="notebook"] .kb.art .key.white.down { background:
+html[data-style="notebook"] .key.black, html[data-style="notebook"] .kb.art .key.black {
+  background: #1b1b1b; border-radius: var(--wobble-key); box-shadow: none;
+}
+html[data-style="notebook"] .key.black.down, html[data-style="notebook"] .kb.art .key.black.down {
+  background: repeating-linear-gradient(45deg, #1b1b1b 0 3px, #55534d 3px 6px);
+}
+html[data-style="notebook"] .key.white.guide, html[data-style="notebook"] .kb.art .key.white.guide { backgroun
+html[data-style="notebook"] .key.black.guide, html[data-style="notebook"] .kb.art .key.black.guide { backgroun
+html[data-style="notebook"] .kw { font-family: var(--body); font-weight: 400; font-size: 21px; }
+html[data-style="notebook"] .black .kw { font-size: 16px; }
+html[data-style="notebook"] .key.guide .kw { font-weight: 400; }
+html[data-style="notebook"] .kb.art .key.white .kw, html[data-style="notebook"] .kb.art .key.guide .kw { color
+html[data-style="notebook"] .kb.art .key.black .kw { color: #fffefa; }
+html[data-style="notebook"] .kb.art .key.white .kw.silly { color: #e01b1b; }
+html[data-style="notebook"] .kb.art .key.white .ki { display: none; }
+html[data-style="notebook"] .stage { border: 2px solid var(--ink); border-radius: 6px 14px 8px 18px / 16px 6px
+html[data-style="notebook"] .sung { font-family: var(--body); font-size: clamp(26px, 3.6vw, 36px); }
+html[data-style="notebook"] .w.silly { font-weight: 400; }
+html[data-style="notebook"] .w.silly::after { border-top-color: #e01b1b; }
+html[data-style="notebook"] .end-strip { background: var(--hi); border-radius: 3px; font-family: var(--body); 
+html[data-style="notebook"] .source h2, html[data-style="notebook"] .how h2 { font-size: 26px; }
+html[data-style="notebook"] .src { font-family: var(--body); font-size: 19px; }
+html[data-style="notebook"] .src span.cur { outline: 0; background: var(--hi); }
+html[data-style="notebook"] .how b { font-weight: 400; background: var(--hi); padding: 0 2px; }
+/* =========================================================
+   3. CARDBOARD — kraft, cut-out paper, chunky arcade buttons
+   ========================================================= */
+html:root[data-style="cardboard"] {
+  --paper: #c69c6d; --stage: #fffaf0; --ink: #2b1a0e; --muted: #5a3d24; --line: #3b2414;
+  --brass: #ff7420; --silly: #e01b1b; --ivory: #fff7e6; --ivory-down: #ffe08a;
+  --ebony: #3b2414; --ebony-down: #6b4a2b; --key-ink: #2b1a0e; --key-ink-on-ebony: #fff7e6;
+  --key-silly: #d4151b; --key-silly-on-ebony: #ffb38a; --chip: #fffaf0; --guide: #00ae3c;
+  --key-note: #8a6a48; --key-hint: #b8997a;
+  --display: "Fredoka", system-ui, sans-serif; --body: "Nunito", system-ui, sans-serif; --mono: "Nunito", syst
+  --edge: #3b2414; --tape: rgb(240 222 170 / .9);
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfil
+}
+html[data-style="cardboard"], html[data-style="cardboard"] body { background: #c69c6d var(--noise); }
+html[data-style="cardboard"] body { font-size: 16px; }
+html[data-style="cardboard"] h1 {
+  font-weight: 700; font-size: clamp(40px, 7vw, 62px); color: #fffaf0; letter-spacing: 0;
+  -webkit-text-stroke: 9px var(--edge); paint-order: stroke fill; text-shadow: 0 5px 0 var(--edge);
+}
+html[data-style="cardboard"] h1 em { font-style: normal; color: #ff7420; }
+html[data-style="cardboard"] .now, html[data-style="cardboard"] .status, html[data-style="cardboard"] .legend 
+/* arcade buttons: bright face, thick brown edge, press down */
+html[data-style="cardboard"] .btn, html[data-style="cardboard"] .pick select, html[data-style="cardboard"] .ch
+  font-family: var(--display); font-weight: 600; font-size: 16px; color: var(--ink);
+  border: 3px solid var(--edge); border-radius: 14px; box-shadow: 0 5px 0 var(--edge);
+  transition: transform .06s, box-shadow .06s;
+}
+html[data-style="cardboard"] .btn:active, html[data-style="cardboard"] .chip:active { transform: translateY(4p
+html[data-style="cardboard"] .btn.silly { background: #ff7420; color: #fff; }
+html[data-style="cardboard"] .btn.restart { background: #0f6deb; color: #fff; border: 3px solid var(--edge); }
+html[data-style="cardboard"] .btn.ghost { background: #e3b448; }
+html[data-style="cardboard"] .btn:not(.silly):not(.restart):not(.ghost) { background: #00ae3c; color: #fff; }
+html[data-style="cardboard"] .song-pick select, html[data-style="cardboard"] .keys-pick select {
+  background-color: #fffaf0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3C
+}
+html[data-style="cardboard"] .song-pick select { font-size: 18px; }
+html[data-style="cardboard"] .keys-pick select { background-color: #e3b448; }
+html[data-style="cardboard"] .song-pick::before { color: #ff7420; }
+html[data-style="cardboard"] .song-pick select:hover, html[data-style="cardboard"] .keys-pick select:hover { f
+/* the keyboard sits in a cardboard tray */
+html[data-style="cardboard"] .kb-wrap { padding: 6px 4px 14px; }
+html[data-style="cardboard"] .kb {
+  background: #8a6440; border: 3px solid var(--edge); border-radius: 16px; padding: 8px 8px 10px;
+  box-shadow: 0 6px 0 var(--edge), inset 0 3px 0 rgb(0 0 0 / .18);
+}
+html[data-style="cardboard"] .key.white, html[data-style="cardboard"] .kb.art .key.white {
+  background: #fff7e6; border: 3px solid var(--edge); border-radius: 4px 4px 12px 12px; margin-right: 3px;
+  box-shadow: inset 0 -9px 0 #ead9b8;
+}
+html[data-style="cardboard"] .key.white.down, html[data-style="cardboard"] .kb.art .key.white.down { backgroun
+html[data-style="cardboard"] .key.black, html[data-style="cardboard"] .kb.art .key.black {
+  background: #3b2414; border: 2px solid #22140a; border-radius: 4px 4px 10px 10px; top: 8px;
+  box-shadow: 0 5px 0 #22140a, inset 0 -7px 0 #5a3a22;
+}
+html[data-style="cardboard"] .key.black.down, html[data-style="cardboard"] .kb.art .key.black.down { backgroun
+html[data-style="cardboard"] .key.white.guide, html[data-style="cardboard"] .kb.art .key.white.guide { backgro
+html[data-style="cardboard"] .key.black.guide, html[data-style="cardboard"] .kb.art .key.black.guide { backgro
+html[data-style="cardboard"] .kw { font-family: var(--display); font-weight: 600; }
+html[data-style="cardboard"] .kb.art .key.white .kw, html[data-style="cardboard"] .kb.art .key.guide .kw { col
+html[data-style="cardboard"] .kb.art .key.black .kw { color: #fff7e6; }
+html[data-style="cardboard"] .kb.art .key.white .kw.silly { color: #d4151b; }
+html[data-style="cardboard"] .kb.art .key.black .kw.silly { color: #ffb38a; }
+/* paper cut-outs taped onto the cardboard */
+html[data-style="cardboard"] .stage {
+  background: #fffaf0; border-radius: 3px; transform: rotate(.4deg); box-shadow: 0 5px 0 rgb(59 36 20 / .45);
+}
+html[data-style="cardboard"] .stage.art { background: transparent; }
+html[data-style="cardboard"] .sung { font-family: var(--display); }
+html[data-style="cardboard"] .end-strip {
+  background: #fffaf0; border: 3px solid var(--edge); border-radius: 14px; box-shadow: 0 5px 0 var(--edge); fo
+}
+html[data-style="cardboard"] .source, html[data-style="cardboard"] .how {
+  background: #fffaf0; padding: 16px 20px; border-radius: 3px; box-shadow: 0 5px 0 rgb(59 36 20 / .45);
+}
+html[data-style="cardboard"] .source { transform: rotate(-.4deg); }
+html[data-style="cardboard"] .how { transform: rotate(.5deg); }
+html[data-style="cardboard"] .source h2, html[data-style="cardboard"] .how h2 { font-family: var(--display); f
+html[data-style="cardboard"] .src { font-family: var(--body); }
+html[data-style="cardboard"] .stage .label, html[data-style="cardboard"] .source .label, html[data-style="card
+/* ---------- the switcher itself ---------- */
+.style-lab {
+  position: fixed; z-index: 100; left: 50%; bottom: max(14px, env(safe-area-inset-bottom, 0px)); transform: tr
+  display: flex; align-items: center; gap: 4px; padding: 6px; max-width: calc(100vw - 24px); box-sizing: borde
+  background: #1b1b1b; color: #fff; border-radius: 999px; box-shadow: 0 8px 24px rgb(0 0 0 / .3);
+  font: 600 13px/1 system-ui, -apple-system, sans-serif;
+}
+.style-lab > span { padding: 0 8px 0 10px; opacity: .65; white-space: nowrap; }
+.style-lab button {
+  font: inherit; color: #fff; background: transparent; border: 0; border-radius: 999px; padding: 9px 14px; cur
+}
+.style-lab button:hover { background: rgb(255 255 255 / .12); }
+.style-lab button[aria-pressed="true"] { background: #ffd600; color: #1b1b1b; }
+@media (max-width: 520px) { .style-lab > span { display: none; } .style-lab { font-size: 12px; gap: 2px; } .st
+@media (prefers-reduced-motion: reduce) {
+  html[data-style] .btn, html[data-style] .pick select, html[data-style] .key { transition: none !important; }
+}
 // data.js
 // Song and word data for Mad Libs Piano. All song lyrics are in the public domain.
 // Each lyric word is written "word|TAG", where TAG is its part of speech.
@@ -449,241 +744,4 @@ The|DET lamb|N was|LINKPAST sure|ADJ to|TO go.|V` },
   { id: "spider", title: "The Itsy Bitsy Spider", credit: "Traditional, printed by 1910",
     melody: [[55, [60, 60, 60, 62], [64, 64], 64, 62, 60, [62, 64], 60], [64, 64, 65, 67, 67, 65, 64, [65, 67]
       [60, 60, 62, 64, 64, 62, 60, 62, 64, 60], [55, 55, [60, 60, 60, 62], [64, 64], 64, 62, 60, 62, [64, 60]]
-    lyrics: `The|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET water|N spout.|N
-Down|ADV came|VED the|DET rain|N and|CONJ washed|VED the|DET spider|N out.|ADV
-Out|ADV came|VED the|DET sun|N and|CONJ dried|VED up|ADV all|DET the|DET rain,|N
-And|CONJ the|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET spout|N again.|ADV` },
-  { id: "london", title: "London Bridge Is Falling Down", credit: "Traditional English rhyme, 1700s",
-    melody: [[[67, 69], 67, 65, [64, 65], 67], [[62, 64], 65, [64, 65], 67], [[67, 69], 67, 65, [64, 65], 67],
-      [67, 69, 67, 65, 64, 65, 67], [62, 64, 65, 64, 65, 67], [67, 69, 67, 65, 64, 65, 67], [62, 67, [64, 60]]
-    lyrics: `London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
-Falling|VING down,|ADV falling|VING down,|ADV
-London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
-My|POSS fair|ADJ lady!|N
-Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
-Sticks|NS and|CONJ stones,|NS sticks|NS and|CONJ stones,|NS
-Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
-My|POSS fair|ADJ lady!|N` },
-  { id: "yankee", title: "Yankee Doodle", credit: "American folk song, 1700s",
-    melody: [[[60, 60], [62, 64], 60, 64, 62], [[55, 60, 60], 62, 64, [60, 59]], [60, 60, [62, 64], 65, 64, 62
-    lyrics: `Yankee|NAME Doodle|NAME went|VED to|PREP town,|N
-A-riding|VING on|PREP a|DET pony,|N
-Stuck|VED a|DET feather|N in|PREP his|POSS cap,|N
-And|CONJ called|VED it|PRON macaroni!|N` },
-  { id: "sleeping", title: "Are You Sleeping (Frère Jacques)", credit: "Traditional French round, 1700s",
-    melody: [[60, 62, [64, 60], 60, 62, [64, 60]], [[64, 65], 67, [64, 65], 67], [[67, 69], 67, 65, [64, 60], 
-    lyrics: `Are|LINK you|PRON sleeping,|VING are|LINK you|PRON sleeping,|VING
-Brother|N John?|NAME Brother|N John?|NAME
-Morning|N bells|NS are|LINK ringing,|VING morning|N bells|NS are|LINK ringing,|VING
-Ding,|INTJ dang,|INTJ dong!|INTJ Ding,|INTJ dang,|INTJ dong!|INTJ` },
-  { id: "farmer", title: "The Farmer in the Dell", credit: "Traditional singing game, 1800s",
-    melody: [[55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 6
-      [55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 64], 62,
-    lyrics: `The|DET farmer|N in|PREP the|DET dell,|N
-The|DET farmer|N in|PREP the|DET dell,|N
-Hi-ho,|INTJ the|DET derry-o,|INTJ
-The|DET farmer|N in|PREP the|DET dell!|N
-The|DET farmer|N takes|VS a|DET wife,|N
-The|DET farmer|N takes|VS a|DET wife,|N
-Hi-ho,|INTJ the|DET derry-o,|INTJ
-The|DET farmer|N takes|VS a|DET wife!|N` },
-  { id: "scarborough", title: "Scarborough Fair", credit: "Traditional English ballad",
-    melody: [[60, 60, [67, 67], 67, [62, 63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72, 72], 70
-      [60, 60, 67, 67, 67, 62, [63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72], 72, 70, 67, [67
-    lyrics: `Are|LINK you|PRON going|VING to|PREP Scarborough|NAME Fair?|NAME
-Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
-Remember|V me|PRON to|PREP one|PRON who|WH lives|VS there,|ADV
-She|PRON once|ADV was|LINKPAST a|DET true|ADJ love|N of|PREP mine.|PRON
-Tell|V her|PRON to|TO make|V me|PRON a|DET cambric|ADJ shirt,|N
-Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
-Without|PREP no|DET seams|NS nor|CONJ needlework,|N
-Then|ADV she'll|IM be|LINK a|DET true|ADJ love|N of|PREP mine.|PRON` },
-  { id: "saints", title: "When the Saints Go Marching In", credit: "Traditional American spiritual and jazz st
-    melody: [[60, 64, 65, 67, 60, [64, 65], 67], [60, 64, 65, 67, 64, [60, 64], 62], [64, 64, 62, 60, 60, 64, 
-    lyrics: `Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
-Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
-Oh|INTJ Lord,|NAME I|PRON want|V to|TO be|V in|PREP that|DET number,|N
-When|WH the|DET saints|NS go|V marching|VING in!|ADV` },
-  { id: "daisy", title: "Daisy Bell (Bicycle Built for Two)", credit: "Words and music by Harry Dacre, 1892",
-    melody: [[[72, 69], [65, 60], 62, 64, 65, [62, 65], 60], [67, 72, [69, 65], 62, 64, 65, 67, 69, 67], [69, 
-      [60, 65, 69, 67, [60, 65], 69, 67], [69, 70, [72, 69, 65], 67, 60, 65]],
-    lyrics: `Daisy,|NAME Daisy,|NAME give|V me|PRON your|POSS answer,|N do!|V
-I'm|IM half|ADV crazy|ADJ all|ADV for|PREP the|DET love|N of|PREP you.|PRON
-It|PRON won't|MODAL be|V a|DET stylish|ADJ marriage,|N
-I|PRON can't|MODAL afford|V a|DET carriage,|N
-But|CONJ you'll|ID look|V sweet|ADJ upon|PREP the|DET seat|N
-Of|PREP a|DET bicycle|N built|VED for|PREP two!|NUM` },
-  { id: "joy", title: "Ode to Joy (Joyful, Joyful)", credit: "Tune by Beethoven, 1824. Words by Henry van Dyke
-    melody: [[[64, 64], [65, 67], 67, [65, 64], 62], [60, 60, [62, 64], 64, 62, 62], [64, [64, 65], 67, 67, [6
-    lyrics: `Joyful,|ADJ joyful,|ADJ we|PRON adore|V thee,|PRON
-God|NAME of|PREP glory,|N Lord|NAME of|PREP love;|N
-Hearts|NS unfold|V like|PREP flowers|NS before|PREP thee,|PRON
-Opening|VING to|PREP the|DET sun|N above.|ADV` },
-  { id: "auld", title: "Auld Lang Syne", credit: "Words by Robert Burns, 1788. Traditional Scottish tune",
-    melody: [[55, 60, [60, 60, 64], 62, [60, 62]], [64, [60, 60], 64, 67, 69], [69, 67, [64, 64, 60], 62, [60,
-    lyrics: `Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
-And|CONJ never|ADV brought|VED to|PREP mind?|N
-Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
-And|CONJ auld|ADJ lang|ADJ syne?|N` }
-// art.js
-// Song art for Mad Libs Piano: an illustrated scene behind "Your song" for each song,
-// shown when the Art toggle is on. Each scene is flat SVG drawn in its own fixed colours
-// (it is a picture, so it looks the same in light and dark mode), with the lyric colours
-// chosen to read on top of it. Scenes keep their busy parts to the right and bottom so the
-// words on the left stay clear.
-const ART = (() => {
-  // a small seeded random, so every visit draws the same stars and confetti
-  function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
-  const W = 800, H = 320;
-  const wrap = (bg, body) => `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMaxYMax slice" aria-hidden="t
-  const sky = (id, a, b) => `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" sto
-  const star = (x, y, r, c) => `<path d="M${x} ${y - r}L${x + r * .28} ${y - r * .28}L${x + r} ${y}L${x + r * 
-  const dots = (seed, n, x0, x1, y0, y1, f) => { const r = rnd(seed); let s = ""; for (let i = 0; i < n; i++) 
-  const hill = (y, amp, c, phase = 0) => { let d = `M0 ${H}L0 ${y}`; for (let x = 0; x <= W; x += 40) d += `L$
-  const cloud = (x, y, s, c) => `<g fill="${c}"><ellipse cx="${x}" cy="${y}" rx="${36 * s}" ry="${16 * s}"/><e
-  const pine = (x, y, h, c) => `<path d="M${x} ${y - h}L${x + h * .32} ${y - h * .45}L${x + h * .16} ${y - h *
-  const flake = (x, y, r, o) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(1 + r * 2.6).toFixed(
-  const light = { ink: "#1b1a2e", sub: "#3d3a52", silly: "#b0306a", glow: "rgba(255,255,255,.75)" };
-  const dark = { ink: "#fbf7ee", sub: "#d9d3e6", silly: "#ff9cc6", glow: "rgba(0,0,0,.55)" };
-  const scenes = {
-    twinkle: { ...dark, svg: () => wrap(sky("tw", "#0c1534", "#27407a"),
-      dots(7, 70, 0, W, 0, H * .8, (x, y, r) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(r * 1
-      star(560, 90, 26, "#ffe27a") + star(690, 160, 14, "#fff2b8") + star(470, 200, 10, "#fff2b8") + star(740,
-      `<circle cx="700" cy="130" r="34" fill="#fff4cf"/><circle cx="718" cy="120" r="32" fill="#1c2c5c"/>` +
-      `<path d="M600 230l24-22 24 22-24 34z" fill="#9fe7ff" opacity=".9"/><path d="M600 230h48M612 230l12 34 1
-      hill(290, 10, "#0b1129")) },
-    row: { ...light, svg: () => wrap(sky("rw", "#bfe6ff", "#e9f7ff"),
-      `<circle cx="720" cy="125" r="34" fill="#ffd45c"/>` + cloud(520, 70, 1, "#fff") + cloud(300, 40, .7, "#f
-      hill(200, 18, "#8fd18c") + hill(225, 12, "#6cbf73", 2) +
-      `<path d="M0 250 C200 230 420 270 800 245 L800 320 L0 320Z" fill="#4aa3df"/><path d="M0 270 C220 255 430
-      `<g transform="translate(560 238)"><path d="M-60 0h120l-18 22h-84z" fill="#a0522d"/><path d="M-40 -6l-26
-    grace: { ...light, svg: () => wrap(sky("gr", "#ffd9a8", "#fff3e0"),
-      `<g opacity=".55">${Array.from({ length: 14 }, (_, i) => { const a = Math.PI * (i / 13); return `<path d
-      `<circle cx="640" cy="300" r="70" fill="#ffb347"/>` + hill(270, 14, "#e8a27a") + hill(292, 10, "#c97b63"
-      `<path d="M560 180q14-14 28 0q14-14 28 0" stroke="#6b3e2e" stroke-width="4" fill="none"/><path d="M650 1
-    clementine: { ...light, svg: () => wrap(sky("cl", "#ffb46b", "#ffe2b0"),
-      `<circle cx="560" cy="115" r="40" fill="#fff0b3"/>` +
-      `<path d="M380 320V180h70l20-40h90l20 40h40v140z" fill="#c8553d"/><path d="M620 320V150h60l15-30h70l20 3
-      `<path d="M500 320v-60a35 35 0 0170 0v60z" fill="#3a1d14"/><path d="M490 262h90" stroke="#6b3a24" stroke
-      `<path d="M330 320v-80M330 270h-18v-26M330 280h18v-24" stroke="#3f8f4f" stroke-width="12" stroke-linecap
-      `<g transform="translate(720 300)"><path d="M-20 0l6-18h28l6 18z" fill="#c7a17a"/><path d="M-12-18c0-10 
-    range: { ...light, svg: () => wrap(sky("rg", "#8fd0ff", "#e6f5ff"),
-      cloud(460, 60, 1.1, "#fff") + cloud(700, 110, .8, "#fff") + `<circle cx="620" cy="125" r="26" fill="#ffd
-      hill(220, 6, "#b9a36b", .5) + hill(240, 8, "#d8bf63", 1) +
-      `<g fill="#5a3b22"><ellipse cx="560" cy="250" rx="46" ry="26"/><circle cx="604" cy="246" r="18"/><rect x
-      `<g fill="#b97a3c"><ellipse cx="700" cy="262" rx="24" ry="11"/><circle cx="724" cy="250" r="7"/><path d=
-      `<path d="M380 320 L410 236 M392 280 l28-10" stroke="#8a6a3a" stroke-width="3"/>`) },
-    shenandoah: { ...dark, svg: () => wrap(sky("sh", "#3c3f7a", "#e58b6b"),
-      `<circle cx="640" cy="210" r="46" fill="#ffd08a"/>` + hill(190, 26, "#4b4f8c") + hill(220, 22, "#373b6e"
-      `<path d="M300 320 C420 300 520 280 640 262 C700 254 760 252 800 252 L800 274 C700 280 580 296 480 320Z"
-      `<g transform="translate(560 288)"><path d="M-34 0h68l-10 12h-48z" fill="#1a1c3a"/><path d="M0 0v-46l26 
-    birthday: { ...light, svg: () => wrap(sky("bd", "#ffe3f1", "#fff7e0"),
-      dots(11, 45, 430, W, 60, H, (x, y, r, i) => `<rect x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="7" hei
-      [["#ff6b9a", 470, 90], ["#4fc3f7", 540, 60], ["#ffc93c", 610, 100], ["#7bd389", 700, 70]].map(([c, x, y]
-      `<g transform="translate(600 300)"><rect x="-90" y="-60" width="180" height="60" rx="8" fill="#ffb6c9"/>
-    jingle: { ...dark, svg: () => wrap(sky("jb", "#0e2a4a", "#3d6e9c"),
-      dots(5, 80, 0, W, 0, H, (x, y, r, i) => flake(x, y, r, (i * 37 % 10) / 10)) + hill(250, 16, "#eef4fb") +
-      pine(470, 250, 90, "#1f5a3e") + pine(740, 260, 120, "#1a4d35") +
-      `<g transform="translate(600 238)"><path d="M-70 0h110q20 0 24-24" stroke="#c0392b" stroke-width="8" fil
-      `<g transform="translate(470 200)">${[0, 1, 2].map(i => `<circle cx="${i * 16}" cy="${(i % 2) * 6}" r="8
-    macdonald: { ...light, svg: () => wrap(sky("md", "#a8dcff", "#e9f7ff"),
-      `<circle cx="740" cy="120" r="30" fill="#ffd45c"/>` + cloud(400, 60, .9, "#fff") + hill(240, 8, "#8bcf6e
-      `<g transform="translate(560 250)"><path d="M-70 0V-80l70-50 70 50V0z" fill="#c8372d"/><path d="M-70-80l
-      `<g transform="translate(700 270)"><ellipse cx="0" cy="0" rx="40" ry="22" fill="#fff"/><circle cx="-12" 
-      `<path d="M360 290h440M360 270h440" stroke="#d9b07a" stroke-width="6"/>${[380, 440, 500, 640, 760].map(x
-    merry: { ...dark, svg: () => wrap(sky("mx", "#1d1530", "#3b2a55"),
-      dots(9, 60, 0, W, 0, H, (x, y, r, i) => flake(x, y, r, (i * 53 % 10) / 10)) + hill(285, 8, "#f1eef8") +
-      `<g transform="translate(600 290)">${[[0, -220, 70], [0, -160, 95], [0, -95, 120]].map(([x, y, w]) => `<
-      `<g transform="translate(720 290)"><rect x="-26" y="-30" width="52" height="30" fill="#e74c3c"/><rect x=
-    mary: { ...light, svg: () => wrap(sky("my", "#c9ecff", "#f3fbff"),
-      cloud(380, 70, .8, "#fff") + `<circle cx="745" cy="115" r="26" fill="#ffe066"/>` + hill(235, 10, "#a8e08
-      `<g transform="translate(640 210)"><rect x="-56" y="-50" width="112" height="70" fill="#e85d4a"/><path d
-      `<g transform="translate(520 280)"><g fill="#fff">${[[-20, 0], [0, -8], [20, 0], [-10, 8], [10, 8], [0, 
-      dots(4, 16, 360, 800, 280, 315, (x, y, r, i) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="4"
-    spider: { ...light, svg: () => wrap(sky("sp", "#cfe6f5", "#f3f9ee"),
-      `<circle cx="700" cy="120" r="34" fill="#ffd45c"/>` + cloud(560, 70, 1, "#fff") + cloud(470, 105, .7, "#
-      dots(21, 26, 430, 620, 110, 230, (x, y) => `<path d="M${x.toFixed(0)} ${y.toFixed(0)}l-3 9" stroke="#7fb
-      hill(275, 8, "#9fd08a") + `<rect x="640" y="150" width="26" height="150" fill="#9aa7b4"/><rect x="630" y
-      `<path d="M653 158v52" stroke="#555" stroke-width="1.5"/><g transform="translate(653 222)"><ellipse rx="
-    london: { ...light, svg: () => wrap(sky("ld", "#c9d6e3", "#eef2f6"),
-      cloud(480, 70, 1, "#fff") + `<path d="M0 262h800v58H0z" fill="#6f8fa8"/><path d="M0 272c120-8 240 8 360 
-      `<g fill="#6b6f7a"><rect x="470" y="120" width="44" height="150"/><rect x="660" y="120" width="44" heigh
-      `<g fill="#9ea6b4">${[0, 1, 2, 3].map(i => `<rect x="${478 + i * 0}" y="${140 + i * 30}" width="28" heig
-      `<path d="M514 244q73-70 146 0" stroke="#4d5260" stroke-width="5" fill="none"/>`) },
-    yankee: { ...light, svg: () => wrap(sky("yk", "#dff0ff", "#fffaf0"),
-      `<g>${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<path d="M${400 + i * 52} 20l26 38 26-38z" fill="${["#c0392b", 
-      hill(265, 10, "#a5d78f") +
-      `<g transform="translate(620 250)"><ellipse rx="56" ry="26" fill="#a0673a"/><path d="M42-10l30-34 14 6-2
-      `<g transform="translate(560 150) rotate(-20)"><path d="M0 0q40-30 90-6-50 18-90 6z" fill="#fff" stroke=
-    sleeping: { ...dark, svg: () => wrap(sky("sl", "#141a3c", "#3a2e5c"),
-      dots(31, 50, 0, W, 0, H * .7, (x, y, r) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(r * 
-      `<circle cx="720" cy="80" r="30" fill="#fff4cf"/><circle cx="734" cy="72" r="28" fill="#1d2248"/>` +
-      `<g fill="#2a2450"><rect x="520" y="110" width="80" height="210"/><path d="M510 110l50-60 50 60z"/></g><
-      `<g font-family="Figtree, sans-serif" font-weight="700" fill="#d9d3e6" opacity=".85"><text x="640" y="20
-      hill(300, 6, "#120f26")) },
-    farmer: { ...light, svg: () => wrap(sky("fm", "#bfe3ff", "#fff8e6"),
-      `<circle cx="720" cy="120" r="28" fill="#ffd45c"/>` + cloud(480, 70, .9, "#fff") + hill(225, 20, "#9ccf7
-      `<g transform="translate(560 270)"><circle cy="-62" r="14" fill="#ffcf9e"/><path d="M-26-74h52l-8-10h-36
-      `<g transform="translate(700 280)"><path d="M0 0l40-24 40 24-40 18z" fill="#ffd54a"/><path d="M0 0v16l40
-    scarborough: { ...dark, svg: () => wrap(sky("sc", "#2f4f5f", "#9cb8b8"),
-      `<circle cx="660" cy="130" r="40" fill="#f3efe0" opacity=".85"/>` + hill(210, 16, "#3e6262", .8) +
-      `<path d="M380 320V230q60-30 120-20t110-10 190 0V320z" fill="#5d7f6b"/><path d="M0 270h800v50H0z" fill="
-      `<g transform="translate(470 285)" stroke="#2e5d3a" stroke-width="3" fill="#6ba36f">${[0, 1, 2, 3, 4].ma
-      `<g transform="translate(700 260)"><path d="M0 0v-90l18 10v80z" fill="#c9c2b0"/><path d="M-4-90l11-14 11
-    saints: { ...dark, svg: () => wrap(sky("st", "#2a1a4a", "#6a3d8a"),
-      dots(41, 40, 380, W, 20, 200, (x, y, r, i) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(2
-      `<g transform="translate(560 200) rotate(-12)"><path d="M0 0h120l40-26v66l-40-26H0z" fill="#ffcf3f"/><re
-      `<g fill="#ffd166" font-family="Georgia, serif" font-size="40"><text x="470" y="120">♪</text><text x="72
-      hill(300, 6, "#1d1233")) },
-    daisy: { ...light, svg: () => wrap(sky("dy", "#d7efff", "#fbfff0"),
-      `<circle cx="720" cy="110" r="28" fill="#ffd45c"/>` + cloud(480, 70, .9, "#fff") + hill(250, 10, "#a8dc8
-      dots(17, 24, 380, W, 262, 315, (x, y) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})">${[0
-      `<g transform="translate(560 220)" fill="none" stroke="#2d5aa0" stroke-width="5"><circle cx="0" cy="40" 
-    joy: { ...light, svg: () => wrap(sky("jy", "#ffe9b0", "#fff7e8"),
-      `<g opacity=".5">${Array.from({ length: 12 }, (_, i) => { const a = Math.PI * (i / 11); return `<path d=
-      `<circle cx="640" cy="320" r="64" fill="#ffb347"/>` + hill(285, 8, "#c6e3a0") +
-      dots(9, 18, 400, W, 250, 310, (x, y, r, i) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})"
-    auld: { ...dark, svg: () => wrap(sky("al", "#0d1430", "#2b2350"),
-      [[520, 90, "#ffd166"], [660, 70, "#ff9cc6"], [740, 150, "#7bd389"], [590, 170, "#9fd4ff"]].map(([x, y, c
-      `<g transform="translate(450 250)"><circle r="44" fill="#f3efe0"/><circle r="44" fill="none" stroke="#c9
-  };
-  // Key art: colours for the white and black keys, and a small picture (a 24x24 SVG shape)
-  // that sits at the top of each white key and repeats faintly as a pattern.
-  const K = (white, whiteDown, black, blackDown, line, ink, inkDark, silly, sillyDark, note, motifColor, motif
-    ({ white, whiteDown, black, blackDown, line, ink, inkDark, silly, sillyDark, note, motifColor, motifDark, 
-  const STAR = "<path d='M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.6z'/>";
-  const keys = {
-    twinkle: K("#eef1fb", "#d9def3", "#101a3d", "#26346a", "#c5cbe6", "#141a33", "#e8ecff", "#9b2a6b", "#ffb8d
-    row: K("#eef8ff", "#d6ecfb", "#1f4f7a", "#2f6a9c", "#bcd8ec", "#10283d", "#e6f4ff", "#a8326b", "#ffc2de", 
-      "<path d='M2 13c3-4 5-4 8 0s5 4 8 0 4-3 4-3v6c-3 3-5 3-8 0s-5-3-8 0-4 3-4 3z'/>"),
-    grace: K("#fff6e8", "#f4e3c6", "#5a2e22", "#7a4434", "#ead6b3", "#2e1a12", "#ffeedd", "#a82d5c", "#ffc0d6"
-      "<circle cx='12' cy='12' r='5'/><path d='M11 1h2v4h-2zM11 19h2v4h-2zM1 11h4v2H1zM19 11h4v2h-4zM4.2 5.6l1
-    clementine: K("#fff1e2", "#f5dcc0", "#5e2a1c", "#7c3c2a", "#ecceae", "#331a10", "#ffe9d6", "#9e2c55", "#ff
-      "<path d='M3 17l3-8 6-4 7 4 2 8-8 4z'/>"),
-    range: K("#fbf5e4", "#efe4c4", "#4a3420", "#654a30", "#e3d6b0", "#2b1e10", "#fff1d9", "#a3305e", "#ffc1d8"
-      "<path d='M5 3h3.5v9a3.5 3.5 0 007 0V3H19v9a7 7 0 01-14 0z'/>"),
-    shenandoah: K("#f1effa", "#dedaf0", "#262a54", "#3a3f78", "#cfcae4", "#1c1d3a", "#f0eeff", "#a8306a", "#ff
-      "<path d='M11 2v14H4zM13 5l6 11h-6zM2 18h20l-3 4H5z'/>"),
-    birthday: K("#fff4f8", "#fbdde8", "#5b2a5e", "#76407a", "#f2cddb", "#2e1630", "#fff0fb", "#a3215c", "#ffd2
-      "<ellipse cx='12' cy='9' rx='6' ry='7.5'/><path d='M10.5 16.2h3l-1.5 2zM11.4 18h1.2v5h-1.2z'/>"),
-    jingle: K("#f2f7fc", "#dce8f5", "#0e2a4a", "#1d4570", "#c9d9ea", "#0f2236", "#eef6ff", "#b02a3a", "#ff9aa6
-      "<path d='M12 2a1.5 1.5 0 011.5 1.5v.7A6 6 0 0118 10v5l2 3H4l2-3v-5a6 6 0 014.5-5.8v-.7A1.5 1.5 0 0112 2
-    macdonald: K("#fbf8ee", "#efe8d2", "#6b1f1a", "#8c2c25", "#e3dbc0", "#2a1d12", "#fff1ea", "#a3285a", "#ffc
-      "<path fill-rule='evenodd' d='M2 10L12 3l10 7v11H2zM9 21v-7h6v7z'/>"),
-    merry: K("#f4f9f4", "#dcecdc", "#2a1d40", "#3e2d5c", "#cfe0cf", "#14261a", "#f2ecff", "#b02a3a", "#ffd166"
-      "<path d='M12 1l5 7h-3l4 6h-3l4 6H5l4-6H6l4-6H7zM11 20h2v3h-2z'/>"),
-    mary: K("#f7fbf2", "#e3f0d6", "#4a3a36", "#655047", "#d6e6c6", "#1e2a14", "#fff6ee", "#a62c62", "#ffc4dc",
-      "<circle cx='8' cy='12' r='4'/><circle cx='12' cy='9.5' r='4'/><circle cx='15.5' cy='12' r='4'/><circle 
-    spider: K("#f3f7f2", "#dfe9db", "#2f3b45", "#46566a", "#cfdccb", "#1a2620", "#eef6ff", "#a62c62", "#ffc2de
-      "<ellipse cx='12' cy='13' rx='4' ry='3.4'/><circle cx='12' cy='8.5' r='2.4'/><path d='M8.5 11L3 7.5M8.5 
-    london: K("#f1f3f6", "#dde2e9", "#3a3f4b", "#525868", "#cdd3dc", "#1d212a", "#eef0f5", "#a62c62", "#ffc2de
-      "<path d='M2 20h20v2H2zM4 6h3v14H4zM17 6h3v14h-3zM3.5 6L5.5 2l2 4zM16.5 6l2-4 2 4zM7 9h10v1.6H7zM7 18q5-
-    yankee: K("#fbf7ef", "#efe6d2", "#1f3d72", "#2d5aa0", "#e6dcc6", "#1d1f2b", "#eef3ff", "#b02a3a", "#ffc2cc
-      "<path d='M3 20C8 9 15 4 21 3c-2 6-7 13-18 17z'/><path d='M3 20L19 5' stroke='#fff' stroke-width='1' fil
-    sleeping: K("#eef0f8", "#d9ddee", "#1d2248", "#2e3570", "#cdd2e6", "#151834", "#f0eeff", "#9b2a6b", "#ffb8
-      "<path d='M15 3a9 9 0 100 18 7.5 7.5 0 010-18z'/>"),
-    farmer: K("#fbfaee", "#efecd2", "#5a6b2a", "#728836", "#e3e0c0", "#262a12", "#f6ffe6", "#a3285a", "#ffc3d7
-      "<path d='M11 22V8h2v14zM12 2c2 2 2 5 0 7-2-2-2-5 0-7zM12 9c3 0 5 2 5 4-3 0-5-2-5-4zM12 9c-3 0-5 2-5 4 3
-    scarborough: K("#f1f6f4", "#dbe8e3", "#2b4a58", "#3d6475", "#cadfd8", "#16262c", "#e9f6f6", "#a62c62", "#f
-      "<path d='M12 22V10M12 14c-4 0-6-3-6-6 4 0 6 3 6 6zM12 11c4 0 6-3 6-6-4 0-6 3-6 6zM12 18c4 0 6-3 6-5-4 0
-    saints: K("#f6f0fb", "#e6dbf2", "#3a1f5e", "#53308a", "#dcc
+    lyrics: `The|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET water|

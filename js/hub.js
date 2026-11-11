@@ -30,6 +30,10 @@ function halfpipe(x) {
   return HP.H * Math.pow(d / HP.w, 2);
 }
 
+// phones and tablets get lighter scenery
+const LOW = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+const Q = n => Math.round(LOW ? n * 0.3 : n);
+
 export function buildHub(selfCode) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(HEX.deep);
@@ -155,7 +159,7 @@ export function buildHub(selfCode) {
         transformed.x += sin(uTime*0.8 + wp.x*0.1 + position.y*0.35)*k*k*2.2;
         transformed.z += cos(uTime*0.6 + wp.z*0.1 + position.y*0.3)*k*k*1.5;`);
     };
-    const n = 420, kelp = new THREE.InstancedMesh(kelpGeo, kelpMat, n), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), cc = new THREE.Color();
+    const n = Q(420), kelp = new THREE.InstancedMesh(kelpGeo, kelpMat, n), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), cc = new THREE.Color();
     let k = 0;
     while (k < n) {
       const a = Math.random() * Math.PI * 2, r = 36 + Math.random() * 120;
@@ -188,7 +192,7 @@ export function buildHub(selfCode) {
   {
     const geo = new THREE.ConeGeometry(0.25, 0.9, 5).rotateX(Math.PI / 2);
     for (let s = 0; s < 4; s++) {
-      const n = 70, col = [HEX.amber, HEX.pink, HEX.lime, HEX.blue][s];
+      const n = Q(70), col = [HEX.amber, HEX.pink, HEX.lime, HEX.blue][s];
       const im = new THREE.InstancedMesh(geo, mat(col, { e: col, ei: 0.5 }), n);
       const fish = [...Array(n)].map(() => ({ o: Math.random() * 6.28, r: (Math.random() - 0.5) * 6, y: (Math.random() - 0.5) * 4, sp: 0.9 + Math.random() * 0.2 }));
       scene.add(im);
@@ -635,7 +639,7 @@ export function buildHub(selfCode) {
       const blade = new THREE.PlaneGeometry(0.09, 1.5, 1, 4); blade.translate(0, 0.75, 0);
       const gm = new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, roughness: 0.8, emissive: '#5a2a08', emissiveIntensity: 0.5, clippingPlanes: [clip] });
       gm.onBeforeCompile = sway(0.18);
-      const pts = scatter(65000), grass = new THREE.InstancedMesh(blade, gm, pts.length);
+      const pts = scatter(Q(65000)), grass = new THREE.InstancedMesh(blade, gm, pts.length);
       const tones = ['#c9a23a', '#b0b84a', '#8a9a3a', '#d88a3a', '#b8552a', '#a6ee70'];
       pts.forEach(([x, z], i) => {
         q.setFromAxisAngle(up, Math.random() * 6.28).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), (Math.random() - 0.5) * 0.5));
@@ -659,10 +663,10 @@ export function buildHub(selfCode) {
         ['goldenrod', new THREE.ConeGeometry(0.07, 0.4, 6), ['#ffd84a', '#ffbf00'], 6440, [0.7, 1.1]],
         ['aster', new THREE.CircleGeometry(0.07, 8).rotateX(-Math.PI / 2 + 0.4), ['#fff3e0', '#d8c8ff', '#a6ee70'], 5880, [0.3, 0.8]],
       ];
-      let stemTotal = species.reduce((a, s) => a + s[3], 0);
+      let stemTotal = species.reduce((a, s) => a + Q(s[3]), 0);
       const stems = new THREE.InstancedMesh(stemGeo, stemMat, stemTotal);
       let si = 0;
-      for (const [, geo, cols, n, [h0, h1]] of species) {
+      for (let [, geo, cols, n, [h0, h1]] of species) {
         const hm = new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide, clippingPlanes: [clip] });
         hm.onBeforeCompile = sh => {
           sh.uniforms.uTime = shared.uTime;
@@ -672,7 +676,8 @@ export function buildHub(selfCode) {
             transformed.x += sin(uTime*1.6 + wp.x*0.3 + wp.z*0.2)*0.12*(0.5+gust)*1.6;
             transformed.z += cos(uTime*1.2 + wp.x*0.2)*0.07*1.6;`);
         };
-        const heads = new THREE.InstancedMesh(geo, hm, n);
+        n = Q(n);
+      const heads = new THREE.InstancedMesh(geo, hm, n);
         // clustered drifts, like a real prairie
         const centers = scatter(Math.ceil(n / 120));
         for (let i = 0; i < n; i++) {
@@ -715,7 +720,7 @@ export function buildHub(selfCode) {
           mvPosition = modelViewMatrix * mvPosition;
           gl_Position = projectionMatrix * mvPosition;`);
       };
-      const nB = 700, bf = new THREE.InstancedMesh(merged, bm, nB);
+      const nB = Q(700), bf = new THREE.InstancedMesh(merged, bm, nB);
       scatter(nB).forEach(([x, z], i) => {
         q.setFromAxisAngle(up, Math.random() * 6.28);
         m4.compose(v3.set(x, fieldHeight(x, z) + 1.2 + Math.random() * 2.2, z), q, sc.setScalar(0.5 + Math.random() * 0.45)); bf.setMatrixAt(i, m4);
@@ -723,7 +728,7 @@ export function buildHub(selfCode) {
       });
       bf.frustumCulled = false; f.add(bf); prairie.butterflies = bf;
       // bees + fireflies as glowing points
-      const nP = 2400, pp = new Float32Array(nP * 3), pk = new Float32Array(nP);
+      const nP = Q(2400), pp = new Float32Array(nP * 3), pk = new Float32Array(nP);
       scatter(nP).forEach(([x, z], i) => { pp.set([x, fieldHeight(x, z) + 0.6 + Math.random() * 2.6, z], i * 3); pk[i] = i < 900 ? 0 : 1; });
       const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pp, 3)); pg.setAttribute('kind', new THREE.BufferAttribute(pk, 1));
       const pm = new THREE.ShaderMaterial({

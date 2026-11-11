@@ -112,3 +112,25 @@ code { font-family: 'JetBrains Mono'; font-size: .9em; color: var(--lime); }
 
 @media (max-width: 700px) { #demoWin { width: calc(100vw - 32px); height: calc(100vh - 120px); } }
 body.in-demo #hud, body.in-demo #wordmark { display: none; }
+
+/* ---------- touch controls (phones / tablets) ---------- */
+canvas#c { touch-action: none; }
+#stick, #jumpBtn { display: none; }
+body.touch #stick { display: block; position: absolute; left: 22px; bottom: calc(22px + env(safe-area-inset-bottom)); width: 132px; height: 132px; border-radius: 50%;
+  background: rgba(18, 6, 38, .45); border: 2px solid rgba(255, 108, 175, .7); pointer-events: auto; touch-action: none; }
+body.touch #knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffd0e8, var(--pink)); box-shadow: 0 0 18px var(--pink); }
+body.touch #jumpBtn { display: block; position: absolute; right: 24px; bottom: calc(34px + env(safe-area-inset-bottom)); width: 84px; height: 84px; border-radius: 50%;
+  background: rgba(18, 6, 38, .55); border: 2px solid var(--lime); color: var(--lime); font-size: 34px; pointer-events: auto; touch-action: none; box-shadow: 0 0 16px -4px var(--lime); }
+body.touch #jumpBtn:active { background: rgba(166, 238, 112, .3); }
+body.touch #quickbar { top: calc(62px + env(safe-area-inset-top)); bottom: auto; gap: 4px; }
+body.touch #quickbar button { padding: 5px 8px; font-size: 10px; }
+body.touch #quickbar kbd, body.touch #corner kbd, body.touch #corner input[type=range] { display: none; }
+body.touch #corner { top: calc(10px + env(safe-area-inset-top)); }
+body.touch #wordmark { font-size: 18px; top: calc(16px + env(safe-area-inset-top)); }
+body.touch #soundPill { bottom: 190px; }
+body.touch #prompt { font-size: 12px; }
+
+/* Bungee Shade's 3D shadow sticks out past the letter box: pad it so the gradient covers the last "D" */
+h1, #wordmark { display: inline-block; padding: 0.04em 0.22em 0.12em 0.08em; overflow: visible; }
+.title-inner { overflow: visible; }

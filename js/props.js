@@ -15,14 +15,56 @@ const M = (geo, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, m); o
 const box = (w, h, d, r = 0.04) => new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2, h / 2, d / 2));
 
 // ---------------- FOOD ----------------
+// a real-looking taco: a folded corn tortilla (toasted spots, charred rim) with al pastor, onion, cilantro, pineapple, salsa
+let tortillaTex = null;
+function tortillaTexture() {
+  if (tortillaTex) return tortillaTex;
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#e8b64a'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(${150 + Math.random() * 60},${90 + Math.random() * 40},20,${0.08 + Math.random() * 0.15})`; g.beginPath(); g.arc(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 3, 0, 7); g.fill(); }
+  for (let i = 0; i < 45; i++) { g.fillStyle = `rgba(70,35,10,${0.25 + Math.random() * 0.35})`; g.beginPath(); g.ellipse(Math.random() * 256, Math.random() * 256, 2 + Math.random() * 7, 1.5 + Math.random() * 4, Math.random() * 3, 0, 7); g.fill(); }
+  const rim = g.createRadialGradient(128, 128, 90, 128, 128, 128); rim.addColorStop(0, 'rgba(0,0,0,0)'); rim.addColorStop(1, 'rgba(90,45,10,0.55)'); g.fillStyle = rim; g.fillRect(0, 0, 256, 256);
+  tortillaTex = new THREE.CanvasTexture(c); tortillaTex.colorSpace = THREE.SRGBColorSpace;
+  return tortillaTex;
+}
 function taco(fill = 'pastor') {
   const g = new THREE.Group();
-  const shell = M(new THREE.CylinderGeometry(0.16, 0.16, 0.05, 20, 1, true, 0, Math.PI), mat('#f2c14e', { r: 0.8 }));
-  shell.rotation.set(Math.PI / 2, 0, Math.PI / 2); shell.material.side = THREE.DoubleSide; shell.position.y = 0.16;
+  const R = 0.16, Rf = R * 0.78;
+  // fold a disc into a U: v across the disc becomes an angle around the spine (x axis)
+  // a fine grid squashed onto the disc bends smoothly
+  const grid = new THREE.PlaneGeometry(2 * R, 2 * R, 30, 30), gp = grid.attributes.position;
+  for (let i = 0; i < gp.count; i++) {
+    let x = gp.getX(i), v = gp.getY(i);
+    const d = Math.hypot(x, v); if (d > R) { x *= R / d; v *= R / d; }          // squash the grid onto the disc
+    const phi = v / Rf;
+    gp.setXYZ(i, x * (1 - 0.15 * Math.abs(Math.sin(phi))), Rf * (1 - Math.cos(phi)), Rf * Math.sin(phi));
+  }
+  grid.computeVertexNormals();
+  const shell = new THREE.Mesh(grid, new THREE.MeshStandardMaterial({ map: tortillaTexture(), emissiveMap: tortillaTexture(), emissive: '#8a5a1c', emissiveIntensity: 0.55, roughness: 0.75, side: THREE.DoubleSide }));
   g.add(shell);
-  const fillC = { pastor: '#d9581c', birria: '#8a2a12', fish: '#f4e1c1' }[fill];
-  for (let i = 0; i < 7; i++) g.add(M(new THREE.SphereGeometry(0.035, 8, 6), mat(i % 3 === 0 ? '#67da5e' : i % 3 === 1 ? fillC : '#e8112d'), (Math.random() - 0.5) * 0.05, 0.13 + Math.random() * 0.06, (Math.random() - 0.5) * 0.18));
-  g.add(M(new THREE.SphereGeometry(0.02, 6, 4), mat('#fff3e0'), 0, 0.2, 0.02));
+  const meatC = { pastor: ['#c4541c', '#a8401a', '#d9692a'], birria: ['#7a2a14', '#8e3418', '#6a2210'], fish: ['#f4e1c1', '#e9caa0', '#d8a868'] }[fill];
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const inside = (y) => { const w = Rf * Math.sin(Math.acos(Math.max(-1, 1 - y / Rf))) * 0.75; return rnd(-w, w); };
+  const piece = (geo, color, n, y0, y1, s0, s1, rough = 0.7) => {
+    const m = mat(color, { r: rough });
+    for (let i = 0; i < n; i++) {
+      const y = rnd(y0, y1), o = new THREE.Mesh(geo, m);
+      o.position.set(rnd(-R * 0.75, R * 0.75), y, inside(y)); o.rotation.set(rnd(0, 3), rnd(0, 3), rnd(0, 3)); o.scale.setScalar(rnd(s0, s1));
+      g.add(o);
+    }
+  };
+  const chunk = new THREE.DodecahedronGeometry(0.018, 0);
+  meatC.forEach(c => piece(chunk, c, 9, 0.015, 0.07, 0.8, 1.4, 0.55));
+  piece(new THREE.BoxGeometry(0.008, 0.008, 0.008), '#f6f2ea', 26, 0.06, 0.09, 0.8, 1.3, 0.4);     // onion
+  piece(new THREE.CircleGeometry(0.009, 5), '#2f9a3a', 22, 0.07, 0.1, 0.8, 1.6, 0.6);               // cilantro
+  if (fill !== 'fish') piece(new THREE.BoxGeometry(0.014, 0.014, 0.014), '#ffd23a', 6, 0.06, 0.085, 0.8, 1.2, 0.35); // pineapple
+  else { piece(new THREE.BoxGeometry(0.03, 0.004, 0.012), '#b8d8f0', 10, 0.07, 0.09, 0.8, 1.2, 0.6); }                // cabbage
+  // salsa verde drizzle along the top
+  const pts = []; for (let i = 0; i <= 10; i++) { const x = -R * 0.7 + i / 10 * R * 1.4; pts.push(new THREE.Vector3(x, 0.095 + Math.sin(i * 1.7) * 0.006, Math.sin(i * 2.3) * 0.02)); }
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 30, 0.004, 5), mat(fill === 'birria' ? '#c8241a' : '#5fae2e', { r: 0.25 })));
+  // lime wedge
+  const lime = new THREE.Mesh(new THREE.SphereGeometry(0.025, 12, 8, 0, Math.PI, 0, Math.PI / 2), mat('#7cc242', { r: 0.4 }));
+  lime.position.set(R * 0.95, 0.01, 0.05); lime.rotation.set(Math.PI / 2, 0, 0.4); g.add(lime);
   return g;
 }
 function nigiri(fish = '#ff8a5c') {
@@ -136,7 +178,7 @@ function hotChicken() {
 }
 
 export const FOODS = [
-  { key: 'taco', name: 'Al Pastor Tacos', make: () => { const g = new THREE.Group(); [-0.2, 0, 0.2].forEach((x, i) => { const t = taco(['pastor', 'birria', 'fish'][i]); t.position.x = x; g.add(t); }); return g; } },
+  { key: 'taco', name: 'Al Pastor Tacos', make: () => { const g = new THREE.Group(); [-0.34, 0, 0.34].forEach((x, i) => { const t = taco(['pastor', 'birria', 'fish'][i]); t.position.x = x; t.rotation.y = (i - 1) * 0.15; g.add(t); }); return g; } },
   { key: 'birria', name: 'Birria + Consommé', make: () => { const g = new THREE.Group(); const t = taco('birria'); t.position.x = -0.1; g.add(t); const b = bowl('#fff3e0', '#a8341a'); b.scale.setScalar(0.6); b.position.x = 0.15; g.add(b); return g; } },
   { key: 'sushi', name: 'Sushi Boat', make: () => { const g = new THREE.Group(); const boat = M(box(0.7, 0.06, 0.25, 0.03), mat('#8a5a2b', { r: 0.7 }), 0, 0.03, 0); g.add(boat); const fishes = ['#ff8a5c', '#ff6caf', '#ffd2a8', '#e8112d']; for (let i = 0; i < 4; i++) { const n = nigiri(fishes[i]); n.position.set(-0.25 + i * 0.16, 0.06, -0.05); g.add(n); } for (let i = 0; i < 5; i++) { const m = maki([HEX.pink, HEX.lime, HEX.amber, HEX.orange, HEX.pink][i]); m.position.set(-0.26 + i * 0.13, 0.06, 0.07); g.add(m); } return g; } },
   { key: 'ramen', name: 'Tonkotsu Ramen', make: ramen },
