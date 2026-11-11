@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RINGSIDE</title>
+<meta name="description" content="Tic·Tac·Mania and Top Rope Four: play the AI, a friend on the couch, or send a link and play someone far away.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤼</text></svg>">
+<style>
+  :root { --bg: #07040f; --panel: rgba(24, 10, 44, .86); --line: #44307a; --text: #f1ecff; --dim: #a79cd0; --gold: #ffd23f; --pink: #ff2e88; --cyan: #2ef2ff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: radial-gradient(ellipse at 50% -10%, #3a1170 0%, #12062a 45%, var(--bg) 80%) fixed; color: var(--text); font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  main { max-width: 760px; margin: 0 auto; padding: max(18px, env(safe-area-inset-top)) 16px 40px; }
+  h1 { margin: 6px 0 2px; text-align: center; font-size: clamp(42px, 11vw, 78px); letter-spacing: .04em; font-weight: 900; line-height: 1;
+    background: linear-gradient(180deg, #fff6c8, var(--gold) 55%, #ff8a1e); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 4px 0 #6a1a8a) drop-shadow(0 0 24px rgba(255, 210, 63, .35)); }
+  .tag { text-align: center; color: var(--dim); margin: 0 0 22px; font-size: 15px; }
+  .step { margin: 22px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+  .games { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .game { position: relative; text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 18px; padding: 14px 14px 12px; transition: transform .12s, border-color .12s, box-shadow .12s; }
+  .game .art { height: 86px; border-radius: 12px; margin-bottom: 10px; display: grid; place-items: center; font-size: 40px; letter-spacing: 4px; }
+  .game b { display: block; font-size: 18px; font-weight: 900; }
+  .game small { color: var(--dim); font-size: 13px; }
+  .game.on { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255, 210, 63, .25), 0 12px 40px -12px var(--gold); transform: translateY(-2px); }
+  .art.ttt { background: repeating-linear-gradient(0deg, transparent 0 27px, #44307a 27px 29px), repeating-linear-gradient(90deg, transparent 0 27px, #44307a 27px 29px), #120828; }
+  .art.trf { background: radial-gradient(circle at 20% 70%, var(--pink) 0 11px, transparent 12px), radial-gradient(circle at 40% 70%, var(--cyan) 0 11px, transparent 12px), radial-gradient(circle at 60% 70%, var(--pink) 0 11px, transparent 12px), radial-gradient(circle at 60% 35%, var(--cyan) 0 11px, transparent 12px), radial-gradient(circle at 80% 70%, var(--cyan) 0 11px, transparent 12px), #120828; }
+  .who { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .big { border: 2px solid var(--line); background: var(--panel); border-radius: 22px; padding: 20px 14px; text-align: center; transition: transform .12s, border-color .12s, box-shadow .12s; }
+  .big .ic { font-size: 44px; display: block; line-height: 1.1; }
+  .big b { display: block; font-size: 22px; font-weight: 900; margin-top: 6px; }
+  .big small { color: var(--dim); font-size: 13px; }
+  .big.on { border-color: var(--gold); background: linear-gradient(160deg, rgba(255, 46, 136, .28), rgba(46, 242, 255, .16)); box-shadow: 0 14px 40px -14px var(--gold); transform: translateY(-2px); }
+  .sub { margin-top: 12px; background: rgba(18, 8, 36, .7); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: grid; gap: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .row .lbl { color: var(--dim); font-size: 13px; margin-right: 4px; }
+  .chip { border: 1px solid var(--line); background: rgba(255, 255, 255, .04); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700; }
+  .chip.on { background: var(--gold); color: #1a0838; border-color: var(--gold); }
+  .linky { background: none; border: 0; color: var(--dim); text-decoration: underline; font-size: 13px; padding: 0; }
+  .invite { border: 2px dashed var(--cyan); background: rgba(46, 242, 255, .06); border-radius: 14px; padding: 12px 14px; font-weight: 800; text-align: left; display: flex; gap: 10px; align-items: center; }
+  .invite .ic { font-size: 26px; }
+  .invite small { display: block; font-weight: 500; color: var(--dim); }
+  .invite.on { border-style: solid; background: rgba(46, 242, 255, .14); }
+  .linkbox { display: flex; gap: 6px; }
+  .linkbox input { flex: 1; min-width: 0; background: #0d0620; border: 1px solid var(--line); border-radius: 10px; color: var(--text); padding: 8px 10px; font: 13px ui-monospace, Menlo, monospace; }
+  .linkbox button { border: 0; border-radius: 10px; background: var(--cyan); color: #04121a; font-weight: 800; padding: 0 12px; }
+  .note { font-size: 12px; color: var(--dim); }
+  details { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 10px; }
+  summary { color: var(--dim); font-size: 13px; cursor: pointer; }
+  details .row { margin-top: 10px; }
+  .go { display: block; width: 100%; margin-top: 22px; border: 0; border-radius: 20px; padding: 18px; font-size: 24px; font-weight: 900; letter-spacing: .06em; color: #1a0838;
+    background: linear-gradient(180deg, #fff1a8, var(--gold) 60%, #ff9a1e); box-shadow: 0 8px 0 #9a5a00, 0 18px 40px -10px var(--gold); transition: transform .08s, box-shadow .08s; }
+  .go:active { transform: translateY(5px); box-shadow: 0 3px 0 #9a5a00; }
+  .challenge { text-align: center; background: var(--panel); border: 2px solid var(--gold); border-radius: 22px; padding: 26px 18px; margin-top: 12px; }
+  .challenge .ic { font-size: 54px; }
+  .challenge h2 { margin: 8px 0 4px; font-size: 26px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 520px) { .games { grid-template-columns: 1fr 1fr; } .big b { font-size: 18px; } .big .ic { font-size: 36px; } .game .art { height: 64px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>RINGSIDE</h1>
+  <p class="tag">two games, one ring. pick your match.</p>
+
+  <!-- someone sent you a link -->
+  <section id="challenge" hidden>
+    <div class="challenge">
+      <div class="ic">📨</div>
+      <h2>You've been challenged!</h2>
+      <p class="note" id="challengeWhat"></p>
+      <button class="go" id="join">STEP INTO THE RING</button>
+      <p class="note">you'll play from here against the person who sent the link</p>
+    </div>
+    <p style="text-align:center"><button class="linky" id="decline">no thanks, take me to the menu</button></p>
+  </section>
+
+  <section id="menu">
+    <div class="step">1 · the game</div>
+    <div class="games">
+      <button class="game" data-g="ttt"><div class="art ttt">✖ ◯</div><b>TIC·TAC·MANIA</b><small>ultimate tic-tac-toe on maximum steroids</small></button>
+      <button class="game" data-g="trf"><div class="art trf"></div><b>TOP ROPE FOUR</b><small>chain-reaction wrestling four-in-a-row</small></button>
+    </div>
+
+    <div class="step">2 · who are you fighting?</div>
+    <div class="who">
+      <button class="big" data-who="ai"><span class="ic">🤖</span><b>The AI</b><small>it's ready when you are</small></button>
+      <button class="big" data-who="person"><span class="ic">🧑‍🤝‍🧑</span><b>A person</b><small>on this screen, or far away</small></button>
+    </div>
+
+    <div class="sub" id="aiSub">
+      <div class="row"><span class="lbl">how tough</span>
+        <button class="chip" data-level="easy">Rookie</button><button class="chip" data-level="medium">Contender</button><button class="chip" data-level="hard">Champion</button><button class="chip" data-level="insane">Legend</button>
+      </div>
+      <div class="row"><button class="linky" id="aivai">or just watch the AI wrestle itself</button><span class="note" id="aivaiNote" hidden>👀 AI vs AI is on · <button class="linky" id="aivaiOff">I want to play</button></span></div>
+    </div>
+
+    <div class="sub" id="personSub" hidden>
+      <div class="row"><span class="chip on" id="hereChip">🛋️ right here, taking turns on this screen</span></div>
+      <button class="invite" id="invite"><span class="ic">📨</span><span>Invite someone far away<small>get a link to send; they open it and you play live</small></span></button>
+      <div id="inviteBox" hidden>
+        <div class="linkbox"><input id="link" readonly><button id="copy">copy</button><button id="share" hidden>share</button></div>
+        <p class="note" id="inviteNote">send this link, then ring the bell. the match starts the moment they open it.</p>
+        <button class="linky" id="cancelInvite">never mind, we're on the same screen</button>
+      </div>
+    </div>
+
+    <details>
+      <summary>more options</summary>
+      <div class="row"><span class="lbl">chaos</span><button class="chip" data-juice="pure">Natural</button><button class="chip" data-juice="juiced">Juiced</button><button class="chip" data-juice="max">MAXIMUM</button></div>
+      <div class="row"><span class="lbl">you go</span><button class="chip" data-side="1">first</button><button class="chip" data-side="2">second</button></div>
+      <div class="row"><span class="lbl">clock</span><button class="chip" data-clock="0">off</button><button class="chip" data-clock="60">1 min</button><button class="chip" data-clock="180">3 min</button><button class="chip" data-clock="300">5 min</button></div>
+    </details>
+
+    <button class="go" id="go">RING THE BELL</button>
+  </section>
+</main>
+<script src="net.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const GAMES = { ttt: { file: 'tic-tac-mania.html', name: 'TIC·TAC·MANIA' }, trf: { file: 'top-rope-four.html', name: 'TOP ROPE FOUR' } };
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
+const P = new URLSearchParams(location.search);
+// defaults: play the AI; a person means on this screen unless you send an invite
+const S = Object.assign({ g: 'ttt', who: 'ai', aivai: false, level: 'medium', juice: 'max', side: '1', clock: '0', room: null }, store.get('ringside') || {});
+S.room = null; S.aivai = false;
+if (P.get('g') && GAMES[P.get('g')]) S.g = P.get('g');
+
+function render() {
+  document.querySelectorAll('[data-g]').forEach(b => b.classList.toggle('on', b.dataset.g === S.g));
+  document.querySelectorAll('[data-who]').forEach(b => b.classList.toggle('on', b.dataset.who === S.who));
+  for (const k of ['level', 'juice', 'side', 'clock']) document.querySelectorAll(`[data-${k}]`).forEach(b => b.classList.toggle('on', b.dataset[k] === S[k]));
+  $('aiSub').hidden = S.who !== 'ai'; $('personSub').hidden = S.who !== 'person';
+  $('aivai').hidden = S.aivai; $('aivaiNote').hidden = !S.aivai;
+  $('invite').classList.toggle('on', !!S.room); $('inviteBox').hidden = !S.room; $('hereChip').classList.toggle('on', !S.room);
+  if (S.room) $('link').value = RingNet.inviteLink(S.room, S.g);
+  $('go').textContent = S.room ? 'RING THE BELL · WAIT FOR THEM' : 'RING THE BELL';
+  store.set('ringside', { g: S.g, who: S.who, level: S.level, juice: S.juice, side: S.side, clock: S.clock });
+}
+document.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S.g = b.dataset.g; render(); });
+document.querySelectorAll('[data-who]').forEach(b => b.onclick = () => { S.who = b.dataset.who; if (S.who === 'ai') S.room = null; render(); });
+for (const k of ['level', 'juice', 'side', 'clock']) document.querySelectorAll(`[data-${k}]`).forEach(b => b.onclick = () => { S[k] = b.dataset[k]; render(); });
+$('aivai').onclick = () => { S.aivai = true; render(); };
+$('aivaiOff').onclick = () => { S.aivai = false; render(); };
+$('invite').onclick = async () => {
+  if (!S.room) S.room = Array.from(crypto.getRandomValues(new Uint8Array(6)), b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+  render();
+  try { await navigator.clipboard.writeText($('link').value); $('copy').textContent = 'copied ✓'; } catch { /* the box is there to copy by hand */ }
+};
+$('copy').onclick = async () => { try { await navigator.clipboard.writeText($('link').value); $('copy').textContent = 'copied ✓'; } catch { $('link').select(); } };
+if (navigator.share) { $('share').hidden = false; $('share').onclick = () => navigator.share({ title: 'RINGSIDE', text: `Wrestle me in ${GAMES[S.g].name}!`, url: $('link').value }).catch(() => { }); }
+$('cancelInvite').onclick = () => { S.room = null; render(); };
+
+function launch(params) { location.href = GAMES[S.g].file + '?' + new URLSearchParams(params).toString(); }
+$('go').onclick = () => {
+  const base = { juice: S.juice, side: S.side, clock: S.clock, level: S.level };
+  if (S.who === 'ai') launch({ ...base, mode: S.aivai ? 'aivai' : 'pvai' });
+  else if (S.room) launch({ ...base, mode: 'online', role: 'host', room: S.room, g: S.g });
+  else launch({ ...base, mode: 'pvp' });
+};
+
+// arriving from an invite link
+if (P.get('join')) {
+  const g = GAMES[P.get('g')] ? P.get('g') : 'ttt';
+  S.g = g;
+  $('menu').hidden = true; $('challenge').hidden = false;
+  $('challengeWhat').textContent = `a match of ${GAMES[g].name} is waiting for you`;
+  $('join').onclick = () => launch({ mode: 'online', role: 'guest', room: P.get('join'), g });
+  $('decline').onclick = () => { history.replaceState(null, '', location.pathname); $('challenge').hidden = true; $('menu').hidden = false; render(); };
+}
+render();
+</script>
+</body>
+</html>

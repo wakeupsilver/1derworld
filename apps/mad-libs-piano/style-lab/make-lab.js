@@ -10,7 +10,7 @@ const head = `
 const i = html.indexOf("</style>");
 if (i < 0) throw new Error("index.html has no </style>");
 html = html.slice(0, i + 8) + head + html.slice(i + 8).replace("<title>Mad Libs Piano</title>", "");
-html = html.replace("<title>Mad Libs Piano</title>", "") + `\n<script src="style-lab/switcher.js"></script>\n`;
+html = html.replace("<title>Mad Libs Piano</title>", "") + `\n<script src="style-lab/switcher.js"></script>\n<script src="style-lab/bouncy.js"></script>\n`;
 if (!/<meta charset/i.test(html)) html = `<meta charset="utf-8">\n` + html; // a plain local server doesn't say UTF-8, so ♪ and ♯ would come out garbled
 fs.writeFileSync(path.join(dir, "style-lab.html"), html);
 console.log("wrote style-lab.html");

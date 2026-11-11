@@ -113,6 +113,8 @@
     .stats, .think { display: none; }
   }
 </style>
+<script src="peerjs.min.js"></script>
+<script src="net.js"></script>
 </head>
 <body>
 <canvas id="bgc"></canvas>
@@ -519,6 +521,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 const DEFAULTS = { mode: 'pvai', level: 'medium', side: '1', juice: 'max', clock: '0' };
 let settings = Object.assign({}, DEFAULTS, JSON.parse(store.get('ttm-settings') || '{}'));
+// ---- RINGSIDE: the front menu passes the choices in the URL; online play goes through RingNet ----
+const RS = new URLSearchParams(location.search), EMBED = RS.has('mode'), GAME_ID = 'ttt';
+if (EMBED) for (const k of ['mode', 'level', 'side', 'juice', 'clock']) if (RS.get(k)) settings[k] = RS.get(k);
+const ONLINE = EMBED && settings.mode === 'online';
+if (ONLINE) settings.clock = '0';
+let gameRnd = Math.random, pendingNames = null, remoteQ = [], applyingRemote = false, startingNet = false;
 let scores = JSON.parse(store.get('ttm-scores') || '{"1":0,"2":0,"3":0}');
 let prefs = Object.assign({ sound: true, threat: true, voice: true }, JSON.parse(store.get('ttm-prefs') || '{}'));
 const save = () => { store.set('ttm-settings', JSON.stringify(settings)); store.set('ttm-scores', JSON.stringify(scores)); store.set('ttm-prefs', JSON.stringify(prefs)); };
@@ -535,7 +543,8 @@ let aiToken = 0, aiThinking = 0, aiInfo = { 1: null, 2: null }, aiBusy = false;
 let menuOpen = true, gameStarted = false, gameOverShown = false, lastTickSecond = -1;
 
 const isAI = p => settings.mode === 'aivai' || (settings.mode === 'pvai' && String(p) !== settings.side);
-const humanTurn = () => !state.winner && !menuOpen && !isAI(state.turn);
+const isRemote = p => ONLINE && String(p) !== settings.side;
+const humanTurn = () => !state.winner && !menuOpen && !isAI(state.turn) && !isRemote(state.turn) && !(ONLINE && !RingNet.connected);
 const juiced = () => state.juice !== 'pure';
 const blackout = () => state.moveNo < state.blackoutUntil && !state.winner;
 
@@ -882,7 +891,7 @@ function updateUI() {
     const card = $('p' + p);
     card.classList.toggle('active', !state.winner && state.turn === p);
     card.querySelector('.nm').textContent = names[p];
-    card.querySelector('.sub2').textContent = settings.mode === 'pvp' ? `PLAYER ${p}` : isAI(p) ? `AI · ${LEVELS[settings.level].label}` : 'YOU';
+    card.querySelector('.sub2').textContent = isRemote(p) ? 'FAR-OFF FOE' : settings.mode === 'pvp' ? `PLAYER ${p}` : isAI(p) ? `AI · ${LEVELS[settings.level].label}` : 'YOU';
     card.querySelector('.bw').textContent = state.boards.filter(x => x === p).length;
     card.querySelector('.sc').textContent = scores[p];
     const tm = card.querySelector('.timer'); tm.classList.toggle('hidden', !clockOn); tm.textContent = fmtClock(clock[p]);
@@ -914,6 +923,7 @@ function updateUI() {
     if (targetMode === 'chair') msg = `🪑 pick an enemy piece to smash (Esc to cancel)`;
     else if (targetMode === 'heel') msg = `😈 pick an enemy piece to turn to your side (Esc to cancel)`;
     else if (targetMode === 'legdrop') msg = `💥 pick a ring to flatten (Esc to cancel)`;
+    else if (isRemote(state.turn)) msg = `${who} — waiting on your far-off foe…`;
     else if (isAI(state.turn)) msg = `${who} is plotting…`;
     else msg = `${who} — ` + (isFree(state) ? (state.wild ? '🪢 ROPE BREAK: play in ANY open ring' : 'FREE MOVE: play in any open ring') : `play in the ${RING_NAMES[state.next]} ring`);
     if (state.flex) msg += ' · 💪 FLEX: this placement captures the ring!';
@@ -952,6 +962,7 @@ function celebrateCaptures(caps, now) {
 
 function doMove(idx) {
   if (!legalSet.has(idx)) return;
+  netSend({ a: 'drop', v: idx });
   pushHistory();
   const now = performance.now();
   const ev = applyMove(state, idx), mover = ev.mover;
@@ -977,10 +988,10 @@ function doMove(idx) {
 }
 
 function triggerEvent(forced) {
-  const type = forced || randomEventType();
+  const type = forced || randomEventType(gameRnd);
   const E = EVENTS[type], now = performance.now();
   // event mutates state as part of the previous turn (undo rolls it back along with the move)
-  const info = applyEvent(state, type);
+  const info = applyEvent(state, type, gameRnd);
   showEvent(E.icon, E.name, E.desc); sfx.event(); hype(0.8);
   if (type === 'quake') { rotStart = now; markTime.fill(0); boardTime.fill(0); shake = 30; sfx.quake(); }
   if (type === 'pyro') info.cells.forEach((i, n) => setTimeout(() => { const C = cellXY(i); explosion(C.cx, C.cy, 0.6); sfx.boom(); shake = 22; }, 300 + n * 260));
@@ -1002,6 +1013,7 @@ function triggerEvent(forced) {
 function performMove(k, target) {
   if (!canUse(state, k)) return false;
   if ((k === 'chair' || k === 'heel' || k === 'legdrop') && !moveTargets(state, k).includes(target)) return false;
+  netSend({ a: 'sp', k, v: target });
   pushHistory();
   const p = state.turn, now = performance.now(), mid = S / 2;
   const info = useMove(state, k, target);
@@ -1042,7 +1054,7 @@ function endGame() {
   if (gameOverShown) return;
   gameOverShown = true; aiToken++; cancelSearch(); targetMode = null;
   const w = state.winner; scores[w]++; save(); updateUI();
-  const humanLost = settings.mode === 'pvai' && w !== 3 && isAI(w);
+  const humanLost = (settings.mode === 'pvai' && w !== 3 && isAI(w)) || (ONLINE && w !== 3 && isRemote(w));
   setTimeout(() => {
     if (w !== 3 && !humanLost) { confetti(); sfx.win(); } else if (humanLost) sfx.lose(); else sfx.draw();
     sfx.bell(3); shake = 30; hype(1);
@@ -1053,7 +1065,7 @@ function endGame() {
     if (w === 3) { t.textContent = 'DOUBLE KO'; t.style.color = '#ccc'; t.style.textShadow = '0 0 30px #888'; $('bannerBelt').textContent = '🤕'; }
     else {
       $('bannerBelt').textContent = humanLost ? '💀' : '🏆';
-      t.textContent = settings.mode === 'pvai' ? (humanLost ? 'DEFEATED' : 'NEW CHAMPION!') : `${names[w]} WINS!`;
+      t.textContent = (settings.mode === 'pvai' || ONLINE) ? (humanLost ? 'DEFEATED' : 'NEW CHAMPION!') : `${names[w]} WINS!`;
       t.style.color = rgba(w, 1); t.style.textShadow = `0 0 40px ${rgba(w, 1)}`;
     }
     const counts = `rings ${state.boards.filter(x => x === 1).length}–${state.boards.filter(x => x === 2).length}`;
@@ -1066,7 +1078,7 @@ function newGame() {
   aiToken++; cancelSearch();
   state = newState(settings.juice);
   history = []; aiInfo = { 1: null, 2: null };
-  names = { 1: pick(GIMMICKS[1]), 2: pick(GIMMICKS[2]) };
+  names = pendingNames || { 1: pick(GIMMICKS[1]), 2: pick(GIMMICKS[2]) }; pendingNames = null;
   markTime.fill(0); boardTime.fill(0); rotStart = -1e9;
   targetMode = null; gameOverShown = false; hintIdx = -1;
   clockOn = settings.clock !== '0'; clock = { 1: +settings.clock * 1000, 2: +settings.clock * 1000 };
@@ -1269,6 +1281,51 @@ window.__ttm = { get state() { return state; }, triggerEvent, performMove, newGa
 buildCards(); resize(); syncMenu(); refresh();
 $('ticker').textContent = '📣 WELCOME TO TIC·TAC·MANIA!';
 requestAnimationFrame(frame);
+// ================= RINGSIDE glue =================
+function netSend(d) { if (ONLINE && !applyingRemote && !isRemote(state.turn)) RingNet.send({ t: 'act', ...d }); }
+// apply the far-off player's moves in order, whenever the board is ready for them
+setInterval(() => {
+  if (!ONLINE || !remoteQ.length || state.winner || menuOpen) return;
+  if (typeof busy !== 'undefined' && busy) return;
+  if (typeof eventRunning !== 'undefined' && eventRunning) return;
+  if (!isRemote(state.turn)) return;
+  const a = remoteQ.shift();
+  applyingRemote = true;
+  try { if (a.a === 'drop') doMove(a.v); else performMove(a.k, a.v); } finally { applyingRemote = false; }
+}, 120);
+if (EMBED) {
+  document.addEventListener('pointerdown', () => sfx.init(), { once: true, capture: true });
+  document.addEventListener('keydown', () => sfx.init(), { once: true, capture: true });
+  $('menu').classList.add('hidden');
+  // Menu / Esc go back to the RINGSIDE front menu
+  openMenu = () => { RingNet.leave(); location.href = 'index.html?g=' + GAME_ID; };
+  const _undo = undo; undo = function () { if (ONLINE) return; return _undo(); };
+  const _newGame = newGame;
+  const makeHello = () => ({ seed: (Math.random() * 2147483647) | 0, juice: settings.juice, hostSide: settings.side, names: { 1: pick(GIMMICKS[1]), 2: pick(GIMMICKS[2]) } });
+  const begin = h => {
+    if (RingNet.role !== 'host') settings.side = String(3 - +h.hostSide);
+    settings.juice = h.juice; gameRnd = RingNet.rng(h.seed); pendingNames = h.names; remoteQ = [];
+    menuOpen = false; startingNet = true; _newGame(); startingNet = false;
+    const me = settings.side === '1' ? 'X' : 'O';
+    RingNet.say(`connected · you are ${me}`); setTimeout(() => RingNet.say(''), 3500);
+  };
+  newGame = function () {
+    if (ONLINE && !startingNet) {   // rematch: the host deals a fresh seed; the guest asks for one
+      if (!RingNet.connected) return;
+      if (RingNet.role === 'host') { const h = makeHello(); RingNet.send({ t: 'hello', ...h }); begin(h); }
+      else { RingNet.send({ t: 'rematch' }); RingNet.say('asking for a rematch…'); }
+      return;
+    }
+    return _newGame();
+  };
+  if (ONLINE) {
+    menuOpen = true; updateUI();
+    RingNet.game = GAME_ID;
+    RingNet.start({ makeHello, onHello: begin, onAct: a => remoteQ.push(a), onRematch: () => { if (RingNet.role === 'host') newGame(); } });
+  } else { menuOpen = false; _newGame(); }
+}
+// test hook (used by the two-browser sync test)
+window.__ring = { get state() { return state; }, humanTurn: () => humanTurn(), legal: () => [...legalSet], move: v => doMove(v), get busy() { return typeof busy !== 'undefined' && busy; } };
 })();
 </script>
 </body>

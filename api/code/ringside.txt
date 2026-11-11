@@ -1,0 +1,742 @@
+// net.js
+// RINGSIDE online play. Two browsers talk directly (WebRTC via PeerJS); the free public PeerJS server
+// only introduces them. The host owns the match settings and the random seed; both screens apply the
+// same moves in the same order, so the boards (and every ring event) stay identical.
+window.RingNet = (() => {
+  const P = new URLSearchParams(location.search);
+  const api = {
+    online: P.get('mode') === 'online' && !!P.get('room'),
+    role: P.get('role') || 'host',
+    room: P.get('room'),
+    game: P.get('g') || '',
+    connected: false,
+    conn: null,
+    peer: null,
+  };
+  // seeded random (mulberry32): both players roll the same ring events
+  api.rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 |
+  // the invite always points at the public site, so a friend anywhere can open it
+  const PUBLIC = 'https://wakeupsilver.github.io/1derworld/apps/ringside/';
+  api.base = () => (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? PUBLIC : location.href.replace(/[^/
+  api.inviteLink = (room = api.room, game = api.game) => `${api.base()}?join=${room}&g=${game}`;
+  // ---- a little status pill in the corner ----
+  let pill;
+  api.say = (msg, withLink = false) => {
+    if (!pill) {
+      pill = document.createElement('div');
+      pill.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:99;background:
+      document.body.appendChild(pill);
+    }
+    pill.innerHTML = '';
+    const t = document.createElement('span'); t.textContent = '🌐 ' + msg; pill.appendChild(t);
+    if (withLink) {
+      const b = document.createElement('button');
+      b.textContent = 'copy invite link';
+      b.style.cssText = 'background:#ffd23f;color:#1a0838;border:0;border-radius:999px;padding:5px 10px;font:7
+      b.onclick = async () => { try { await navigator.clipboard.writeText(api.inviteLink()); b.textContent = '
+      pill.appendChild(b);
+    }
+    pill.style.display = msg ? 'flex' : 'none';
+  };
+  api.send = d => { if (api.conn && api.conn.open) api.conn.send(d); };
+  api.leave = () => { try { api.conn && api.conn.close(); api.peer && api.peer.destroy(); } catch { /* fine */
+  // opts: { makeHello(), onHello(hello), onAct(action), onRematch() }
+  api.start = opts => {
+    if (!window.Peer) { api.say('online play needs a connection (PeerJS did not load)'); return; }
+    const id = 'ringside-' + api.room;
+    const wire = c => {
+      api.conn = c;
+      c.on('data', d => {
+        if (!d || typeof d !== 'object') return;
+        if (d.t === 'hello') { api.connected = true; api.say(''); opts.onHello(d); }
+        else if (d.t === 'act') opts.onAct(d);
+        else if (d.t === 'rematch') opts.onRematch && opts.onRematch(d);
+      });
+      c.on('close', () => { api.connected = false; api.say('your opponent left the ring'); });
+      c.on('error', () => api.say('lost the connection'));
+    };
+    if (api.role === 'host') {
+      api.peer = new Peer(id);
+      api.peer.on('open', () => api.say('waiting for your opponent to open the link…', true));
+      api.peer.on('connection', c => {
+        if (api.conn && api.conn.open) { c.on('open', () => c.close()); return; } // one opponent at a time
+        wire(c);
+        c.on('open', () => { const h = opts.makeHello(); api.send({ t: 'hello', ...h }); api.connected = true;
+      });
+    } else {
+      api.peer = new Peer();
+      // the host may not have rung the bell yet: keep knocking for a couple of minutes
+      api.tries = 0;
+      api.knock = () => { if (api.connected) return; api.tries++; wire(api.peer.connect(id, { reliable: true }
+      api.peer.on('open', () => { api.say('stepping into the ring…'); api.knock(); });
+    }
+    api.peer.on('error', e => {
+      const t = e && e.type;
+      if (t === 'peer-unavailable' && api.role !== 'host' && api.tries < 40) { api.say('waiting for your chall
+      api.say(t === 'unavailable-id' ? 'that invite is already in use: make a new one from the menu'
+        : t === 'peer-unavailable' ? 'that match is not open right now: ask for a fresh link'
+        : t === 'network' || t === 'server-error' ? 'cannot reach the matchmaking server right now'
+        : 'connection problem (' + t + ')');
+    });
+  };
+  return api;
+})();
+// peerjs.min.js
+(()=>{function e(e,t,n,r){Object.defineProperty(e,t,{get:n,set:r,enumerable:!0,configurable:!0})}function t(e)
+    browser:${this.getBrowser()}
+    version:${this.getVersion()}
+    isIOS:${this.isIOS}
+    isWebRTCSupported:${this.isWebRTCSupported()}
+    isBrowserSupported:${this.isBrowserSupported()}
+    isUnifiedPlanSupported:${this.isUnifiedPlanSupported()}`}constructor(){this.isIOS="undefined"!=typeof navi
+//# sourceMappingURL=peerjs.min.js.map
+// index.html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RINGSIDE</title>
+<meta name="description" content="Tic·Tac·Mania and Top Rope Four: play the AI, a friend on the couch, or send
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text 
+<style>
+  :root { --bg: #07040f; --panel: rgba(24, 10, 44, .86); --line: #44307a; --text: #f1ecff; --dim: #a79cd0; --g
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: radial-gradient(ellipse at 50% -10%, #3a1170 0%, #1206
+  button { font: inherit; color: inherit; cursor: pointer; }
+  main { max-width: 760px; margin: 0 auto; padding: max(18px, env(safe-area-inset-top)) 16px 40px; }
+  h1 { margin: 6px 0 2px; text-align: center; font-size: clamp(42px, 11vw, 78px); letter-spacing: .04em; font-
+    background: linear-gradient(180deg, #fff6c8, var(--gold) 55%, #ff8a1e); -webkit-background-clip: text; bac
+  .tag { text-align: center; color: var(--dim); margin: 0 0 22px; font-size: 15px; }
+  .step { margin: 22px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .14em; color: var(--dim); te
+  .games { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .game { position: relative; text-align: left; border: 2px solid var(--line); background: var(--panel); borde
+  .game .art { height: 86px; border-radius: 12px; margin-bottom: 10px; display: grid; place-items: center; fon
+  .game b { display: block; font-size: 18px; font-weight: 900; }
+  .game small { color: var(--dim); font-size: 13px; }
+  .game.on { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255, 210, 63, .25), 0 12px 40px -12px var(-
+  .art.ttt { background: repeating-linear-gradient(0deg, transparent 0 27px, #44307a 27px 29px), repeating-lin
+  .art.trf { background: radial-gradient(circle at 20% 70%, var(--pink) 0 11px, transparent 12px), radial-grad
+  .who { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .big { border: 2px solid var(--line); background: var(--panel); border-radius: 22px; padding: 20px 14px; tex
+  .big .ic { font-size: 44px; display: block; line-height: 1.1; }
+  .big b { display: block; font-size: 22px; font-weight: 900; margin-top: 6px; }
+  .big small { color: var(--dim); font-size: 13px; }
+  .big.on { border-color: var(--gold); background: linear-gradient(160deg, rgba(255, 46, 136, .28), rgba(46, 2
+  .sub { margin-top: 12px; background: rgba(18, 8, 36, .7); border: 1px solid var(--line); border-radius: 16px
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .row .lbl { color: var(--dim); font-size: 13px; margin-right: 4px; }
+  .chip { border: 1px solid var(--line); background: rgba(255, 255, 255, .04); border-radius: 999px; padding: 
+  .chip.on { background: var(--gold); color: #1a0838; border-color: var(--gold); }
+  .linky { background: none; border: 0; color: var(--dim); text-decoration: underline; font-size: 13px; paddin
+  .invite { border: 2px dashed var(--cyan); background: rgba(46, 242, 255, .06); border-radius: 14px; padding:
+  .invite .ic { font-size: 26px; }
+  .invite small { display: block; font-weight: 500; color: var(--dim); }
+  .invite.on { border-style: solid; background: rgba(46, 242, 255, .14); }
+  .linkbox { display: flex; gap: 6px; }
+  .linkbox input { flex: 1; min-width: 0; background: #0d0620; border: 1px solid var(--line); border-radius: 1
+  .linkbox button { border: 0; border-radius: 10px; background: var(--cyan); color: #04121a; font-weight: 800;
+  .note { font-size: 12px; color: var(--dim); }
+  details { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 10px; }
+  summary { color: var(--dim); font-size: 13px; cursor: pointer; }
+  details .row { margin-top: 10px; }
+  .go { display: block; width: 100%; margin-top: 22px; border: 0; border-radius: 20px; padding: 18px; font-siz
+    background: linear-gradient(180deg, #fff1a8, var(--gold) 60%, #ff9a1e); box-shadow: 0 8px 0 #9a5a00, 0 18p
+  .go:active { transform: translateY(5px); box-shadow: 0 3px 0 #9a5a00; }
+  .challenge { text-align: center; background: var(--panel); border: 2px solid var(--gold); border-radius: 22p
+  .challenge .ic { font-size: 54px; }
+  .challenge h2 { margin: 8px 0 4px; font-size: 26px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 520px) { .games { grid-template-columns: 1fr 1fr; } .big b { font-size: 18px; } .big .ic 
+</style>
+</head>
+<body>
+<main>
+  <h1>RINGSIDE</h1>
+  <p class="tag">two games, one ring. pick your match.</p>
+  <!-- someone sent you a link -->
+  <section id="challenge" hidden>
+    <div class="challenge">
+      <div class="ic">📨</div>
+      <h2>You've been challenged!</h2>
+      <p class="note" id="challengeWhat"></p>
+      <button class="go" id="join">STEP INTO THE RING</button>
+      <p class="note">you'll play from here against the person who sent the link</p>
+    </div>
+    <p style="text-align:center"><button class="linky" id="decline">no thanks, take me to the menu</button></p
+  </section>
+  <section id="menu">
+    <div class="step">1 · the game</div>
+    <div class="games">
+      <button class="game" data-g="ttt"><div class="art ttt">✖ ◯</div><b>TIC·TAC·MANIA</b><small>ultimate tic-
+      <button class="game" data-g="trf"><div class="art trf"></div><b>TOP ROPE FOUR</b><small>chain-reaction w
+    </div>
+    <div class="step">2 · who are you fighting?</div>
+    <div class="who">
+      <button class="big" data-who="ai"><span class="ic">🤖</span><b>The AI</b><small>it's ready when you are</
+      <button class="big" data-who="person"><span class="ic">🧑‍🤝‍🧑</span><b>A person</b><small>on this screen,
+    </div>
+    <div class="sub" id="aiSub">
+      <div class="row"><span class="lbl">how tough</span>
+        <button class="chip" data-level="easy">Rookie</button><button class="chip" data-level="medium">Contend
+      </div>
+      <div class="row"><button class="linky" id="aivai">or just watch the AI wrestle itself</button><span clas
+    </div>
+    <div class="sub" id="personSub" hidden>
+      <div class="row"><span class="chip on" id="hereChip">🛋️ right here, taking turns on this screen</span></
+      <button class="invite" id="invite"><span class="ic">📨</span><span>Invite someone far away<small>get a li
+      <div id="inviteBox" hidden>
+        <div class="linkbox"><input id="link" readonly><button id="copy">copy</button><button id="share" hidde
+        <p class="note" id="inviteNote">send this link, then ring the bell. the match starts the moment they o
+        <button class="linky" id="cancelInvite">never mind, we're on the same screen</button>
+      </div>
+    </div>
+    <details>
+      <summary>more options</summary>
+      <div class="row"><span class="lbl">chaos</span><button class="chip" data-juice="pure">Natural</button><b
+      <div class="row"><span class="lbl">you go</span><button class="chip" data-side="1">first</button><button
+      <div class="row"><span class="lbl">clock</span><button class="chip" data-clock="0">off</button><button c
+    </details>
+    <button class="go" id="go">RING THE BELL</button>
+  </section>
+</main>
+<script src="net.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const GAMES = { ttt: { file: 'tic-tac-mania.html', name: 'TIC·TAC·MANIA' }, trf: { file: 'top-rope-four.html',
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, 
+const P = new URLSearchParams(location.search);
+// defaults: play the AI; a person means on this screen unless you send an invite
+const S = Object.assign({ g: 'ttt', who: 'ai', aivai: false, level: 'medium', juice: 'max', side: '1', clock: 
+S.room = null; S.aivai = false;
+if (P.get('g') && GAMES[P.get('g')]) S.g = P.get('g');
+function render() {
+  document.querySelectorAll('[data-g]').forEach(b => b.classList.toggle('on', b.dataset.g === S.g));
+  document.querySelectorAll('[data-who]').forEach(b => b.classList.toggle('on', b.dataset.who === S.who));
+  for (const k of ['level', 'juice', 'side', 'clock']) document.querySelectorAll(`[data-${k}]`).forEach(b => b
+  $('aiSub').hidden = S.who !== 'ai'; $('personSub').hidden = S.who !== 'person';
+  $('aivai').hidden = S.aivai; $('aivaiNote').hidden = !S.aivai;
+  $('invite').classList.toggle('on', !!S.room); $('inviteBox').hidden = !S.room; $('hereChip').classList.toggl
+  if (S.room) $('link').value = RingNet.inviteLink(S.room, S.g);
+  $('go').textContent = S.room ? 'RING THE BELL · WAIT FOR THEM' : 'RING THE BELL';
+  store.set('ringside', { g: S.g, who: S.who, level: S.level, juice: S.juice, side: S.side, clock: S.clock });
+}
+document.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S.g = b.dataset.g; render(); });
+document.querySelectorAll('[data-who]').forEach(b => b.onclick = () => { S.who = b.dataset.who; if (S.who === 
+for (const k of ['level', 'juice', 'side', 'clock']) document.querySelectorAll(`[data-${k}]`).forEach(b => b.o
+$('aivai').onclick = () => { S.aivai = true; render(); };
+$('aivaiOff').onclick = () => { S.aivai = false; render(); };
+$('invite').onclick = async () => {
+  if (!S.room) S.room = Array.from(crypto.getRandomValues(new Uint8Array(6)), b => 'abcdefghjkmnpqrstuvwxyz234
+  render();
+  try { await navigator.clipboard.writeText($('link').value); $('copy').textContent = 'copied ✓'; } catch { /*
+};
+$('copy').onclick = async () => { try { await navigator.clipboard.writeText($('link').value); $('copy').textCo
+if (navigator.share) { $('share').hidden = false; $('share').onclick = () => navigator.share({ title: 'RINGSID
+$('cancelInvite').onclick = () => { S.room = null; render(); };
+function launch(params) { location.href = GAMES[S.g].file + '?' + new URLSearchParams(params).toString(); }
+$('go').onclick = () => {
+  const base = { juice: S.juice, side: S.side, clock: S.clock, level: S.level };
+  if (S.who === 'ai') launch({ ...base, mode: S.aivai ? 'aivai' : 'pvai' });
+  else if (S.room) launch({ ...base, mode: 'online', role: 'host', room: S.room, g: S.g });
+  else launch({ ...base, mode: 'pvp' });
+};
+// arriving from an invite link
+if (P.get('join')) {
+  const g = GAMES[P.get('g')] ? P.get('g') : 'ttt';
+  S.g = g;
+  $('menu').hidden = true; $('challenge').hidden = false;
+  $('challengeWhat').textContent = `a match of ${GAMES[g].name} is waiting for you`;
+  $('join').onclick = () => launch({ mode: 'online', role: 'guest', room: P.get('join'), g });
+  $('decline').onclick = () => { history.replaceState(null, '', location.pathname); $('challenge').hidden = tr
+}
+render();
+</script>
+</body>
+</html>
+// top-rope-four.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOP ROPE FOUR — Chain-Reaction Wrestling Four-in-a-Row</title>
+<style>
+  :root { --x: #ff2e88; --o: #2ef2ff; --bg: #07040f; --panel: rgba(22, 10, 40, 0.8); --line: #44307a; --text: 
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); overflow: hidden; font-family: "SF Mon
+  #bgc { position: fixed; inset: 0; z-index: 0; } #fx { position: fixed; inset: 0; z-index: 50; pointer-events
+  #app { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; align-items: cen
+  header { text-align: center; line-height: 1; }
+  h1 { font-size: clamp(26px, 4vw, 46px); letter-spacing: .14em; font-weight: 900; font-style: italic; display
+       background: linear-gradient(180deg, #fff6b0 0%, #ffd23f 35%, #ff7a00 65%, #ff2e2e 100%); -webkit-backgr
+       filter: drop-shadow(0 0 2px #000) drop-shadow(0 3px 0 #6a0018) drop-shadow(0 0 18px rgba(255, 120, 0, .
+  @keyframes titlePump { 50% { transform: scale(1.04) skewX(-4deg); } }
+  .sub { font-size: 10px; letter-spacing: .5em; color: var(--gold); text-transform: uppercase; margin-top: 4px
+  #ticker { min-height: 20px; font-size: 13px; font-weight: 800; letter-spacing: .06em; color: #fff; text-alig
+  #ticker.flash { animation: tick .6s ease-out; } @keyframes tick { from { transform: scale(1.35); color: var(
+  main { display: flex; align-items: center; justify-content: center; gap: 16px; flex: 1; min-height: 0; width
+  #boardWrap { position: relative; will-change: transform; }
+  #board { display: block; cursor: pointer; } #board.targeting { cursor: crosshair; }
+  .pcard { width: 250px; background: var(--panel); border: 2px solid var(--line); border-radius: 18px; padding
+  .pcard.active { transform: scale(1.03); }
+  #p1.active { border-color: var(--x); box-shadow: 0 0 34px rgba(255, 46, 136, .55); } #p2.active { border-col
+  .pname { display: flex; align-items: center; gap: 10px; }
+  .sym { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-w
+  #p1 .sym { background: radial-gradient(circle at 35% 30%, #ff9cc6, #ff2e88 60%, #a0004a); box-shadow: 0 0 16
+  #p2 .sym { background: radial-gradient(circle at 35% 30%, #b8fbff, #2ef2ff 60%, #008a99); box-shadow: 0 0 16
+  .nm { font-size: 13px; font-weight: 900; letter-spacing: .06em; font-style: italic; } .who small { display: 
+  .falls { display: flex; gap: 8px; justify-content: center; align-items: center; font-size: 11px; color: var(
+  .falls i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); display: 
+  #p1 .falls i.on { background: var(--x); border-color: #fff; box-shadow: 0 0 14px var(--x); } #p2 .falls i.on
+  .timer { font-size: 26px; font-weight: 800; text-align: center; padding: 2px; border-radius: 10px; backgroun
+  .timer.low { color: #ff4d4d; animation: blink .5s infinite alternate; } .timer.hidden { display: none; } @ke
+  .hype { position: relative; height: 22px; border-radius: 11px; background: rgba(0,0,0,.45); overflow: hidden
+  .hype i { position: absolute; inset: 0 auto 0 0; width: 20%; transition: width .45s cubic-bezier(.3,1.5,.5,1
+  .hype.full i { background: linear-gradient(90deg, #ffd23f, #fff, #ffd23f); background-size: 200% 100%; anima
+  .hype span { position: relative; display: block; text-align: center; font-size: 11px; font-weight: 900; line
+  .stats { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); } .stats b { col
+  .moves { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; } .moves.hidden { display: none; }
+  .mv { font: inherit; font-size: 10px; font-weight: 800; color: var(--text); background: rgba(255,255,255,.05
+  .mv .ic { font-size: 18px; display: block; } .mv .c { color: var(--gold); font-size: 9px; }
+  .mv:hover:not(:disabled) { background: rgba(255,210,63,.18); transform: translateY(-2px); border-color: var(
+  .mv:disabled { opacity: .28; cursor: not-allowed; filter: grayscale(1); }
+  .mv.armed { background: var(--gold); color: #1a1000; border-color: var(--gold); box-shadow: 0 0 18px var(--g
+  .mv.big { grid-column: span 2; } .mv.big:not(:disabled) { animation: flexGlow .7s infinite alternate; border
+  @keyframes flexGlow { to { box-shadow: 0 0 22px #ffd23f, inset 0 0 12px #ff8a00; } }
+  .think { font-size: 10px; color: var(--dim); min-height: 26px; line-height: 1.4; }
+  .confbar { height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 
+  #p1 .confbar i { background: var(--x); } #p2 .confbar i { background: var(--o); }
+  #status { font-size: 14px; letter-spacing: .06em; text-align: center; min-height: 20px; font-weight: 800; }
+  #controls { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .btn { font: inherit; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; co
+  .btn:hover:not(:disabled) { border-color: var(--gold); box-shadow: 0 0 14px rgba(255,210,63,.4); } .btn:disa
+  .btn.on { border-color: var(--gold); color: var(--gold); } .btn .k { opacity: .5; font-size: 9px; }
+  #eventBanner { position: fixed; left: 0; right: 0; top: 38%; z-index: 55; pointer-events: none; text-align: 
+  #eventBanner.go { animation: sweep 2.6s cubic-bezier(.2,.9,.2,1) forwards; }
+  #eventBanner .strip { display: inline-block; padding: 14px 60px; background: linear-gradient(90deg, transpar
+  #eventBanner .t { font-size: clamp(28px, 6vw, 64px); font-weight: 900; font-style: italic; letter-spacing: .
+  #eventBanner .d { font-size: 14px; font-weight: 800; color: #fff7d0; letter-spacing: .12em; }
+  @keyframes sweep { 0% { opacity: 0; transform: translateX(-60%) scale(1.4); } 14% { opacity: 1; transform: t
+  .overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: cent
+  .box { background: linear-gradient(160deg, rgba(50, 16, 60, .97), rgba(12, 6, 28, .97)); border: 2px solid #
+  .box h2 { font-size: 30px; font-style: italic; letter-spacing: .1em; text-align: center; margin-bottom: 14px
+  .row { margin-bottom: 12px; } .row label { display: block; font-size: 10px; letter-spacing: .25em; color: va
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { flex: 1; font: inherit; font-size: 12px; font-weight: 800; padding: 9px 6px; border-radius: 10
+  .seg button small { display: block; font-size: 9px; color: var(--dim); font-weight: 400; margin-top: 2px; }
+  .seg button.sel { background: linear-gradient(135deg, rgba(255,60,40,.45), rgba(255,180,0,.35)); border-colo
+  .row.disabled { opacity: .3; pointer-events: none; }
+  .go { width: 100%; font: inherit; font-size: 18px; font-weight: 900; font-style: italic; letter-spacing: .3e
+  .go:hover { filter: brightness(1.15); } .go.alt { background: rgba(255,255,255,.08); color: var(--text); ani
+  @keyframes shimmer { to { background-position: 200% 0 } }
+  .help { font-size: 13px; line-height: 1.55; color: #ddd3f5; } .help h3 { color: var(--gold); font-size: 13px
+  .help kbd { background: rgba(255,255,255,.1); border-radius: 4px; padding: 1px 5px; font-size: 11px; } .help
+  .scoreline { text-align: center; font-size: 12px; color: var(--dim); margin-top: 10px; } .linky { background
+  #banner .box { text-align: center; animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); } #bannerBelt { font-siz
+  #bannerTitle { font-size: clamp(30px, 6vw, 56px); font-weight: 900; font-style: italic; letter-spacing: .08e
+  @keyframes pop { from { transform: scale(.5); opacity: 0 } }
+  @media (max-width: 999px) {
+    main { flex-direction: column; gap: 6px; }
+    .pcard { width: min(600px, 98vw); flex-direction: row; flex-wrap: wrap; align-items: center; padding: 6px 
+    .pname { flex: 1; } .sym { width: 26px; height: 26px; font-size: 13px; } .timer { font-size: 16px; padding
+    .hype { width: 100%; height: 16px; } .hype span { line-height: 16px; font-size: 9px; }
+    .moves { grid-template-columns: repeat(5, 1fr); width: 100%; } .mv.big { grid-column: auto; } .mv { font-s
+    .stats, .think { display: none; }
+  }
+</style>
+<script src="peerjs.min.js"></script>
+<script src="net.js"></script>
+</head>
+<body>
+<canvas id="bgc"></canvas>
+<div id="app">
+  <header><h1>TOP ROPE FOUR</h1><div class="sub">★ chain-reaction pinfall edition ★</div></header>
+  <div id="ticker"></div>
+  <main>
+    <aside class="pcard" id="p1"></aside>
+    <div id="boardWrap"><canvas id="board"></canvas></div>
+    <aside class="pcard" id="p2"></aside>
+  </main>
+  <div id="status"></div>
+  <nav id="controls">
+    <button class="btn" id="bMenu">Menu <span class="k">esc</span></button>
+    <button class="btn" id="bNew">New Match <span class="k">N</span></button>
+    <button class="btn" id="bUndo">Undo <span class="k">U</span></button>
+    <button class="btn" id="bHint">Hint <span class="k">H</span></button>
+    <button class="btn" id="bThreat">Threat Vision <span class="k">T</span></button>
+    <button class="btn" id="bVoice">Announcer <span class="k">V</span></button>
+    <button class="btn" id="bSound">Sound <span class="k">M</span></button>
+    <button class="btn" id="bHelp">Rules <span class="k">?</span></button>
+  </nav>
+</div>
+<div id="eventBanner"><div class="strip"><div class="t"></div><div class="d"></div></div></div>
+<canvas id="fx"></canvas>
+<div id="menu" class="overlay">
+  <div class="box">
+    <h2>TOP ROPE FOUR</h2>
+    <div class="row"><label>Match type</label>
+      <div class="seg" data-key="mode"><button data-v="pvai">You vs AI</button><button data-v="pvp">Hot-seat 2
+    <div class="row"><label>Steroid dosage</label>
+      <div class="seg" data-key="juice">
+        <button data-v="pure">Natural<small>pinfalls &amp; cascades only</small></button>
+        <button data-v="juiced">Juiced<small>+ hype &amp; special moves</small></button>
+        <button data-v="max">MAXIMUM<small>+ random ring events</small></button>
+      </div></div>
+    <div class="row" id="rowLevel"><label>AI opponent</label>
+      <div class="seg" data-key="level"><button data-v="easy">Rookie</button><button data-v="medium">Contender
+    <div class="row" id="rowSide"><label>You are</label>
+      <div class="seg" data-key="side"><button data-v="1">Pink (goes first)</button><button data-v="2">Cyan (g
+    <div class="row"><label>Blitz clock (+2s per drop)</label>
+      <div class="seg" data-key="clock"><button data-v="0">Off</button><button data-v="60">1 min</button><butt
+    <button class="go" id="bStart">RING THE BELL</button>
+    <button class="go alt" id="bResume" style="margin-top:8px">Resume match</button>
+    <div class="scoreline" id="scoreline"></div>
+    <div style="text-align:center;margin-top:6px"><button class="linky" id="bRules2">how to play</button> · <b
+  </div>
+</div>
+<div id="help" class="overlay hidden">
+  <div class="box help">
+    <h2>THE RULEBOOK</h2>
+    <p>Drop your wrestlers off the top rope into a 7×6 ring. They fall to the lowest open spot.</p>
+    <h3>PINFALLS &amp; CHAIN REACTIONS</h3>
+    <p>Line up <b>4 or more</b> of your pieces in a row, column or diagonal for a <b>PINFALL</b>. Those pieces
+    <p>First to <b>3 pinfalls</b> wins the title. If both players reach 3 on the same drop, whoever caused it 
+    <h3>HYPE &amp; SPECIAL MOVES (Juiced &amp; MAXIMUM)</h3>
+    <p>You earn hype by dropping, scoring pinfalls (more for chain reactions) and getting beaten up. Spend it 
+    <table>
+      <tr><td>🪑 STEEL CHAIR</td><td>30</td><td>Smash any enemy piece. Everything above it falls, which can set
+      <tr><td>⛓️ CAGE COLUMN</td><td>35</td><td>Lock a column so your opponent can't drop there on their next 
+      <tr><td>🤝 TAG TEAM</td><td>45</td><td>Drop two pieces this turn.</td></tr>
+      <tr><td>🙃 PILEDRIVER</td><td>60</td><td>Flip the whole ring upside down and let everything fall again.</
+      <tr><td>🏋️ HEAVYWEIGHT</td><td>100</td><td>Your next drop crushes every piece in its column and lands on
+    </table>
+    <h3>RING EVENTS (MAXIMUM only)</h3>
+    <p>🕳️ <b>Floor Collapse</b> drops out the bottom row · 🎆 <b>Pyro</b> blows up random pieces · 🪑 <b>Chair S
+    <h3>TOOLS &amp; KEYS</h3>
+    <p><b>Threat Vision</b> marks columns: a green ▲ means you score by dropping there, a red ▼ means dropping
+    <kbd>1</kbd>–<kbd>7</kbd> drop in that column · <kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>5</kbd> special moves ·
+    <button class="go" id="bHelpClose" style="margin-top:14px">LET'S GO</button>
+  </div>
+</div>
+<div id="banner" class="overlay hidden">
+  <div class="box">
+    <div id="bannerBelt">🏆</div><div id="bannerTitle"></div><div id="bannerSub"></div>
+    <button class="go" id="bAgain">REMATCH</button>
+    <button class="go alt" id="bBannerMenu" style="margin-top:8px">Menu</button>
+    <button class="go alt" id="bBannerView" style="margin-top:8px">Look at the carnage</button>
+  </div>
+</div>
+<!-- ======================= ENGINE (pure rules + search; also runs inside the AI worker) ====================
+<script id="engine">
+const W = 7, H = 6, NC = W * H, FALLS_TO_WIN = 3, HYPE_MAX = 100;
+const MOVES = {
+  chair: { cost: 30,  icon: '🪑', name: 'STEEL CHAIR' },
+  cage:  { cost: 35,  icon: '⛓️', name: 'CAGE COLUMN' },
+  tag:   { cost: 45,  icon: '🤝', name: 'TAG TEAM' },
+  pile:  { cost: 60,  icon: '🙃', name: 'PILEDRIVER' },
+  heavy: { cost: 100, icon: '🏋️', name: 'HEAVYWEIGHT' },
+};
+const MOVE_KEYS = ['chair', 'cage', 'tag', 'pile', 'heavy'];
+const EVENTS = {
+  collapse: { icon: '🕳️', name: 'FLOOR COLLAPSE', desc: 'the bottom row falls through the mat' },
+  pyro:     { icon: '🎆', name: 'PYRO MISFIRE',   desc: 'three random pieces explode' },
+  chairs:   { icon: '🪑', name: 'CHAIR SHOWER',   desc: 'the crowd throws chairs: +30 hype each' },
+  blackout: { icon: '🌑', name: 'BLACKOUT',       desc: 'every piece looks the same for 2 drops' },
+  quake:    { icon: '🌋', name: 'EARTHQUAKE',     desc: 'every row slides sideways' },
+  flip:     { icon: '🙃', name: 'GRAVITY FLIP',   desc: 'the ring turns upside down' },
+};
+const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]];
+const WINDOWS = (() => { const out = []; for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) for (const [d
+  const er = r + 3 * dr, ec = c + 3 * dc; if (er < 0 || er >= H || ec < 0 || ec >= W) continue; out.push([0, 1
+function newState(juice) {
+  return { juice, cells: Array(NC).fill(0), turn: 1, falls: { 1: 0, 2: 0 }, hype: { 1: 20, 2: 20 }, used: [], 
+           lock: { col: -1, victim: 0 }, moveNo: 0, winner: 0, timeout: false, blackoutUntil: 0, nextEvent: 7,
+}
+const cloneState = s => JSON.parse(JSON.stringify(s));
+const addHype = (s, p, n) => { s.hype[p] = Math.max(0, Math.min(HYPE_MAX, s.hype[p] + n)); };
+const colOf = i => i % W, rowOf = i => (i / W) | 0;
+function gravity(cells, moves) {
+  for (let c = 0; c < W; c++) {
+    let w = H - 1;
+    for (let r = H - 1; r >= 0; r--) {
+      const v = cells[r * W + c]; if (!v) continue;
+      if (r !== w) { cells[w * W + c] = v; cells[r * W + c] = 0; if (moves) moves.push({ from: r * W + c, to: 
+      w--;
+    }
+  }
+}
+// maximal runs of 4+ for either player
+function findRuns(cells) {
+  const runs = [];
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const v = cells[r * W + c]; if (!v) continue;
+    for (const [dr, dc] of DIRS) {
+      const pr = r - dr, pc = c - dc;
+      if (pr >= 0 && pr < H && pc >= 0 && pc < W && cells[pr * W + pc] === v) continue; // not the start of a 
+      const run = []; let rr = r, cc = c;
+      while (rr >= 0 && rr < H && cc >= 0 && cc < W && cells[rr * W + cc] === v) { run.push(rr * W + cc); rr +
+      if (run.length >= 4) runs.push({ p: v, cells: run });
+    }
+  }
+  return runs;
+}
+// Clear runs, apply gravity, repeat. Scores falls + hype. trace (optional) records steps for animation.
+function resolve(s, trace) {
+  let chain = 0; const scored = { 1: 0, 2: 0 };
+  while (true) {
+    const runs = findRuns(s.cells); if (!runs.length) break;
+    chain++;
+    const clear = new Set();
+    for (const run of runs) { s.falls[run.p]++; scored[run.p]++; addHype(s, run.p, 25 + 12 * (chain - 1)); add
+    if (trace) trace.push({ type: 'clear', runs, chain, board: s.cells.slice() });
+    clear.forEach(i => { s.cells[i] = 0; });
+    const mv = []; gravity(s.cells, mv);
+    if (trace) trace.push({ type: 'fall', moves: mv, board: s.cells.slice() });
+  }
+  return { chain, scored };
+}
+function boardFull(cells) { for (let c = 0; c < W; c++) if (!cells[c]) return false; return true; }
+function checkWinner(s, mover) {
+  if (s.winner) return;
+  const a = s.falls[1], b = s.falls[2];
+  if (a >= FALLS_TO_WIN || b >= FALLS_TO_WIN) s.winner = a > b ? 1 : b > a ? 2 : (mover || 3);
+  else if (boardFull(s.cells)) s.winner = a > b ? 1 : b > a ? 2 : 3;
+}
+const lockActive = s => s.lock.col >= 0 && s.lock.victim === s.turn;
+function legalCols(s) {
+  if (s.winner) return [];
+  const out = [];
+  for (let c = 0; c < W; c++) if (!s.cells[c] && !(lockActive(s) && s.lock.col === c)) out.push(c);
+  if (!out.length) for (let c = 0; c < W; c++) if (!s.cells[c]) out.push(c);
+  return out;
+}
+function endTurn(s) {
+  if (s.lock.victim === s.turn) s.lock = { col: -1, victim: 0 };
+  s.turn = 3 - s.turn; s.used = []; s.heavy = false;
+}
+// tic-tac-mania.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TIC·TAC·MANIA — Maximum Steroids Edition</title>
+<style>
+  :root { --x: #ff2e88; --o: #2ef2ff; --bg: #07040f; --panel: rgba(22, 10, 40, 0.8); --line: #44307a; --text: 
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); overflow: hidden; font-family: "SF Mon
+  #bgc { position: fixed; inset: 0; z-index: 0; }
+  #fx { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
+  #app { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; align-items: cen
+  header { text-align: center; line-height: 1; }
+  h1 { font-size: clamp(26px, 4vw, 46px); letter-spacing: .18em; font-weight: 900; font-style: italic; display
+       background: linear-gradient(180deg, #fff6b0 0%, #ffd23f 35%, #ff7a00 65%, #ff2e2e 100%); -webkit-backgr
+       filter: drop-shadow(0 0 2px #000) drop-shadow(0 3px 0 #6a0018) drop-shadow(0 0 18px rgba(255, 120, 0, .
+  @keyframes titlePump { 50% { transform: scale(1.04) skewX(-4deg); } }
+  .sub { font-size: 10px; letter-spacing: .55em; color: var(--gold); text-transform: uppercase; margin-top: 4p
+  #ticker { min-height: 20px; font-size: 13px; font-weight: 800; letter-spacing: .06em; color: #fff; text-alig
+  #ticker.flash { animation: tick .6s ease-out; }
+  @keyframes tick { from { transform: scale(1.35); color: var(--gold); } }
+  main { display: flex; align-items: center; justify-content: center; gap: 16px; flex: 1; min-height: 0; width
+  #boardWrap { position: relative; will-change: transform; }
+  #board { display: block; border-radius: 20px; cursor: pointer; background: radial-gradient(circle at 50% 40%
+           box-shadow: 0 0 0 3px #2a1a50, 0 0 0 6px #ffd23f22, 0 0 70px rgba(255, 140, 0, .18), inset 0 0 50px
+  #board.targeting { cursor: crosshair; }
+  .pcard { width: 250px; background: var(--panel); border: 2px solid var(--line); border-radius: 18px; padding
+           backdrop-filter: blur(6px); transition: box-shadow .3s, border-color .3s, transform .3s; }
+  .pcard.active { transform: scale(1.03); }
+  #p1.active { border-color: var(--x); box-shadow: 0 0 34px rgba(255, 46, 136, .55); }
+  #p2.active { border-color: var(--o); box-shadow: 0 0 34px rgba(46, 242, 255, .55); }
+  .pname { display: flex; align-items: center; gap: 10px; }
+  .sym { font-size: 40px; font-weight: 900; line-height: 1; }
+  #p1 .sym { color: var(--x); text-shadow: 0 0 16px var(--x); } #p2 .sym { color: var(--o); text-shadow: 0 0 1
+  .nm { font-size: 13px; font-weight: 900; letter-spacing: .06em; font-style: italic; }
+  .who small { display: block; font-size: 9px; color: var(--dim); letter-spacing: .2em; margin-top: 2px; }
+  .timer { font-size: 26px; font-weight: 800; text-align: center; padding: 2px; border-radius: 10px; backgroun
+  .timer.low { color: #ff4d4d; animation: blink .5s infinite alternate; } .timer.hidden { display: none; }
+  @keyframes blink { to { opacity: .45 } }
+  .hype { position: relative; height: 22px; border-radius: 11px; background: rgba(0,0,0,.45); overflow: hidden
+  .hype i { position: absolute; inset: 0 auto 0 0; width: 20%; transition: width .45s cubic-bezier(.3,1.5,.5,1
+            background: linear-gradient(90deg, #ff2e2e, #ff8a00, #ffd23f); box-shadow: 0 0 14px #ff8a00; }
+  .hype.full i { background: linear-gradient(90deg, #ffd23f, #fff, #ffd23f); background-size: 200% 100%; anima
+  .hype span { position: relative; display: block; text-align: center; font-size: 11px; font-weight: 900; line
+  .hype.hidden { display: none; }
+  .stats { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); } .stats b { col
+  .moves { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; } .moves.hidden { display: none; }
+  .mv { font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .04em; color: var(--text); backgroun
+        border-radius: 9px; padding: 6px 4px; cursor: pointer; transition: all .12s; text-align: center; line-
+  .mv .ic { font-size: 18px; display: block; } .mv .c { color: var(--gold); font-size: 9px; }
+  .mv:hover:not(:disabled) { background: rgba(255,210,63,.18); transform: translateY(-2px); border-color: var(
+  .mv:disabled { opacity: .28; cursor: not-allowed; filter: grayscale(1); }
+  .mv.armed { background: var(--gold); color: #1a1000; border-color: var(--gold); box-shadow: 0 0 18px var(--g
+  .mv.flexmv { grid-column: span 2; }
+  .mv.flexmv:not(:disabled) { animation: flexGlow .7s infinite alternate; border-color: var(--gold); }
+  @keyframes flexGlow { to { box-shadow: 0 0 22px #ffd23f, inset 0 0 12px #ff8a00; } }
+  .think { font-size: 10px; color: var(--dim); min-height: 26px; line-height: 1.4; }
+  .confbar { height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 
+  .confbar i { display: block; height: 100%; width: 50%; transition: width .4s; } #p1 .confbar i { background:
+  #status { font-size: 14px; letter-spacing: .06em; text-align: center; min-height: 20px; font-weight: 800; }
+  #controls { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .btn { font: inherit; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; co
+  .btn:hover:not(:disabled) { border-color: var(--gold); box-shadow: 0 0 14px rgba(255,210,63,.4); } .btn:disa
+  .btn.on { border-color: var(--gold); color: var(--gold); } .btn .k { opacity: .5; font-size: 9px; }
+  #eventBanner { position: fixed; left: 0; right: 0; top: 38%; z-index: 55; pointer-events: none; text-align: 
+  #eventBanner.go { animation: sweep 2.6s cubic-bezier(.2,.9,.2,1) forwards; }
+  #eventBanner .strip { display: inline-block; padding: 14px 60px; background: linear-gradient(90deg, transpar
+  #eventBanner .t { font-size: clamp(28px, 6vw, 64px); font-weight: 900; font-style: italic; letter-spacing: .
+  #eventBanner .d { font-size: 14px; font-weight: 800; color: #fff7d0; letter-spacing: .12em; }
+  @keyframes sweep { 0% { opacity: 0; transform: translateX(-60%) scale(1.4); } 14% { opacity: 1; transform: t
+  .overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: cent
+  .overlay.hidden { display: none; }
+  .box { background: linear-gradient(160deg, rgba(50, 16, 60, .97), rgba(12, 6, 28, .97)); border: 2px solid #
+         width: min(600px, 94vw); max-height: 94vh; overflow-y: auto; box-shadow: 0 0 80px rgba(255, 120, 0, .
+  .box h2 { font-size: 30px; font-style: italic; letter-spacing: .12em; text-align: center; margin-bottom: 14p
+            background: linear-gradient(180deg, #fff6b0, #ffd23f 40%, #ff5a00); -webkit-background-clip: text;
+  .row { margin-bottom: 12px; } .row label { display: block; font-size: 10px; letter-spacing: .25em; color: va
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { flex: 1; font: inherit; font-size: 12px; font-weight: 800; padding: 9px 6px; border-radius: 10
+  .seg button small { display: block; font-size: 9px; color: var(--dim); font-weight: 400; margin-top: 2px; }
+  .seg button.sel { background: linear-gradient(135deg, rgba(255,60,40,.45), rgba(255,180,0,.35)); border-colo
+  .row.disabled { opacity: .3; pointer-events: none; }
+  .go { width: 100%; font: inherit; font-size: 18px; font-weight: 900; font-style: italic; letter-spacing: .3e
+        background: linear-gradient(90deg, #ff2e2e, #ff8a00, #ffd23f, #ff8a00, #ff2e2e); background-size: 200%
+  .go:hover { filter: brightness(1.15); }
+  .go.alt { background: rgba(255,255,255,.08); color: var(--text); animation: none; box-shadow: none; font-siz
+  @keyframes shimmer { to { background-position: 200% 0 } }
+  .help { font-size: 13px; line-height: 1.55; color: #ddd3f5; }
+  .help h3 { color: var(--gold); font-size: 13px; letter-spacing: .15em; margin: 12px 0 4px; }
+  .help kbd { background: rgba(255,255,255,.1); border-radius: 4px; padding: 1px 5px; font-size: 11px; }
+  .help table { border-collapse: collapse; width: 100%; font-size: 12px; } .help td { padding: 3px 6px; border
+  .scoreline { text-align: center; font-size: 12px; color: var(--dim); margin-top: 10px; }
+  .linky { background: none; border: none; color: var(--dim); font: inherit; font-size: 11px; text-decoration:
+  #banner .box { text-align: center; animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); }
+  #bannerBelt { font-size: 70px; animation: titlePump 1s infinite; }
+  #bannerTitle { font-size: clamp(30px, 6vw, 56px); font-weight: 900; font-style: italic; letter-spacing: .08e
+  #bannerSub { color: var(--dim); margin-bottom: 16px; font-size: 13px; }
+  @keyframes pop { from { transform: scale(.5); opacity: 0 } }
+  @media (max-width: 999px) {
+    main { flex-direction: column; gap: 6px; }
+    .pcard { width: min(600px, 98vw); flex-direction: row; flex-wrap: wrap; align-items: center; padding: 6px 
+    .pcard.active { transform: none; }
+    .pname { flex: 1; } .sym { font-size: 26px; } .timer { font-size: 16px; padding: 2px 8px; }
+    .hype { width: 100%; height: 16px; } .hype span { line-height: 16px; font-size: 9px; }
+    .moves { grid-template-columns: repeat(6, 1fr); width: 100%; } .mv.flexmv { grid-column: auto; } .mv { fon
+    .stats, .think { display: none; }
+  }
+</style>
+<script src="peerjs.min.js"></script>
+<script src="net.js"></script>
+</head>
+<body>
+<canvas id="bgc"></canvas>
+<div id="app">
+  <header>
+    <h1>TIC·TAC·MANIA</h1>
+    <div class="sub">★ maximum steroids edition ★</div>
+  </header>
+  <div id="ticker"></div>
+  <main>
+    <aside class="pcard" id="p1"></aside>
+    <div id="boardWrap"><canvas id="board"></canvas></div>
+    <aside class="pcard" id="p2"></aside>
+  </main>
+  <div id="status"></div>
+  <nav id="controls">
+    <button class="btn" id="bMenu">Menu <span class="k">esc</span></button>
+    <button class="btn" id="bNew">New Match <span class="k">N</span></button>
+    <button class="btn" id="bUndo">Undo <span class="k">U</span></button>
+    <button class="btn" id="bHint">Hint <span class="k">H</span></button>
+    <button class="btn" id="bThreat">Threat Vision <span class="k">T</span></button>
+    <button class="btn" id="bVoice">Announcer <span class="k">V</span></button>
+    <button class="btn" id="bSound">Sound <span class="k">M</span></button>
+    <button class="btn" id="bHelp">Rules <span class="k">?</span></button>
+  </nav>
+</div>
+<div id="eventBanner"><div class="strip"><div class="t"></div><div class="d"></div></div></div>
+<canvas id="fx"></canvas>
+<div id="menu" class="overlay">
+  <div class="box">
+    <h2>TIC·TAC·MANIA</h2>
+    <div class="row"><label>Match type</label>
+      <div class="seg" data-key="mode"><button data-v="pvai">You vs AI</button><button data-v="pvp">Hot-seat 2
+    <div class="row"><label>Steroid dosage</label>
+      <div class="seg" data-key="juice">
+        <button data-v="pure">Natural<small>9 boards, no moves</small></button>
+        <button data-v="juiced">Juiced<small>+ hype &amp; special moves</small></button>
+        <button data-v="max">MAXIMUM<small>+ random ring events</small></button>
+      </div></div>
+    <div class="row" id="rowLevel"><label>AI opponent</label>
+      <div class="seg" data-key="level"><button data-v="easy">Rookie</button><button data-v="medium">Contender
+    <div class="row" id="rowSide"><label>You are</label>
+      <div class="seg" data-key="side"><button data-v="1">X (goes first)</button><button data-v="2">O (goes se
+    <div class="row"><label>Blitz clock (+2s per move)</label>
+      <div class="seg" data-key="clock"><button data-v="0">Off</button><button data-v="60">1 min</button><butt
+    <button class="go" id="bStart">RING THE BELL</button>
+    <button class="go alt" id="bResume" style="margin-top:8px">Resume match</button>
+    <div class="scoreline" id="scoreline"></div>
+    <div style="text-align:center;margin-top:6px"><button class="linky" id="bRules2">how to play</button> · <b
+  </div>
+</div>
+<div id="help" class="overlay hidden">
+  <div class="box help">
+    <h2>THE RULEBOOK</h2>
+    <p>The arena has <b>9 rings</b>, and each ring is a tic-tac-toe board. Win a ring's tic-tac-toe to <b>capt
+    <h3>WHERE YOU PLAY, THEY GO</h3>
+    <p>The cell you pick inside a ring sends your opponent to the matching ring. Play the top-right cell and t
+    <p>If all 9 rings are decided and nobody has 3 in a row, the player who captured the most rings wins.</p>
+    <h3>HYPE &amp; SPECIAL MOVES (Juiced &amp; MAXIMUM)</h3>
+    <p>You gain hype from moves, big hype from captures, more from combos, and sympathy hype when you get hit.
+    <table>
+      <tr><td>🪑 STEEL CHAIR</td><td>30</td><td>Smash one enemy piece in an uncaptured ring.</td></tr>
+      <tr><td>🪢 ROPE BREAK</td><td>25</td><td>Ignore where you were sent and play in any open ring.</td></tr>
+      <tr><td>🤝 TAG TEAM</td><td>45</td><td>You take two placements this turn.</td></tr>
+      <tr><td>😈 HEEL TURN</td><td>55</td><td>Turn an enemy piece into yours. This can capture a ring on the sp
+      <tr><td>💥 ATOMIC LEG DROP</td><td>80</td><td>Wipe an entire ring, captured or not, back to empty.</td></
+      <tr><td>💪 MAXIMUM FLEX</td><td>100</td><td>Your next placement captures that ring instantly.</td></tr>
+    </table>
+    <h3>RING EVENTS (MAXIMUM only)</h3>
+    <p>Every few turns the arena goes nuts: 🌋 <b>Earthquake</b> rotates the whole arena 90° · 🧲 <b>Gravity</b>
+    <h3>TOOLS</h3>
+    <p><b>Threat Vision</b>: <span style="color:#ff5050">red</span> means that cell sends your opponent somewh
+    <h3>KEYS</h3>
+    <p><kbd>1</kbd>–<kbd>6</kbd> special moves · <kbd>N</kbd> new · <kbd>U</kbd> undo · <kbd>H</kbd> hint · <k
+    <button class="go" id="bHelpClose" style="margin-top:14px">LET'S GO</button>
+  </div>
+</div>
+<div id="banner" class="overlay hidden">
+  <div class="box">
+    <div id="bannerBelt">🏆</div>
+    <div id="bannerTitle"></div>
+    <div id="bannerSub"></div>
+    <button class="go" id="bAgain">REMATCH</button>
+    <button class="go alt" id="bBannerMenu" style="margin-top:8px">Menu</button>
+    <button class="go alt" id="bBannerView" style="margin-top:8px">Look at the carnage</button>
+  </div>
+</div>
+<!-- ======================= MCTS WORKER ======================= -->
+<script type="text/plain" id="workerSrc">
+const L = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+function sw(c, b) {
+  const o = b * 9;
+  for (let i = 0; i < 8; i++) { const l = L[i]; const v = c[o + l[0]]; if (v && v === c[o + l[1]] && v === c[o
+  for (let i = 0; i < 9; i++) if (!c[o + i]) return 0;
+  return 3;
+}
+function mw(B) {
+  for (let i = 0; i < 8; i++) { const l = L[i]; const v = B[l[0]]; if ((v === 1 || v === 2) && v === B[l[1]] &
+  let a = 0, b = 0;
+  for (let i = 0; i < 9; i++) { if (!B[i]) return 0; if (B[i] === 1) a++; else if (B[i] === 2) b++; }
+  return a > b ? 1 : b > a ? 2 : 3;
+}
+function gen(c, B, n, out) {
+  let k = 0;
+  if (n >= 0 && !B[n]) { for (let i = 0; i < 9; i++) if (!c[n * 9 + i]) out[k++] = n * 9 + i; }
+  else { for (let b = 0; b < 9; b++) { if (B[b]) continue; for (let i = 0; i < 9; i++) if (!c[b * 9 + i]) out[
+  return k;
+}
+function Node(p, m, pl) { this.p = p; this.m = m; this.pl = pl; this.ch = []; this.un = null; this.w = 0; this
+onmessage = (e) => {
+  const { cells, boards, next, turn, ms, id } = e.data;
+  const rc = Int8Array.from(cells), rB = Int8Array.from(boards);
+  const c = new Int8Ar

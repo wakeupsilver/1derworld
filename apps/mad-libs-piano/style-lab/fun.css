@@ -123,7 +123,7 @@ html[data-style="candy"] .stage.art { box-shadow: none; }
    SUNSHINE — one big yellow, white toy shapes with thick black outlines
    ========================================================= */
 html:root[data-style="sunshine"] {
-  --paper: #ffd84d; --stage: #ffffff; --ink: #1f1a10; --muted: #5c4d1e; --line: #1f1a10;
+  --paper: var(--sun-bg, #ffd84d); --stage: #ffffff; --ink: #1f1a10; --muted: #5c4d1e; --line: #1f1a10;
   --brass: #1f1a10; --silly: #e8246b; --ivory: #ffffff; --ivory-down: #fff4c2;
   --ebony: #1f1a10; --ebony-down: #4a4030; --key-ink: #1f1a10; --key-ink-on-ebony: #ffffff;
   --key-silly: #e8246b; --key-silly-on-ebony: #ffa3c6; --chip: #ffffff; --key-note: #7a6c48; --key-hint: #a89a74;
@@ -158,18 +158,120 @@ html[data-style="sunshine"] .source, html[data-style="sunshine"] .how {
 html[data-style="sunshine"] .legend span::before { box-shadow: 0 0 0 2px #1f1a10; }
 html[data-style="sunshine"] .now, html[data-style="sunshine"] .status, html[data-style="sunshine"] .legend { color: var(--ink); font-weight: 600; }
 
+/* =========================================================
+   SUNSHINE OPTIONS — page colours and add-ons that mix in any combination
+   ========================================================= */
+html[data-bg="yellow"] { --sun-bg: #ffd84d; }
+html[data-bg="sky"]    { --sun-bg: #8fd3ff; }
+html[data-bg="mint"]   { --sun-bg: #8ee6b0; }
+html[data-bg="peach"]  { --sun-bg: #ffb38a; }
+html[data-bg="lilac"]  { --sun-bg: #c8b6ff; }
+html[data-bg="pink"]   { --sun-bg: #ff9ecf; }
+
+/* Rainbow keys: each white key gets its note's colour in a band along the bottom */
+html[data-style="sunshine"][data-add~="rainbow"] .key.white, html[data-style="sunshine"][data-add~="rainbow"] .kb.art .key.white {
+  box-shadow: inset 0 -14px 0 var(--kc), inset 0 -17px 0 #1f1a10; padding-bottom: 22px;
+}
+
+/* Colour buttons: every control its own bright colour */
+html[data-style="sunshine"][data-add~="colors"] h1 em { color: #ff5a5f; }
+html[data-style="sunshine"][data-add~="colors"] .btn.restart { background: #3d9bff; color: #fff; }
+html[data-style="sunshine"][data-add~="colors"] .keys-pick select {
+  background-color: #8b5cf6; color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+html[data-style="sunshine"][data-add~="colors"] .btn.ghost { background: #22b45a; color: #fff; }
+html[data-style="sunshine"][data-add~="colors"] .how { background: #fff4c2; }
+html[data-style="sunshine"][data-add~="colors"] .key.black { background: #2b2f7a; }
+html[data-style="sunshine"][data-add~="colors"] .key.black.down { background: #4a4fb0; }
+
+/* Chunky: fatter lines, a deeper lift, a bigger title and bigger sung words */
+html[data-style="sunshine"][data-add~="chunky"] { --edge: 4px solid #1f1a10; --lift: 0 7px 0 #1f1a10; }
+html[data-style="sunshine"][data-add~="chunky"] h1 { font-size: clamp(42px, 8vw, 72px); text-shadow: 0 5px 0 #1f1a10; }
+html[data-style="sunshine"][data-add~="chunky"] h1 em { text-shadow: none; }
+html[data-style="sunshine"][data-add~="chunky"] .btn, html[data-style="sunshine"][data-add~="chunky"] .pick select { min-height: 48px; font-size: 16px; }
+html[data-style="sunshine"][data-add~="chunky"] .key.white, html[data-style="sunshine"][data-add~="chunky"] .kb.art .key.white { border-right-width: 4px; }
+html[data-style="sunshine"][data-add~="chunky"] .kb { border-radius: 24px; }
+html[data-style="sunshine"][data-add~="chunky"] .stage, html[data-style="sunshine"][data-add~="chunky"] .source,
+html[data-style="sunshine"][data-add~="chunky"] .how, html[data-style="sunshine"][data-add~="chunky"] .end-strip { border-radius: 26px; }
+html[data-style="sunshine"][data-add~="chunky"] .sung { font-size: clamp(26px, 3.8vw, 38px); font-weight: 600; }
+
+/* Polka dots: a soft dot pattern on the page */
+html[data-style="sunshine"][data-add~="dots"], html[data-style="sunshine"][data-add~="dots"] body {
+  background-image: radial-gradient(rgb(31 26 16 / .14) 3.5px, transparent 4px);
+  background-size: 26px 26px;
+}
+
+/* Extra bouncy: the pressed word bounces and floats away before the new one drops in (bouncy.js) */
+html[data-add~="bouncy"] .kw { --r: rotate(180deg); }
+html[data-add~="bouncy"] .kw.letter { --r: none; }
+html[data-style="sunshine"][data-add~="bouncy"] .key[data-ghosting] .kw:not(.ghost) { display: none; }
+html[data-style="sunshine"][data-add~="bouncy"] .kw.ghost { animation: ghost-out .65s ease-in forwards; }
+html[data-style="sunshine"][data-add~="bouncy"] .key[data-arriving] .kw:not(.ghost) { animation: drop-in .38s var(--ease-pop); }
+@keyframes ghost-out {
+  0%   { transform: translateY(0) var(--r) scale(1); }
+  28%  { transform: translateY(-4px) var(--r) scale(1.32); animation-timing-function: var(--ease-pop); }
+  50%  { transform: translateY(0) var(--r) scale(1); opacity: 1; }
+  100% { transform: translateY(-70px) var(--r) scale(.7); opacity: 0; }
+}
+@keyframes drop-in { from { transform: translateY(-26px) var(--r) scale(.6); opacity: 0; } to { transform: translateY(0) var(--r); opacity: 1; } }
+
+/* Juice: each press flashes the key in its note's colour, squashes it, and pops music notes out of it */
+html[data-style="sunshine"][data-add~="bouncy"] .key { transform-origin: 50% 0; }
+html[data-style="sunshine"][data-add~="bouncy"] .key.juice { animation: squash .32s var(--ease-pop); }
+html[data-style="sunshine"][data-add~="bouncy"] .key::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: var(--kc, #ffd84d); mix-blend-mode: multiply;
+}
+html[data-style="sunshine"][data-add~="bouncy"] .key.black::before { mix-blend-mode: screen; background: #ffd84d; }
+html[data-style="sunshine"][data-add~="bouncy"] .key.juice::before { animation: flash .5s ease-out; }
+@keyframes squash { 0% { transform: scale(1, 1); } 30% { transform: scale(1.04, .95); } 100% { transform: scale(1, 1); } }
+@keyframes flash { 0% { opacity: .75; } 100% { opacity: 0; } }
+.juice-note {
+  position: fixed; z-index: 90; pointer-events: none; font: 700 26px/1 "Fredoka", system-ui, sans-serif;
+  color: var(--c); -webkit-text-stroke: 5px #1f1a10; paint-order: stroke fill;
+  animation: note-fly .9s cubic-bezier(.2, .7, .3, 1) forwards;
+}
+@keyframes note-fly {
+  0%   { transform: translate(-50%, 0) scale(.3) rotate(0deg); opacity: 0; }
+  15%  { opacity: 1; }
+  45%  { transform: translate(calc(-50% + var(--dx) * .6), calc(var(--dy) * .7)) scale(1.15) rotate(calc(var(--rot) * .6)); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), var(--dy)) scale(.8) rotate(var(--rot)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-add~="bouncy"] .kw.ghost, html[data-add~="bouncy"] .key[data-arriving] .kw, html[data-add~="bouncy"] .key.juice,
+  html[data-add~="bouncy"] .key.juice::before { animation: none !important; }
+  .juice-note { display: none; }
+}
+html[data-style="sunshine"][data-add~="bouncy"] .w { transition: transform .2s var(--ease-pop); }
+html[data-style="sunshine"][data-add~="bouncy"] .w:hover { transform: translateY(-3px) rotate(-3deg); }
+html[data-style="sunshine"][data-add~="bouncy"] h1 em { display: inline-block; animation: sway 2.4s ease-in-out infinite; transform-origin: 50% 80%; }
+@keyframes sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+
 /* ---------- the switcher ---------- */
 .style-lab {
   position: fixed; z-index: 100; left: 50%; bottom: max(14px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
-  display: flex; align-items: center; gap: 4px; padding: 6px; max-width: calc(100vw - 24px); box-sizing: border-box; overflow-x: auto;
-  background: #1b1b1b; color: #fff; border-radius: 999px; box-shadow: 0 8px 24px rgb(0 0 0 / .3);
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 10px; padding: 8px 10px; width: max-content;
+  max-width: calc(100vw - 24px); box-sizing: border-box;
+  background: #1b1b1b; color: #fff; border-radius: 22px; box-shadow: 0 8px 24px rgb(0 0 0 / .3);
   font: 600 13px/1 system-ui, -apple-system, sans-serif;
 }
-.style-lab > span { padding: 0 8px 0 10px; opacity: .65; white-space: nowrap; }
-.style-lab button { font: inherit; color: #fff; background: transparent; border: 0; border-radius: 999px; padding: 9px 14px; cursor: pointer; white-space: nowrap; }
+.style-lab .grp { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.style-lab .grp + .grp { border-left: 1px solid rgb(255 255 255 / .18); padding-left: 10px; }
+.style-lab button { font: inherit; color: #fff; background: transparent; border: 0; border-radius: 999px; padding: 8px 12px; cursor: pointer; white-space: nowrap; }
 .style-lab button:hover { background: rgb(255 255 255 / .12); }
 .style-lab button[aria-pressed="true"] { background: #ffd84d; color: #1b1b1b; }
-@media (max-width: 520px) { .style-lab > span { display: none; } .style-lab { font-size: 12px; gap: 2px; } .style-lab button { padding: 8px 9px; } }
+.style-lab .sw { width: 26px; height: 26px; padding: 0; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px rgb(0 0 0 / .25); }
+.style-lab .sw:hover { background: var(--c); transform: scale(1.1); }
+.style-lab .sw[aria-pressed="true"] { background: var(--c); box-shadow: 0 0 0 2px #1b1b1b, 0 0 0 4px #fff; }
+.style-lab[data-off] .opt { display: none; }
+@media (max-width: 640px) {
+  .style-lab { font-size: 12px; gap: 6px; border-radius: 18px; }
+  .style-lab .grp + .grp { border-left: 0; padding-left: 0; }
+  .style-lab button { padding: 7px 9px; }
+  .style-lab .sw { width: 22px; height: 22px; }
+  html[data-style] .wrap { padding-bottom: 170px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   html[data-style] .w.fresh, html[data-style] .w.silly.fresh, html[data-style] .end-strip, html[data-style] .key.guide::after { animation: none !important; }
