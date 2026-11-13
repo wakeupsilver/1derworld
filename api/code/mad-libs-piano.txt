@@ -1,20 +1,3 @@
-// make-lab.js
-// Makes style-lab.html: a copy of the built index.html with the fun looks and a switcher added.
-// index.html itself is not changed. Run again after rebuilding index.html:  node style-lab/make-lab.js
-const fs = require("fs"), path = require("path");
-const dir = path.join(__dirname, "..");
-let html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
-const head = `
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400..700&family=Nunito:wght
-<link rel="stylesheet" href="style-lab/fun.css">
-<title>Mad Libs Piano – Style lab</title>`;
-const i = html.indexOf("</style>");
-if (i < 0) throw new Error("index.html has no </style>");
-html = html.slice(0, i + 8) + head + html.slice(i + 8).replace("<title>Mad Libs Piano</title>", "");
-html = html.replace("<title>Mad Libs Piano</title>", "") + `\n<script src="style-lab/switcher.js"></script>\n<
-if (!/<meta charset/i.test(html)) html = `<meta charset="utf-8">\n` + html; // a plain local server doesn't sa
-fs.writeFileSync(path.join(dir, "style-lab.html"), html);
-console.log("wrote style-lab.html");
 // build.js
 // Builds the page: index.html (template + song data + silly words) and voice/<song>.json,
 // one file of recorded words per song, which the page fetches when that song is picked.
@@ -89,54 +72,6 @@ if (require.main === module) {
   process.stdout.write(JSON.stringify(out));
 }
 module.exports = { keyOf, songWords };
-// switcher.js
-// Style lab switcher. Picks a look (<html data-style>), and for Sunshine a page colour (data-bg)
-// and any mix of add-ons (data-add, space-separated). Remembers the choice in this browser, and
-// reads ?style=sunshine&bg=sky&add=rainbow,chunky so a combination can be shared as a link.
-(() => {
-  const looks = [["original", "Original"], ["sunshine", "Sunshine"]];
-  const bgs = [["yellow", "#ffd84d"], ["sky", "#8fd3ff"], ["mint", "#8ee6b0"], ["peach", "#ffb38a"], ["lilac",
-  const adds = [["rainbow", "Rainbow keys"], ["colors", "Color buttons"], ["chunky", "Chunky"], ["dots", "Polk
-  const root = document.documentElement;
-  let state = { style: "sunshine", bg: "yellow", add: [] };
-  try { Object.assign(state, JSON.parse(localStorage.getItem("mlp-lab") || "{}")); } catch (e) {}
-  const q = new URLSearchParams(location.search);
-  if (q.get("style")) state.style = q.get("style");
-  if (q.get("bg")) state.bg = q.get("bg");
-  if (q.has("add")) state.add = q.get("add").split(",").filter(Boolean);
-  const bar = document.createElement("div");
-  bar.className = "style-lab";
-  bar.setAttribute("role", "group");
-  bar.setAttribute("aria-label", "Style lab");
-  bar.innerHTML =
-    `<div class="grp">${looks.map(([id, name]) => `<button type="button" data-look="${id}">${name}</button>`).
-    `<div class="grp opt">${bgs.map(([id, c]) => `<button type="button" class="sw" data-bg="${id}" style="--c:
-    `<div class="grp opt">${adds.map(([id, name]) => `<button type="button" data-add="${id}">${name}</button>`
-  document.body.appendChild(bar);
-  const apply = () => {
-    if (!looks.some(l => l[0] === state.style)) state.style = "sunshine";
-    if (state.style === "original") root.removeAttribute("data-style"); else root.setAttribute("data-style", s
-    root.setAttribute("data-bg", state.bg);
-    root.setAttribute("data-add", state.add.join(" "));
-    bar.toggleAttribute("data-off", state.style !== "sunshine");
-    bar.querySelectorAll("[data-look]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.look === 
-    bar.querySelectorAll("[data-bg]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.bg === stat
-    bar.querySelectorAll("[data-add]").forEach(b => b.setAttribute("aria-pressed", String(state.add.includes(b
-    try { localStorage.setItem("mlp-lab", JSON.stringify(state)); } catch (e) {}
-    const link = new URL(location.href);
-    link.search = state.style === "original" ? "?style=original" : `?style=sunshine&bg=${state.bg}${state.add.
-    history.replaceState(null, "", link);
-  };
-  // a click shouldn't leave focus on the switcher, so the letter keys keep playing the piano
-  bar.addEventListener("click", e => {
-    const b = e.target.closest("button"); if (!b) return;
-    if (b.dataset.look) state.style = b.dataset.look;
-    if (b.dataset.bg) state.bg = b.dataset.bg;
-    if (b.dataset.add) state.add = state.add.includes(b.dataset.add) ? state.add.filter(a => a !== b.dataset.a
-    apply(); b.blur();
-  });
-  apply();
-})();
 // grammar.js
 // Grammar for Mad Libs Piano: when you swap the subject of a line ("I" → "Bigfoot"),
 // the verb that goes with it changes to match ("wonder" → "wonders", "am" → "is").
@@ -206,81 +141,6 @@ const GRAMMAR = (() => {
   return { subjectClass, markAgreement, inflect };
 })();
 if (typeof module !== "undefined") module.exports = { GRAMMAR };
-// bouncy.js
-// Extra bouncy, part 2: the word you just pressed finishes its bounce before the new word appears.
-// The page swaps a pressed key's word the moment you press it, so this watches for that swap and
-// puts a copy of the OLD word in its place. The copy bounces and floats up and away; then the new
-// word drops in. Only runs when Sunshine + Extra bouncy are on. The page's own code is untouched.
-(() => {
-  const root = document.documentElement, kb = document.getElementById("kb");
-  if (!kb) return;
-  const on = () => root.dataset.style === "sunshine" && (root.dataset.add || "").split(" ").includes("bouncy")
-  const keys = () => [...kb.querySelectorAll(":scope > .key")];
-  const realWord = key => key.querySelector(".kw:not(.ghost)");
-  const last = new Map(); // key -> { text, cls } as it was after the previous change
-  const remember = () => keys().forEach(k => { const s = realWord(k); if (s) last.set(k, { text: s.textContent
-  const OUT_MS = 650, IN_MS = 380;
-  function bounceOut(key, old) {
-    key.querySelectorAll(".kw.ghost").forEach(g => g.remove()); // pressed again mid-bounce: start over
-    clearTimeout(key._bouncy);
-    const real = realWord(key);
-    const ghost = document.createElement("span");
-    ghost.className = old.cls.replace(/\bchanged\b/, "") + " ghost";
-    ghost.textContent = old.text;
-    ghost.setAttribute("aria-hidden", "true");
-    real.after(ghost); // after, so the page's querySelector(".kw") still finds the real word
-    key.dataset.ghosting = "";
-    key.removeAttribute("data-arriving");
-    key._bouncy = setTimeout(() => {
-      ghost.remove();
-      key.removeAttribute("data-ghosting");
-      key.dataset.arriving = "";
-      key._bouncy = setTimeout(() => key.removeAttribute("data-arriving"), IN_MS);
-    }, OUT_MS);
-  }
-  // Juice: flash + squash the key, and pop a few music notes out of its top
-  const NOTES = ["♪", "♫", "♩", "♬"];
-  function juice(key) {
-    key.classList.remove("juice"); void key.offsetWidth; key.classList.add("juice");
-    setTimeout(() => key.classList.remove("juice"), 520);
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const r = key.getBoundingClientRect();
-    const silly = !key._wasGuide;
-    const colors = silly ? ["#ff5fb8", "#ff5a5f", "#ffd84d"] : ["#22b45a", "#3d9bff", "#ffd84d"];
-    const n = silly ? 4 : 3;
-    for (let i = 0; i < n; i++) {
-      const s = document.createElement("span");
-      s.className = "juice-note";
-      s.textContent = NOTES[(Math.random() * NOTES.length) | 0];
-      s.style.left = r.left + r.width / 2 + "px";
-      s.style.top = r.top + 4 + "px";
-      s.style.setProperty("--c", colors[i % colors.length]);
-      s.style.setProperty("--dx", (Math.random() * 90 - 45).toFixed(0) + "px");
-      s.style.setProperty("--dy", -(60 + Math.random() * 60).toFixed(0) + "px");
-      s.style.setProperty("--rot", (Math.random() * 60 - 30).toFixed(0) + "deg");
-      s.style.animationDelay = i * 45 + "ms";
-      document.body.appendChild(s);
-      setTimeout(() => s.remove(), 1000 + i * 45);
-    }
-  }
-  // Remember which key was the green one, so a press can tell a right note from a silly one
-  // (by the time the press is seen, the green has already moved on to the next key).
-  const markGuide = () => keys().forEach(k => { k._wasGuide = k._isGuide; k._isGuide = k.classList.contains("g
-  new MutationObserver(muts => {
-    if (on()) {
-      const pressed = new Set();
-      muts.forEach(m => { if (m.type === "attributes" && m.target.classList.contains("down") && !m.oldValue?.i
-      markGuide();
-      pressed.forEach(juice);
-      keys().forEach(k => {
-        const s = realWord(k), was = last.get(k);
-        if (s && was && was.text && was.text !== s.textContent && k.classList.contains("down")) bounceOut(k, w
-      });
-    }
-    remember();
-  }).observe(kb, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["c
-  remember(); markGuide(); markGuide();
-})();
 // build_voice.py
 """Record every word of Mad Libs Piano with the Kokoro neural voice and pack it for the page.
 Usage: node vocab.js > vocab.json
@@ -404,267 +264,6 @@ def main():
     print("wrote", out_path, os.path.getsize(out_path))
 if __name__ == "__main__":
     main()
-// fun.css
-/* Style lab, round 2: the original layout, made fun with three moves only —
-   colour, round friendly type, and a little bounce. No textures, no tilt, no tape.
-   html:root[data-style] outranks the page's dark-mode :root rules, so each look sets its own colours. */
-/* ---------- shared by every fun look ---------- */
-html:root[data-style] {
-  color-scheme: light;
-  --display: "Fredoka", system-ui, sans-serif; --body: "Nunito", system-ui, sans-serif; --mono: "Nunito", syst
-  --ease-pop: cubic-bezier(.34, 1.56, .64, 1);
-  --guide: #22b45a;
-}
-/* each note has its own colour (C red, D orange, E yellow, F blue, G purple, A pink, B teal); the keyboard st
-html[data-style] .kb > .key:nth-child(12n+1)  { --kc: #ff5a5f; --kp: #ffd0d2; }
-html[data-style] .kb > .key:nth-child(12n+3)  { --kc: #ff9f1c; --kp: #ffe0b8; }
-html[data-style] .kb > .key:nth-child(12n+5)  { --kc: #ffcf33; --kp: #fff1b0; }
-html[data-style] .kb > .key:nth-child(12n+6)  { --kc: #3d9bff; --kp: #cfe4ff; }
-html[data-style] .kb > .key:nth-child(12n+8)  { --kc: #8b5cf6; --kp: #e2d6ff; }
-html[data-style] .kb > .key:nth-child(12n+10) { --kc: #ff5fb8; --kp: #ffd3ec; }
-html[data-style] .kb > .key:nth-child(12n+12) { --kc: #14b8b0; --kp: #c4f1ee; }
-html[data-style] h1 { font-weight: 700; letter-spacing: -0.01em; }
-html[data-style] h1 em { font-style: normal; }
-html[data-style] .label { font-family: var(--display); font-size: 13px; font-weight: 600; letter-spacing: .02e
-html[data-style] .w.silly::after, html[data-style] .now .pos { font-family: var(--body); font-weight: 700; let
-html[data-style] .kw { font-family: var(--display); font-weight: 600; }
-html[data-style] .sung { font-family: var(--display); font-weight: 500; }
-html[data-style] .source h2, html[data-style] .how h2 { font-family: var(--display); font-weight: 700; }
-html[data-style] .src { font-family: var(--body); }
-/* round, chunky controls */
-html[data-style] .btn, html[data-style] .pick select, html[data-style] .chip { font-family: var(--display); fo
-html[data-style] .song-pick select { font-size: 17px; }
-html[data-style] .keys-pick select { padding-left: 16px; }
-html[data-style] .btn { padding-inline: 16px; transition: transform .12s var(--ease-pop); }
-html[data-style] .btn:hover:not(:disabled) { transform: translateY(-2px); }
-html[data-style] .btn:active:not(:disabled) { transform: translateY(1px) scale(.97); }
-html[data-style] .stage, html[data-style] .end-strip { border-radius: 20px; }
-/* keys squish when pressed, and the guide dot bobs */
-html[data-style] .key { transition: transform .1s var(--ease-pop), background-color .1s; }
-html[data-style] .key.white.down { transform: translateY(3px); }
-html[data-style] .key.black.down { transform: translateY(2px); }
-html[data-style] .key.white, html[data-style] .kb.art .key.white { border-radius: 0 0 12px 12px; }
-html[data-style] .key.black, html[data-style] .kb.art .key.black { border-radius: 0 0 9px 9px; }
-html[data-style] .key.guide::after { animation: bob .7s ease-in-out infinite alternate; }
-@keyframes bob { to { transform: translateY(-4px) scale(1.15); } }
-/* each new sung word pops in; a silly one wiggles too */
-html[data-style] .w.fresh { animation: pop .45s var(--ease-pop); }
-html[data-style] .w.silly.fresh { animation: pop .45s var(--ease-pop), wiggle .5s ease-in-out .3s; }
-@keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes wiggle { 25% { transform: rotate(-7deg); } 50% { transform: rotate(6deg); } 75% { transform: rotate
-html[data-style] .end-strip { animation: pop .5s var(--ease-pop); }
-/* room for the switcher */
-html[data-style] .wrap { padding-bottom: 96px; }
-/* =========================================================
-   RAINBOW — white page, every white key wears its note's colour along the bottom
-   ========================================================= */
-html:root[data-style="rainbow"] {
-  --paper: #ffffff; --stage: #f4f4fb; --ink: #1d1b2c; --muted: #6a6880; --line: #dddbe8;
-  --brass: #8b5cf6; --silly: #ff3d7f; --ivory: #ffffff; --ivory-down: #f6f5fb;
-  --ebony: #1d1b2c; --ebony-down: #3a3752; --key-ink: #1d1b2c; --key-ink-on-ebony: #ffffff;
-  --key-silly: #e8246b; --key-silly-on-ebony: #ff9cc2; --chip: #ffffff; --key-note: #8a889e; --key-hint: #b3b1
-}
-html[data-style="rainbow"] h1 em {
-  background: linear-gradient(90deg, #ff5a5f, #ff9f1c, #ffcf33, #22b45a, #3d9bff, #8b5cf6, #ff5fb8);
-  -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .04em;
-}
-html[data-style="rainbow"] .btn.silly { background: #ff3d7f; }
-html[data-style="rainbow"] .song-pick select, html[data-style="rainbow"] .keys-pick select, html[data-style="r
-html[data-style="rainbow"] .song-pick::before { color: #ff3d7f; }
-html[data-style="rainbow"] .key.white, html[data-style="rainbow"] .kb.art .key.white {
-  background: color-mix(in srgb, var(--kc) 7%, #fff); border-color: var(--line);
-  box-shadow: inset 0 -14px 0 var(--kc); padding-bottom: 20px;
-}
-html[data-style="rainbow"] .key.white.down, html[data-style="rainbow"] .kb.art .key.white.down {
-  background: color-mix(in srgb, var(--kc) 30%, #fff); box-shadow: inset 0 -8px 0 var(--kc);
-}
-html[data-style="rainbow"] .key.black, html[data-style="rainbow"] .kb.art .key.black { background: var(--ebony
-html[data-style="rainbow"] .key.black.down, html[data-style="rainbow"] .kb.art .key.black.down { background: v
-html[data-style="rainbow"] .key.white.guide, html[data-style="rainbow"] .kb.art .key.white.guide { background:
-html[data-style="rainbow"] .key.black.guide, html[data-style="rainbow"] .kb.art .key.black.guide { background:
-/* =========================================================
-   CANDY — soft pink page, every white key a pastel sweet, the guide key bright green
-   ========================================================= */
-html:root[data-style="candy"] {
-  --paper: #fff5fa; --stage: #ffffff; --ink: #3a1f3d; --muted: #8a6a8c; --line: #f3d6e6;
-  --brass: #ff5fb8; --silly: #e8246b; --ivory: #ffffff; --ivory-down: #fff;
-  --ebony: #4a2a52; --ebony-down: #6d4a76; --key-ink: #3a1f3d; --key-ink-on-ebony: #ffffff;
-  --key-silly: #d4145c; --key-silly-on-ebony: #ffb3d4; --chip: #ffffff; --key-note: #8a6a8c; --key-hint: #b99b
-}
-html[data-style="candy"] h1 em { color: #ff5fb8; }
-html[data-style="candy"] .btn { background: var(--ink); }
-html[data-style="candy"] .btn.silly { background: #ff5fb8; }
-html[data-style="candy"] .btn.restart { background: #fff; border: 2px solid #f3c2dc; color: var(--ink); }
-html[data-style="candy"] .song-pick select, html[data-style="candy"] .keys-pick select { border: 2px solid #f3
-html[data-style="candy"] .song-pick::before { color: #ff5fb8; }
-html[data-style="candy"] .kb { gap: 4px; }
-html[data-style="candy"] .key.white, html[data-style="candy"] .kb.art .key.white {
-  background: var(--kp); border: 0; margin-right: 0; border-radius: 0 0 16px 16px;
-  box-shadow: inset 0 -7px 0 color-mix(in srgb, var(--kc) 35%, var(--kp));
-}
-html[data-style="candy"] .key.white.down, html[data-style="candy"] .kb.art .key.white.down {
-  background: color-mix(in srgb, var(--kc) 40%, var(--kp)); box-shadow: inset 0 -3px 0 color-mix(in srgb, var(
-}
-html[data-style="candy"] .key.black, html[data-style="candy"] .kb.art .key.black { background: var(--ebony); b
-html[data-style="candy"] .key.black.down, html[data-style="candy"] .kb.art .key.black.down { background: var(-
-html[data-style="candy"] .key.white.guide, html[data-style="candy"] .kb.art .key.white.guide { background: var
-html[data-style="candy"] .key.black.guide, html[data-style="candy"] .kb.art .key.black.guide { background: var
-html[data-style="candy"] .key.white.guide .kw, html[data-style="candy"] .key.white.guide .kn,
-html[data-style="candy"] .kb.art .key.white.guide .kw, html[data-style="candy"] .kb.art .key.white.guide .kn {
-html[data-style="candy"] .key.white.guide::after { background: #fff; box-shadow: 0 0 0 3px rgb(255 255 255 / .
-html[data-style="candy"] .kb.art .key.white .kw:not(.silly) { color: var(--ink); }
-html[data-style="candy"] .kb.art .key.white .kw.silly { color: #d4145c; }
-html[data-style="candy"] .kb.art .key.black .kw:not(.silly) { color: #fff; }
-html[data-style="candy"] .stage { box-shadow: 0 2px 0 #f3d6e6; }
-html[data-style="candy"] .stage.art { box-shadow: none; }
-/* =========================================================
-   SUNSHINE — one big yellow, white toy shapes with thick black outlines
-   ========================================================= */
-html:root[data-style="sunshine"] {
-  --paper: var(--sun-bg, #ffd84d); --stage: #ffffff; --ink: #1f1a10; --muted: #5c4d1e; --line: #1f1a10;
-  --brass: #1f1a10; --silly: #e8246b; --ivory: #ffffff; --ivory-down: #fff4c2;
-  --ebony: #1f1a10; --ebony-down: #4a4030; --key-ink: #1f1a10; --key-ink-on-ebony: #ffffff;
-  --key-silly: #e8246b; --key-silly-on-ebony: #ffa3c6; --chip: #ffffff; --key-note: #7a6c48; --key-hint: #a89a
-  --edge: 3px solid #1f1a10; --lift: 0 4px 0 #1f1a10;
-}
-html[data-style="sunshine"] h1 em { color: #fff; -webkit-text-stroke: 7px #1f1a10; paint-order: stroke fill; }
-html[data-style="sunshine"] .btn, html[data-style="sunshine"] .pick select { border: var(--edge); box-shadow: 
-html[data-style="sunshine"] .btn:active:not(:disabled) { box-shadow: 0 1px 0 #1f1a10; transform: translateY(3p
-html[data-style="sunshine"] .btn.silly { background: #ff5a5f; color: #fff; }
-html[data-style="sunshine"] .btn.restart { background: #fff; border: var(--edge); }
-html[data-style="sunshine"] .btn.ghost { background: #fff; border: var(--edge); }
-html[data-style="sunshine"] .song-pick::before { color: #ff5a5f; }
-html[data-style="sunshine"] .kb-wrap { padding: 2px 4px 10px; }
-html[data-style="sunshine"] .kb { background: #fff; border: var(--edge); border-radius: 18px; overflow: hidden
-html[data-style="sunshine"] .key.white, html[data-style="sunshine"] .kb.art .key.white {
-  background: #fff; border: 0; border-right: 3px solid #1f1a10; margin-right: 0; border-radius: 0; box-shadow:
-}
-html[data-style="sunshine"] .key.white:last-child { border-right: 0; }
-html[data-style="sunshine"] .key.white.down, html[data-style="sunshine"] .kb.art .key.white.down { background:
-html[data-style="sunshine"] .key.black, html[data-style="sunshine"] .kb.art .key.black { background: #1f1a10; 
-html[data-style="sunshine"] .key.black.down, html[data-style="sunshine"] .kb.art .key.black.down { background:
-html[data-style="sunshine"] .key.white.guide, html[data-style="sunshine"] .kb.art .key.white.guide { backgroun
-html[data-style="sunshine"] .key.black.guide, html[data-style="sunshine"] .kb.art .key.black.guide { backgroun
-html[data-style="sunshine"] .key.guide::after { background: #1f1a10; box-shadow: 0 0 0 3px #fff; }
-html[data-style="sunshine"] .kb.art .key.white .kw:not(.silly) { color: var(--ink); }
-html[data-style="sunshine"] .kb.art .key.white .kw.silly { color: #e8246b; }
-html[data-style="sunshine"] .kb.art .key.black .kw:not(.silly) { color: #fff; }
-html[data-style="sunshine"] .stage, html[data-style="sunshine"] .end-strip { border: var(--edge); box-shadow: 
-html[data-style="sunshine"] .source, html[data-style="sunshine"] .how {
-  background: #fff; border: var(--edge); border-radius: 20px; padding: 16px 20px; box-shadow: var(--lift);
-}
-html[data-style="sunshine"] .legend span::before { box-shadow: 0 0 0 2px #1f1a10; }
-html[data-style="sunshine"] .now, html[data-style="sunshine"] .status, html[data-style="sunshine"] .legend { c
-/* =========================================================
-   SUNSHINE OPTIONS — page colours and add-ons that mix in any combination
-   ========================================================= */
-html[data-bg="yellow"] { --sun-bg: #ffd84d; }
-html[data-bg="sky"]    { --sun-bg: #8fd3ff; }
-html[data-bg="mint"]   { --sun-bg: #8ee6b0; }
-html[data-bg="peach"]  { --sun-bg: #ffb38a; }
-html[data-bg="lilac"]  { --sun-bg: #c8b6ff; }
-html[data-bg="pink"]   { --sun-bg: #ff9ecf; }
-/* Rainbow keys: each white key gets its note's colour in a band along the bottom */
-html[data-style="sunshine"][data-add~="rainbow"] .key.white, html[data-style="sunshine"][data-add~="rainbow"] 
-  box-shadow: inset 0 -14px 0 var(--kc), inset 0 -17px 0 #1f1a10; padding-bottom: 22px;
-}
-/* Colour buttons: every control its own bright colour */
-html[data-style="sunshine"][data-add~="colors"] h1 em { color: #ff5a5f; }
-html[data-style="sunshine"][data-add~="colors"] .btn.restart { background: #3d9bff; color: #fff; }
-html[data-style="sunshine"][data-add~="colors"] .keys-pick select {
-  background-color: #8b5cf6; color: #fff;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3C
-}
-html[data-style="sunshine"][data-add~="colors"] .btn.ghost { background: #22b45a; color: #fff; }
-html[data-style="sunshine"][data-add~="colors"] .how { background: #fff4c2; }
-html[data-style="sunshine"][data-add~="colors"] .key.black { background: #2b2f7a; }
-html[data-style="sunshine"][data-add~="colors"] .key.black.down { background: #4a4fb0; }
-/* Chunky: fatter lines, a deeper lift, a bigger title and bigger sung words */
-html[data-style="sunshine"][data-add~="chunky"] { --edge: 4px solid #1f1a10; --lift: 0 7px 0 #1f1a10; }
-html[data-style="sunshine"][data-add~="chunky"] h1 { font-size: clamp(42px, 8vw, 72px); text-shadow: 0 5px 0 #
-html[data-style="sunshine"][data-add~="chunky"] h1 em { text-shadow: none; }
-html[data-style="sunshine"][data-add~="chunky"] .btn, html[data-style="sunshine"][data-add~="chunky"] .pick se
-html[data-style="sunshine"][data-add~="chunky"] .key.white, html[data-style="sunshine"][data-add~="chunky"] .k
-html[data-style="sunshine"][data-add~="chunky"] .kb { border-radius: 24px; }
-html[data-style="sunshine"][data-add~="chunky"] .stage, html[data-style="sunshine"][data-add~="chunky"] .sourc
-html[data-style="sunshine"][data-add~="chunky"] .how, html[data-style="sunshine"][data-add~="chunky"] .end-str
-html[data-style="sunshine"][data-add~="chunky"] .sung { font-size: clamp(26px, 3.8vw, 38px); font-weight: 600;
-/* Polka dots: a soft dot pattern on the page */
-html[data-style="sunshine"][data-add~="dots"], html[data-style="sunshine"][data-add~="dots"] body {
-  background-image: radial-gradient(rgb(31 26 16 / .14) 3.5px, transparent 4px);
-  background-size: 26px 26px;
-}
-/* Extra bouncy: the pressed word bounces and floats away before the new one drops in (bouncy.js) */
-html[data-add~="bouncy"] .kw { --r: rotate(180deg); }
-html[data-add~="bouncy"] .kw.letter { --r: none; }
-html[data-style="sunshine"][data-add~="bouncy"] .key[data-ghosting] .kw:not(.ghost) { display: none; }
-html[data-style="sunshine"][data-add~="bouncy"] .kw.ghost { animation: ghost-out .65s ease-in forwards; }
-html[data-style="sunshine"][data-add~="bouncy"] .key[data-arriving] .kw:not(.ghost) { animation: drop-in .38s 
-@keyframes ghost-out {
-  0%   { transform: translateY(0) var(--r) scale(1); }
-  28%  { transform: translateY(-4px) var(--r) scale(1.32); animation-timing-function: var(--ease-pop); }
-  50%  { transform: translateY(0) var(--r) scale(1); opacity: 1; }
-  100% { transform: translateY(-70px) var(--r) scale(.7); opacity: 0; }
-}
-@keyframes drop-in { from { transform: translateY(-26px) var(--r) scale(.6); opacity: 0; } to { transform: tra
-/* Juice: each press flashes the key in its note's colour, squashes it, and pops music notes out of it */
-html[data-style="sunshine"][data-add~="bouncy"] .key { transform-origin: 50% 0; }
-html[data-style="sunshine"][data-add~="bouncy"] .key.juice { animation: squash .32s var(--ease-pop); }
-html[data-style="sunshine"][data-add~="bouncy"] .key::before {
-  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
-  background: var(--kc, #ffd84d); mix-blend-mode: multiply;
-}
-html[data-style="sunshine"][data-add~="bouncy"] .key.black::before { mix-blend-mode: screen; background: #ffd8
-html[data-style="sunshine"][data-add~="bouncy"] .key.juice::before { animation: flash .5s ease-out; }
-@keyframes squash { 0% { transform: scale(1, 1); } 30% { transform: scale(1.04, .95); } 100% { transform: scal
-@keyframes flash { 0% { opacity: .75; } 100% { opacity: 0; } }
-.juice-note {
-  position: fixed; z-index: 90; pointer-events: none; font: 700 26px/1 "Fredoka", system-ui, sans-serif;
-  color: var(--c); -webkit-text-stroke: 5px #1f1a10; paint-order: stroke fill;
-  animation: note-fly .9s cubic-bezier(.2, .7, .3, 1) forwards;
-}
-@keyframes note-fly {
-  0%   { transform: translate(-50%, 0) scale(.3) rotate(0deg); opacity: 0; }
-  15%  { opacity: 1; }
-  45%  { transform: translate(calc(-50% + var(--dx) * .6), calc(var(--dy) * .7)) scale(1.15) rotate(calc(var(-
-  100% { transform: translate(calc(-50% + var(--dx)), var(--dy)) scale(.8) rotate(var(--rot)); opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  html[data-add~="bouncy"] .kw.ghost, html[data-add~="bouncy"] .key[data-arriving] .kw, html[data-add~="bouncy
-  html[data-add~="bouncy"] .key.juice::before { animation: none !important; }
-  .juice-note { display: none; }
-}
-html[data-style="sunshine"][data-add~="bouncy"] .w { transition: transform .2s var(--ease-pop); }
-html[data-style="sunshine"][data-add~="bouncy"] .w:hover { transform: translateY(-3px) rotate(-3deg); }
-html[data-style="sunshine"][data-add~="bouncy"] h1 em { display: inline-block; animation: sway 2.4s ease-in-ou
-@keyframes sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
-/* ---------- the switcher ---------- */
-.style-lab {
-  position: fixed; z-index: 100; left: 50%; bottom: max(14px, env(safe-area-inset-bottom, 0px)); transform: tr
-  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 10px; padding: 8px 10
-  max-width: calc(100vw - 24px); box-sizing: border-box;
-  background: #1b1b1b; color: #fff; border-radius: 22px; box-shadow: 0 8px 24px rgb(0 0 0 / .3);
-  font: 600 13px/1 system-ui, -apple-system, sans-serif;
-}
-.style-lab .grp { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
-.style-lab .grp + .grp { border-left: 1px solid rgb(255 255 255 / .18); padding-left: 10px; }
-.style-lab button { font: inherit; color: #fff; background: transparent; border: 0; border-radius: 999px; padd
-.style-lab button:hover { background: rgb(255 255 255 / .12); }
-.style-lab button[aria-pressed="true"] { background: #ffd84d; color: #1b1b1b; }
-.style-lab .sw { width: 26px; height: 26px; padding: 0; border-radius: 50%; background: var(--c); box-shadow: 
-.style-lab .sw:hover { background: var(--c); transform: scale(1.1); }
-.style-lab .sw[aria-pressed="true"] { background: var(--c); box-shadow: 0 0 0 2px #1b1b1b, 0 0 0 4px #fff; }
-.style-lab[data-off] .opt { display: none; }
-@media (max-width: 640px) {
-  .style-lab { font-size: 12px; gap: 6px; border-radius: 18px; }
-  .style-lab .grp + .grp { border-left: 0; padding-left: 0; }
-  .style-lab button { padding: 7px 9px; }
-  .style-lab .sw { width: 22px; height: 22px; }
-  html[data-style] .wrap { padding-bottom: 170px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  html[data-style] .w.fresh, html[data-style] .w.silly.fresh, html[data-style] .end-strip, html[data-style] .k
-  html[data-style] .btn, html[data-style] .key { transition: none !important; }
 // data.js
 // Song and word data for Mad Libs Piano. All song lyrics are in the public domain.
 // Each lyric word is written "word|TAG", where TAG is its part of speech.
@@ -750,4 +349,341 @@ How|WH I|PRON wonder|V what|WH you|PRON are!|LINK
 Up|ADV above|PREP the|DET world|N so|ADV high,|ADJ
 Like|PREP a|DET diamond|N in|PREP the|DET sky.|N
 Twinkle,|V twinkle,|V little|ADJ star,|N
-How|WH I|PRON wonder|V what|WH you|PRON are!|L
+How|WH I|PRON wonder|V what|WH you|PRON are!|LINK` },
+  { id: "row", title: "Row, Row, Row Your Boat", credit: "Traditional, first printed 1852",
+    melody: [[60, 60, 60, 62, 64], [[64, 62], 64, 65, 67], [[72, 72, 72], [67, 67, 67], [64, 64, 64], [60, 60,
+    lyrics: `Row,|V row,|V row|V your|POSS boat,|N
+Gently|ADV down|PREP the|DET stream.|N
+Merrily,|ADV merrily,|ADV merrily,|ADV merrily,|ADV
+Life|N is|LINK but|ADV a|DET dream.|N` },
+  { id: "grace", title: "Amazing Grace", credit: "Words by John Newton, 1779",
+    melody: [[[60, 65, 69], 69, 67, 65, 62, 60], [60, 65, 69, 69, 67, 72], [69, 72, 69, 69, 67, 65, 62, 60], [
+    lyrics: `Amazing|ADJ grace!|N How|WH sweet|ADJ the|DET sound|N
+That|WH saved|VED a|DET wretch|N like|PREP me!|PRON
+I|PRON once|ADV was|LINKPAST lost,|ADJ but|CONJ now|ADV am|LINK found;|ADJ
+Was|LINKPAST blind,|ADJ but|CONJ now|ADV I|PRON see.|V
+'Twas|ITWAS grace|N that|WH taught|VED my|POSS heart|N to|TO fear,|V
+And|CONJ grace|N my|POSS fears|NS relieved;|VED
+How|WH precious|ADJ did|MODAL that|DET grace|N appear|V
+The|DET hour|N I|PRON first|ADV believed!|VED
+Through|PREP many|DET dangers,|NS toils|NS and|CONJ snares,|NS
+I|PRON have|MODAL already|ADV come;|VED
+'Tis|ITIS grace|N hath|MODAL brought|VED me|PRON safe|ADJ thus|ADV far,|ADV
+And|CONJ grace|N will|MODAL lead|V me|PRON home.|N` },
+  { id: "clementine", title: "Oh My Darling, Clementine", credit: "Words by Percy Montrose, 1884",
+    melody: [[60, 60, [60, 55], 64, 64, [64, 60]], [[60, 64, 67, 67], 65, 64, 62], [62, 64, [65, 65], [64, 62,
+    lyrics: `In|PREP a|DET cavern,|N in|PREP a|DET canyon,|N
+Excavating|VING for|PREP a|DET mine,|N
+Dwelt|VED a|DET miner|N forty-niner,|N
+And|CONJ his|POSS daughter|N Clementine.|NAME
+Oh|INTJ my|POSS darling,|N oh|INTJ my|POSS darling,|N
+Oh|INTJ my|POSS darling,|N Clementine!|NAME
+You|PRON are|LINK lost|ADJ and|CONJ gone|ADJ forever,|ADV
+Dreadful|ADJ sorry,|ADJ Clementine.|NAME
+Light|ADJ she|PRON was|LINKPAST and|CONJ like|PREP a|DET fairy,|N
+And|CONJ her|POSS shoes|NS were|LINKPAST number|N nine,|NUM
+Herring|N boxes|NS without|PREP topses,|NS
+Sandals|NS were|LINKPAST for|PREP Clementine.|NAME` },
+  { id: "range", title: "Home on the Range", credit: "Words by Brewster Higley, 1870s",
+    melody: [[55, 55, 60, 62, 64, 60, 59, [57, 65, 65], 65], [64, 65, 67, 64, 64, 64, 62], [55, 55, 62, 64, 60
+    lyrics: `Oh,|INTJ give|V me|PRON a|DET home|N where|WH the|DET buffalo|NS roam,|V
+Where|WH the|DET deer|NS and|CONJ the|DET antelope|NS play,|V
+Where|WH seldom|ADV is|LINK heard|VED a|DET discouraging|ADJ word,|N
+And|CONJ the|DET skies|NS are|LINK not|ADV cloudy|ADJ all|DET day.|N
+Home,|N home|N on|PREP the|DET range,|N
+Where|WH the|DET deer|NS and|CONJ the|DET antelope|NS play;|V
+Where|WH seldom|ADV is|LINK heard|VED a|DET discouraging|ADJ word,|N
+And|CONJ the|DET skies|NS are|LINK not|ADV cloudy|ADJ all|DET day.|N` },
+  { id: "shenandoah", title: "Shenandoah", credit: "Traditional sea shanty, 1800s",
+    melody: [[55, 60, 69, 67, 65, 72, 69], [67, 67, 69, 64], [55, 60, 69, 67, 65, 72, 69], [62, 64, 60, 64], [
+    lyrics: `Oh|INTJ Shenandoah,|NAME I|PRON long|V to|TO see|V you,|PRON
+Away,|ADV you|PRON rolling|ADJ river.|N
+Oh|INTJ Shenandoah,|NAME I|PRON long|V to|TO see|V you,|PRON
+Away,|ADV I'm|IM bound|ADJ away|ADV
+'Cross|PREP the|DET wide|ADJ Missouri.|NAME
+Oh|INTJ Shenandoah,|NAME I|PRON love|V your|POSS daughter,|N
+Away,|ADV you|PRON rolling|ADJ river.|N
+For|PREP her|PRON I'd|ID cross|V your|POSS roaming|ADJ waters,|NS
+Away,|ADV I'm|IM bound|ADJ away|ADV
+'Cross|PREP the|DET wide|ADJ Missouri.|NAME` },
+  { id: "birthday", title: "Happy Birthday to You", credit: "Tune and words from the 1890s. The most-sung song
+    melody: [[[60, 60], [62, 60], 65, 64], [[60, 60], [62, 60], 67, 65], [[60, 60], [72, 69], 65, 64], [[70, 7
+    lyrics: `Happy|ADJ birthday|N to|PREP you!|PRON
+Happy|ADJ birthday|N to|PREP you!|PRON
+Happy|ADJ birthday,|N dear|ADJ Sam,|NAME
+Happy|ADJ birthday|N to|PREP you!|PRON` },
+  { id: "jingle", title: "Jingle Bells", credit: "Words and music by James Lord Pierpont, 1857",
+    melody: [[[69, 69], 69, [69, 69], 69], [[69, 72], 65, 67, 69], [70, 70, 70, 70, 70, 69, 69, 69, 69, [67, 6
+    lyrics: `Jingle|V bells,|NS jingle|V bells,|NS
+Jingle|V all|DET the|DET way!|N
+Oh|INTJ what|WH fun|N it|PRON is|LINK to|TO ride|V in|PREP a|DET one-horse|ADJ open|ADJ sleigh!|N
+Jingle|V bells,|NS jingle|V bells,|NS
+Jingle|V all|DET the|DET way!|N
+Oh|INTJ what|WH fun|N it|PRON is|LINK to|TO ride|V in|PREP a|DET one-horse|ADJ open|ADJ sleigh!|N` },
+  { id: "macdonald", title: "Old MacDonald Had a Farm", credit: "Traditional farm song, printed by 1917",
+    melody: [[65, [65, 65, 60], 62, 62, 60], [69, 69, 67, 67, 65], [60, 65, 65, 65, 60, 62, 62, 60], [69, 69, 
+    lyrics: `Old|ADJ MacDonald|NAME had|VED a|DET farm,|N
+E-|INTJ I-|INTJ E-|INTJ I-|INTJ O!|INTJ
+And|CONJ on|PREP his|POSS farm|N he|PRON had|VED a|DET cow,|N
+E-|INTJ I-|INTJ E-|INTJ I-|INTJ O!|INTJ
+With|PREP a|DET moo|N moo|N here|ADV and|CONJ a|DET moo|N moo|N there,|ADV
+Here|ADV a|DET moo,|N there|ADV a|DET moo,|N everywhere|ADV a|DET moo|N moo!|N
+Old|ADJ MacDonald|NAME had|VED a|DET farm,|N
+E-|INTJ I-|INTJ E-|INTJ I-|INTJ O!|INTJ` },
+  { id: "merry", title: "We Wish You a Merry Christmas", credit: "Traditional English carol",
+    melody: [[62, 67, 67, 69, [67, 66], [64, 64]], [64, 69, 69, 71, [69, 67], [66, 62]], [62, 71, 71, 72, [71,
+    lyrics: `We|PRON wish|V you|PRON a|DET merry|ADJ Christmas,|N
+We|PRON wish|V you|PRON a|DET merry|ADJ Christmas,|N
+We|PRON wish|V you|PRON a|DET merry|ADJ Christmas,|N
+And|CONJ a|DET happy|ADJ New|ADJ Year!|N` },
+  { id: "mary", title: "Mary Had a Little Lamb", credit: "Words by Sarah Josepha Hale, 1830",
+    melody: [[[64, 62], 60, 62, [64, 64], 64], [[62, 62], 62, [64, 67], 67], [[64, 62], 60, 62, [64, 64], 64],
+    lyrics: `Mary|NAME had|VED a|DET little|ADJ lamb,|N
+Little|ADJ lamb,|N little|ADJ lamb,|N
+Mary|NAME had|VED a|DET little|ADJ lamb,|N
+Its|POSS fleece|N was|LINKPAST white|ADJ as|PREP snow.|N
+Everywhere|ADV that|WH Mary|NAME went,|VED
+Mary|NAME went,|VED Mary|NAME went,|VED
+Everywhere|ADV that|WH Mary|NAME went,|VED
+The|DET lamb|N was|LINKPAST sure|ADJ to|TO go.|V` },
+  { id: "spider", title: "The Itsy Bitsy Spider", credit: "Traditional, printed by 1910",
+    melody: [[55, [60, 60, 60, 62], [64, 64], 64, 62, 60, [62, 64], 60], [64, 64, 65, 67, 67, 65, 64, [65, 67]
+      [60, 60, 62, 64, 64, 62, 60, 62, 64, 60], [55, 55, [60, 60, 60, 62], [64, 64], 64, 62, 60, 62, [64, 60]]
+    lyrics: `The|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET water|N spout.|N
+Down|ADV came|VED the|DET rain|N and|CONJ washed|VED the|DET spider|N out.|ADV
+Out|ADV came|VED the|DET sun|N and|CONJ dried|VED up|ADV all|DET the|DET rain,|N
+And|CONJ the|DET itsy-bitsy|ADJ spider|N climbed|VED up|PREP the|DET spout|N again.|ADV` },
+  { id: "london", title: "London Bridge Is Falling Down", credit: "Traditional English rhyme, 1700s",
+    melody: [[[67, 69], 67, 65, [64, 65], 67], [[62, 64], 65, [64, 65], 67], [[67, 69], 67, 65, [64, 65], 67],
+      [67, 69, 67, 65, 64, 65, 67], [62, 64, 65, 64, 65, 67], [67, 69, 67, 65, 64, 65, 67], [62, 67, [64, 60]]
+    lyrics: `London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
+Falling|VING down,|ADV falling|VING down,|ADV
+London|NAME Bridge|NAME is|LINK falling|VING down,|ADV
+My|POSS fair|ADJ lady!|N
+Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
+Sticks|NS and|CONJ stones,|NS sticks|NS and|CONJ stones,|NS
+Build|V it|PRON up|ADV with|PREP sticks|NS and|CONJ stones,|NS
+My|POSS fair|ADJ lady!|N` },
+  { id: "yankee", title: "Yankee Doodle", credit: "American folk song, 1700s",
+    melody: [[[60, 60], [62, 64], 60, 64, 62], [[55, 60, 60], 62, 64, [60, 59]], [60, 60, [62, 64], 65, 64, 62
+    lyrics: `Yankee|NAME Doodle|NAME went|VED to|PREP town,|N
+A-riding|VING on|PREP a|DET pony,|N
+Stuck|VED a|DET feather|N in|PREP his|POSS cap,|N
+And|CONJ called|VED it|PRON macaroni!|N` },
+  { id: "sleeping", title: "Are You Sleeping (Frère Jacques)", credit: "Traditional French round, 1700s",
+    melody: [[60, 62, [64, 60], 60, 62, [64, 60]], [[64, 65], 67, [64, 65], 67], [[67, 69], 67, 65, [64, 60], 
+    lyrics: `Are|LINK you|PRON sleeping,|VING are|LINK you|PRON sleeping,|VING
+Brother|N John?|NAME Brother|N John?|NAME
+Morning|N bells|NS are|LINK ringing,|VING morning|N bells|NS are|LINK ringing,|VING
+Ding,|INTJ dang,|INTJ dong!|INTJ Ding,|INTJ dang,|INTJ dong!|INTJ` },
+  { id: "farmer", title: "The Farmer in the Dell", credit: "Traditional singing game, 1800s",
+    melody: [[55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 6
+      [55, [60, 60], 60, 60, 60], [55, [62, 64], 64, 64, 64], [[67, 67], 69, [67, 64, 60]], [62, [64, 64], 62,
+    lyrics: `The|DET farmer|N in|PREP the|DET dell,|N
+The|DET farmer|N in|PREP the|DET dell,|N
+Hi-ho,|INTJ the|DET derry-o,|INTJ
+The|DET farmer|N in|PREP the|DET dell!|N
+The|DET farmer|N takes|VS a|DET wife,|N
+The|DET farmer|N takes|VS a|DET wife,|N
+Hi-ho,|INTJ the|DET derry-o,|INTJ
+The|DET farmer|N takes|VS a|DET wife!|N` },
+  { id: "scarborough", title: "Scarborough Fair", credit: "Traditional English ballad",
+    melody: [[60, 60, [67, 67], 67, [62, 63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72, 72], 70
+      [60, 60, 67, 67, 67, 62, [63, 62], 60], [[67, 70], 72, [70, 67, 69], 65, 67], [[72, 72], 72, 70, 67, [67
+    lyrics: `Are|LINK you|PRON going|VING to|PREP Scarborough|NAME Fair?|NAME
+Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
+Remember|V me|PRON to|PREP one|PRON who|WH lives|VS there,|ADV
+She|PRON once|ADV was|LINKPAST a|DET true|ADJ love|N of|PREP mine.|PRON
+Tell|V her|PRON to|TO make|V me|PRON a|DET cambric|ADJ shirt,|N
+Parsley,|N sage,|N rosemary|N and|CONJ thyme,|N
+Without|PREP no|DET seams|NS nor|CONJ needlework,|N
+Then|ADV she'll|IM be|LINK a|DET true|ADJ love|N of|PREP mine.|PRON` },
+  { id: "saints", title: "When the Saints Go Marching In", credit: "Traditional American spiritual and jazz st
+    melody: [[60, 64, 65, 67, 60, [64, 65], 67], [60, 64, 65, 67, 64, [60, 64], 62], [64, 64, 62, 60, 60, 64, 
+    lyrics: `Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
+Oh|INTJ when|WH the|DET saints|NS go|V marching|VING in,|ADV
+Oh|INTJ Lord,|NAME I|PRON want|V to|TO be|V in|PREP that|DET number,|N
+When|WH the|DET saints|NS go|V marching|VING in!|ADV` },
+  { id: "daisy", title: "Daisy Bell (Bicycle Built for Two)", credit: "Words and music by Harry Dacre, 1892",
+    melody: [[[72, 69], [65, 60], 62, 64, 65, [62, 65], 60], [67, 72, [69, 65], 62, 64, 65, 67, 69, 67], [69, 
+      [60, 65, 69, 67, [60, 65], 69, 67], [69, 70, [72, 69, 65], 67, 60, 65]],
+    lyrics: `Daisy,|NAME Daisy,|NAME give|V me|PRON your|POSS answer,|N do!|V
+I'm|IM half|ADV crazy|ADJ all|ADV for|PREP the|DET love|N of|PREP you.|PRON
+It|PRON won't|MODAL be|V a|DET stylish|ADJ marriage,|N
+I|PRON can't|MODAL afford|V a|DET carriage,|N
+But|CONJ you'll|ID look|V sweet|ADJ upon|PREP the|DET seat|N
+Of|PREP a|DET bicycle|N built|VED for|PREP two!|NUM` },
+  { id: "joy", title: "Ode to Joy (Joyful, Joyful)", credit: "Tune by Beethoven, 1824. Words by Henry van Dyke
+    melody: [[[64, 64], [65, 67], 67, [65, 64], 62], [60, 60, [62, 64], 64, 62, 62], [64, [64, 65], 67, 67, [6
+    lyrics: `Joyful,|ADJ joyful,|ADJ we|PRON adore|V thee,|PRON
+God|NAME of|PREP glory,|N Lord|NAME of|PREP love;|N
+Hearts|NS unfold|V like|PREP flowers|NS before|PREP thee,|PRON
+Opening|VING to|PREP the|DET sun|N above.|ADV` },
+  { id: "auld", title: "Auld Lang Syne", credit: "Words by Robert Burns, 1788. Traditional Scottish tune",
+    melody: [[55, 60, [60, 60, 64], 62, [60, 62]], [64, [60, 60], 64, 67, 69], [69, 67, [64, 64, 60], 62, [60,
+    lyrics: `Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
+And|CONJ never|ADV brought|VED to|PREP mind?|N
+Should|MODAL auld|ADJ acquaintance|N be|V forgot,|VED
+And|CONJ auld|ADJ lang|ADJ syne?|N` }
+// art.js
+// Song art for Mad Libs Piano: an illustrated scene behind "Your song" for each song,
+// shown when the Art toggle is on. Each scene is flat SVG drawn in its own fixed colours
+// (it is a picture, so it looks the same in light and dark mode), with the lyric colours
+// chosen to read on top of it. Scenes keep their busy parts to the right and bottom so the
+// words on the left stay clear.
+const ART = (() => {
+  // a small seeded random, so every visit draws the same stars and confetti
+  function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+  const W = 800, H = 320;
+  const wrap = (bg, body) => `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMaxYMax slice" aria-hidden="t
+  const sky = (id, a, b) => `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" sto
+  const star = (x, y, r, c) => `<path d="M${x} ${y - r}L${x + r * .28} ${y - r * .28}L${x + r} ${y}L${x + r * 
+  const dots = (seed, n, x0, x1, y0, y1, f) => { const r = rnd(seed); let s = ""; for (let i = 0; i < n; i++) 
+  const hill = (y, amp, c, phase = 0) => { let d = `M0 ${H}L0 ${y}`; for (let x = 0; x <= W; x += 40) d += `L$
+  const cloud = (x, y, s, c) => `<g fill="${c}"><ellipse cx="${x}" cy="${y}" rx="${36 * s}" ry="${16 * s}"/><e
+  const pine = (x, y, h, c) => `<path d="M${x} ${y - h}L${x + h * .32} ${y - h * .45}L${x + h * .16} ${y - h *
+  const flake = (x, y, r, o) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(1 + r * 2.6).toFixed(
+  const light = { ink: "#1b1a2e", sub: "#3d3a52", silly: "#b0306a", glow: "rgba(255,255,255,.75)" };
+  const dark = { ink: "#fbf7ee", sub: "#d9d3e6", silly: "#ff9cc6", glow: "rgba(0,0,0,.55)" };
+  const scenes = {
+    twinkle: { ...dark, svg: () => wrap(sky("tw", "#0c1534", "#27407a"),
+      dots(7, 70, 0, W, 0, H * .8, (x, y, r) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(r * 1
+      star(560, 90, 26, "#ffe27a") + star(690, 160, 14, "#fff2b8") + star(470, 200, 10, "#fff2b8") + star(740,
+      `<circle cx="700" cy="130" r="34" fill="#fff4cf"/><circle cx="718" cy="120" r="32" fill="#1c2c5c"/>` +
+      `<path d="M600 230l24-22 24 22-24 34z" fill="#9fe7ff" opacity=".9"/><path d="M600 230h48M612 230l12 34 1
+      hill(290, 10, "#0b1129")) },
+    row: { ...light, svg: () => wrap(sky("rw", "#bfe6ff", "#e9f7ff"),
+      `<circle cx="720" cy="125" r="34" fill="#ffd45c"/>` + cloud(520, 70, 1, "#fff") + cloud(300, 40, .7, "#f
+      hill(200, 18, "#8fd18c") + hill(225, 12, "#6cbf73", 2) +
+      `<path d="M0 250 C200 230 420 270 800 245 L800 320 L0 320Z" fill="#4aa3df"/><path d="M0 270 C220 255 430
+      `<g transform="translate(560 238)"><path d="M-60 0h120l-18 22h-84z" fill="#a0522d"/><path d="M-40 -6l-26
+    grace: { ...light, svg: () => wrap(sky("gr", "#ffd9a8", "#fff3e0"),
+      `<g opacity=".55">${Array.from({ length: 14 }, (_, i) => { const a = Math.PI * (i / 13); return `<path d
+      `<circle cx="640" cy="300" r="70" fill="#ffb347"/>` + hill(270, 14, "#e8a27a") + hill(292, 10, "#c97b63"
+      `<path d="M560 180q14-14 28 0q14-14 28 0" stroke="#6b3e2e" stroke-width="4" fill="none"/><path d="M650 1
+    clementine: { ...light, svg: () => wrap(sky("cl", "#ffb46b", "#ffe2b0"),
+      `<circle cx="560" cy="115" r="40" fill="#fff0b3"/>` +
+      `<path d="M380 320V180h70l20-40h90l20 40h40v140z" fill="#c8553d"/><path d="M620 320V150h60l15-30h70l20 3
+      `<path d="M500 320v-60a35 35 0 0170 0v60z" fill="#3a1d14"/><path d="M490 262h90" stroke="#6b3a24" stroke
+      `<path d="M330 320v-80M330 270h-18v-26M330 280h18v-24" stroke="#3f8f4f" stroke-width="12" stroke-linecap
+      `<g transform="translate(720 300)"><path d="M-20 0l6-18h28l6 18z" fill="#c7a17a"/><path d="M-12-18c0-10 
+    range: { ...light, svg: () => wrap(sky("rg", "#8fd0ff", "#e6f5ff"),
+      cloud(460, 60, 1.1, "#fff") + cloud(700, 110, .8, "#fff") + `<circle cx="620" cy="125" r="26" fill="#ffd
+      hill(220, 6, "#b9a36b", .5) + hill(240, 8, "#d8bf63", 1) +
+      `<g fill="#5a3b22"><ellipse cx="560" cy="250" rx="46" ry="26"/><circle cx="604" cy="246" r="18"/><rect x
+      `<g fill="#b97a3c"><ellipse cx="700" cy="262" rx="24" ry="11"/><circle cx="724" cy="250" r="7"/><path d=
+      `<path d="M380 320 L410 236 M392 280 l28-10" stroke="#8a6a3a" stroke-width="3"/>`) },
+    shenandoah: { ...dark, svg: () => wrap(sky("sh", "#3c3f7a", "#e58b6b"),
+      `<circle cx="640" cy="210" r="46" fill="#ffd08a"/>` + hill(190, 26, "#4b4f8c") + hill(220, 22, "#373b6e"
+      `<path d="M300 320 C420 300 520 280 640 262 C700 254 760 252 800 252 L800 274 C700 280 580 296 480 320Z"
+      `<g transform="translate(560 288)"><path d="M-34 0h68l-10 12h-48z" fill="#1a1c3a"/><path d="M0 0v-46l26 
+    birthday: { ...light, svg: () => wrap(sky("bd", "#ffe3f1", "#fff7e0"),
+      dots(11, 45, 430, W, 60, H, (x, y, r, i) => `<rect x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="7" hei
+      [["#ff6b9a", 470, 90], ["#4fc3f7", 540, 60], ["#ffc93c", 610, 100], ["#7bd389", 700, 70]].map(([c, x, y]
+      `<g transform="translate(600 300)"><rect x="-90" y="-60" width="180" height="60" rx="8" fill="#ffb6c9"/>
+    jingle: { ...dark, svg: () => wrap(sky("jb", "#0e2a4a", "#3d6e9c"),
+      dots(5, 80, 0, W, 0, H, (x, y, r, i) => flake(x, y, r, (i * 37 % 10) / 10)) + hill(250, 16, "#eef4fb") +
+      pine(470, 250, 90, "#1f5a3e") + pine(740, 260, 120, "#1a4d35") +
+      `<g transform="translate(600 238)"><path d="M-70 0h110q20 0 24-24" stroke="#c0392b" stroke-width="8" fil
+      `<g transform="translate(470 200)">${[0, 1, 2].map(i => `<circle cx="${i * 16}" cy="${(i % 2) * 6}" r="8
+    macdonald: { ...light, svg: () => wrap(sky("md", "#a8dcff", "#e9f7ff"),
+      `<circle cx="740" cy="120" r="30" fill="#ffd45c"/>` + cloud(400, 60, .9, "#fff") + hill(240, 8, "#8bcf6e
+      `<g transform="translate(560 250)"><path d="M-70 0V-80l70-50 70 50V0z" fill="#c8372d"/><path d="M-70-80l
+      `<g transform="translate(700 270)"><ellipse cx="0" cy="0" rx="40" ry="22" fill="#fff"/><circle cx="-12" 
+      `<path d="M360 290h440M360 270h440" stroke="#d9b07a" stroke-width="6"/>${[380, 440, 500, 640, 760].map(x
+    merry: { ...dark, svg: () => wrap(sky("mx", "#1d1530", "#3b2a55"),
+      dots(9, 60, 0, W, 0, H, (x, y, r, i) => flake(x, y, r, (i * 53 % 10) / 10)) + hill(285, 8, "#f1eef8") +
+      `<g transform="translate(600 290)">${[[0, -220, 70], [0, -160, 95], [0, -95, 120]].map(([x, y, w]) => `<
+      `<g transform="translate(720 290)"><rect x="-26" y="-30" width="52" height="30" fill="#e74c3c"/><rect x=
+    mary: { ...light, svg: () => wrap(sky("my", "#c9ecff", "#f3fbff"),
+      cloud(380, 70, .8, "#fff") + `<circle cx="745" cy="115" r="26" fill="#ffe066"/>` + hill(235, 10, "#a8e08
+      `<g transform="translate(640 210)"><rect x="-56" y="-50" width="112" height="70" fill="#e85d4a"/><path d
+      `<g transform="translate(520 280)"><g fill="#fff">${[[-20, 0], [0, -8], [20, 0], [-10, 8], [10, 8], [0, 
+      dots(4, 16, 360, 800, 280, 315, (x, y, r, i) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="4"
+    spider: { ...light, svg: () => wrap(sky("sp", "#cfe6f5", "#f3f9ee"),
+      `<circle cx="700" cy="120" r="34" fill="#ffd45c"/>` + cloud(560, 70, 1, "#fff") + cloud(470, 105, .7, "#
+      dots(21, 26, 430, 620, 110, 230, (x, y) => `<path d="M${x.toFixed(0)} ${y.toFixed(0)}l-3 9" stroke="#7fb
+      hill(275, 8, "#9fd08a") + `<rect x="640" y="150" width="26" height="150" fill="#9aa7b4"/><rect x="630" y
+      `<path d="M653 158v52" stroke="#555" stroke-width="1.5"/><g transform="translate(653 222)"><ellipse rx="
+    london: { ...light, svg: () => wrap(sky("ld", "#c9d6e3", "#eef2f6"),
+      cloud(480, 70, 1, "#fff") + `<path d="M0 262h800v58H0z" fill="#6f8fa8"/><path d="M0 272c120-8 240 8 360 
+      `<g fill="#6b6f7a"><rect x="470" y="120" width="44" height="150"/><rect x="660" y="120" width="44" heigh
+      `<g fill="#9ea6b4">${[0, 1, 2, 3].map(i => `<rect x="${478 + i * 0}" y="${140 + i * 30}" width="28" heig
+      `<path d="M514 244q73-70 146 0" stroke="#4d5260" stroke-width="5" fill="none"/>`) },
+    yankee: { ...light, svg: () => wrap(sky("yk", "#dff0ff", "#fffaf0"),
+      `<g>${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<path d="M${400 + i * 52} 20l26 38 26-38z" fill="${["#c0392b", 
+      hill(265, 10, "#a5d78f") +
+      `<g transform="translate(620 250)"><ellipse rx="56" ry="26" fill="#a0673a"/><path d="M42-10l30-34 14 6-2
+      `<g transform="translate(560 150) rotate(-20)"><path d="M0 0q40-30 90-6-50 18-90 6z" fill="#fff" stroke=
+    sleeping: { ...dark, svg: () => wrap(sky("sl", "#141a3c", "#3a2e5c"),
+      dots(31, 50, 0, W, 0, H * .7, (x, y, r) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(r * 
+      `<circle cx="720" cy="80" r="30" fill="#fff4cf"/><circle cx="734" cy="72" r="28" fill="#1d2248"/>` +
+      `<g fill="#2a2450"><rect x="520" y="110" width="80" height="210"/><path d="M510 110l50-60 50 60z"/></g><
+      `<g font-family="Figtree, sans-serif" font-weight="700" fill="#d9d3e6" opacity=".85"><text x="640" y="20
+      hill(300, 6, "#120f26")) },
+    farmer: { ...light, svg: () => wrap(sky("fm", "#bfe3ff", "#fff8e6"),
+      `<circle cx="720" cy="120" r="28" fill="#ffd45c"/>` + cloud(480, 70, .9, "#fff") + hill(225, 20, "#9ccf7
+      `<g transform="translate(560 270)"><circle cy="-62" r="14" fill="#ffcf9e"/><path d="M-26-74h52l-8-10h-36
+      `<g transform="translate(700 280)"><path d="M0 0l40-24 40 24-40 18z" fill="#ffd54a"/><path d="M0 0v16l40
+    scarborough: { ...dark, svg: () => wrap(sky("sc", "#2f4f5f", "#9cb8b8"),
+      `<circle cx="660" cy="130" r="40" fill="#f3efe0" opacity=".85"/>` + hill(210, 16, "#3e6262", .8) +
+      `<path d="M380 320V230q60-30 120-20t110-10 190 0V320z" fill="#5d7f6b"/><path d="M0 270h800v50H0z" fill="
+      `<g transform="translate(470 285)" stroke="#2e5d3a" stroke-width="3" fill="#6ba36f">${[0, 1, 2, 3, 4].ma
+      `<g transform="translate(700 260)"><path d="M0 0v-90l18 10v80z" fill="#c9c2b0"/><path d="M-4-90l11-14 11
+    saints: { ...dark, svg: () => wrap(sky("st", "#2a1a4a", "#6a3d8a"),
+      dots(41, 40, 380, W, 20, 200, (x, y, r, i) => `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(2
+      `<g transform="translate(560 200) rotate(-12)"><path d="M0 0h120l40-26v66l-40-26H0z" fill="#ffcf3f"/><re
+      `<g fill="#ffd166" font-family="Georgia, serif" font-size="40"><text x="470" y="120">♪</text><text x="72
+      hill(300, 6, "#1d1233")) },
+    daisy: { ...light, svg: () => wrap(sky("dy", "#d7efff", "#fbfff0"),
+      `<circle cx="720" cy="110" r="28" fill="#ffd45c"/>` + cloud(480, 70, .9, "#fff") + hill(250, 10, "#a8dc8
+      dots(17, 24, 380, W, 262, 315, (x, y) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})">${[0
+      `<g transform="translate(560 220)" fill="none" stroke="#2d5aa0" stroke-width="5"><circle cx="0" cy="40" 
+    joy: { ...light, svg: () => wrap(sky("jy", "#ffe9b0", "#fff7e8"),
+      `<g opacity=".5">${Array.from({ length: 12 }, (_, i) => { const a = Math.PI * (i / 11); return `<path d=
+      `<circle cx="640" cy="320" r="64" fill="#ffb347"/>` + hill(285, 8, "#c6e3a0") +
+      dots(9, 18, 400, W, 250, 310, (x, y, r, i) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})"
+    auld: { ...dark, svg: () => wrap(sky("al", "#0d1430", "#2b2350"),
+      [[520, 90, "#ffd166"], [660, 70, "#ff9cc6"], [740, 150, "#7bd389"], [590, 170, "#9fd4ff"]].map(([x, y, c
+      `<g transform="translate(450 250)"><circle r="44" fill="#f3efe0"/><circle r="44" fill="none" stroke="#c9
+  };
+  // Key art: colours for the white and black keys, and a small picture (a 24x24 SVG shape)
+  // that sits at the top of each white key and repeats faintly as a pattern.
+  const K = (white, whiteDown, black, blackDown, line, ink, inkDark, silly, sillyDark, note, motifColor, motif
+    ({ white, whiteDown, black, blackDown, line, ink, inkDark, silly, sillyDark, note, motifColor, motifDark, 
+  const STAR = "<path d='M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.6z'/>";
+  const keys = {
+    twinkle: K("#eef1fb", "#d9def3", "#101a3d", "#26346a", "#c5cbe6", "#141a33", "#e8ecff", "#9b2a6b", "#ffb8d
+    row: K("#eef8ff", "#d6ecfb", "#1f4f7a", "#2f6a9c", "#bcd8ec", "#10283d", "#e6f4ff", "#a8326b", "#ffc2de", 
+      "<path d='M2 13c3-4 5-4 8 0s5 4 8 0 4-3 4-3v6c-3 3-5 3-8 0s-5-3-8 0-4 3-4 3z'/>"),
+    grace: K("#fff6e8", "#f4e3c6", "#5a2e22", "#7a4434", "#ead6b3", "#2e1a12", "#ffeedd", "#a82d5c", "#ffc0d6"
+      "<circle cx='12' cy='12' r='5'/><path d='M11 1h2v4h-2zM11 19h2v4h-2zM1 11h4v2H1zM19 11h4v2h-4zM4.2 5.6l1
+    clementine: K("#fff1e2", "#f5dcc0", "#5e2a1c", "#7c3c2a", "#ecceae", "#331a10", "#ffe9d6", "#9e2c55", "#ff
+      "<path d='M3 17l3-8 6-4 7 4 2 8-8 4z'/>"),
+    range: K("#fbf5e4", "#efe4c4", "#4a3420", "#654a30", "#e3d6b0", "#2b1e10", "#fff1d9", "#a3305e", "#ffc1d8"
+      "<path d='M5 3h3.5v9a3.5 3.5 0 007 0V3H19v9a7 7 0 01-14 0z'/>"),
+    shenandoah: K("#f1effa", "#dedaf0", "#262a54", "#3a3f78", "#cfcae4", "#1c1d3a", "#f0eeff", "#a8306a", "#ff
+      "<path d='M11 2v14H4zM13 5l6 11h-6zM2 18h20l-3 4H5z'/>"),
+    birthday: K("#fff4f8", "#fbdde8", "#5b2a5e", "#76407a", "#f2cddb", "#2e1630", "#fff0fb", "#a3215c", "#ffd2
+      "<ellipse cx='12' cy='9' rx='6' ry='7.5'/><path d='M10.5 16.2h3l-1.5 2zM11.4 18h1.2v5h-1.2z'/>"),
+    jingle: K("#f2f7fc", "#dce8f5", "#0e2a4a", "#1d4570", "#c9d9ea", "#0f2236", "#eef6ff", "#b02a3a", "#ff9aa6
+      "<path d='M12 2a1.5 1.5 0 011.5 1.5v.7A6 6 0 0118 10v5l2 3H4l2-3v-5a6 6 0 014.5-5.8v-.7A1.5 1.5 0 0112 2
+    macdonald: K("#fbf8ee", "#efe8d2", "#6b1f1a", "#8c2c25", "#e3dbc0", "#2a1d12", "#fff1ea", "#a3285a", "#ffc
+      "<path fill-rule='evenodd' d='M2 10L12 3l10 7v11H2zM9 21v-7h6v7z'/>"),
+    merry: K("#f4f9f4", "#dcecdc", "#2a1d40", "#3e2d5c", "#cfe0cf", "#14261a", "#f2ecff", "#b02a3a", "#ffd166"
+      "<path d='M12 1l5 7h-3l4 6h-3l4 6H5l4-6H6l4-6H7zM11 20h2v3h-2z'/>"),
+    mary: K("#f7fbf2", "#e3f0d6", "#4a3a36", "#655047", "#d6e6c6", "#1e2a14", "#fff6ee", "#a62c62", "#ffc4dc",
+      "<circle cx='8' cy='12' r='4'/><circle cx='12' cy='9.5' r='4'/><circle cx='15.5' cy='12' r='4'/><circle 
+    spider: K("#f3f7f2", "#dfe9db", "#2f3b45", "#46566a", "#cfdccb", "#1a2620", "#eef6ff", "#a62c62", "#ffc2de
+      "<ellipse cx='12' cy='13' rx='4' ry='3.4'/><circle cx='12' cy='8.5' r='2.4'/><path d='M8.5 11L3 7.5M8.5 
+    london: K("#f1f3f6", "#dde2e9", "#3a3f4b", "#525868", "#cdd3dc", "#1d212a", "#eef0f5", "#a62c62", "#ffc2de
+      "<path d='M2 20h20v2H2zM4 6h3v14H4zM17 6h3v14h-3zM3.5 6L5.5 2l2 4zM16.5 6l2-4 2 4zM7 9h10v1.6H7zM7 18q5-
+    yankee: K("#fbf7ef", "#efe6d2", "#1f3d72", "#2d5aa0", "#e6dcc6", "#1d1f2b", "#eef3ff", "#b02a3a", "#ffc2cc
+      "<path d='M3 20C8 9 15 4 21 3c-2 6-7 13-18 17z'/><path d='M3 20L19 5' stroke='#fff' stroke-width='1' fil
+    sleeping: K("#eef0f8", "#d9ddee", "#1d2248", "#2e3570", "#cdd2e6", "#151834", "#f0eeff", "#9b2a6b", "#ffb8
+      "<path d='M15 3a9 9 0 100 18 7.5 7.5 0 010-18z'/>"),
+    farmer: K("#fbfaee", "#efecd2", "#5a6b2a", "#728836", "#e3e0c0", "#262a12", "#f6ffe6", "#a3285a", "#ffc3d7
+      "<path d='M11 22V8h2v14zM12 2c2 2 2 5 0 7-2-2-2-5 0-7zM12 9c3 0 5 2 5 4-3 0-5-2-5-4zM12 9c-3 0-5 2-5 4 3
+    scarborough: K("#f1f6f4", "#dbe8e3", "#2b4a58", "#3d6475", "#cadfd8", "#16262c", "#e9f6f6", "#a62c62", "#f
+      "<path d='M12 22V10M12 14c-4 0-6-3-6-6 4 0 6 3 6 6zM12 11c4 0 6-3 6-6-4 0-6 3-6 6zM12 18c4 0 6-3 6-5-4 0
+    saints: K("#f6f0fb", "#e6dbf2", "#3a1f5e", "#53308a", "#dcc

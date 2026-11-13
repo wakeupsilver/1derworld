@@ -1,8 +1,10 @@
+<meta charset="utf-8">
 <title>Mad Libs Piano</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23b0306a'/><path d='M26 14v26.5A8 8 0 1 0 30 47V24l16-4v16.5A8 8 0 1 0 50 43V9z' fill='%23fff'/></svg>">
 <link rel="preconnect" href="https://fonts.gstatic.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;1,6..96,400;1,6..96,500&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400..700&family=Nunito:wght@400;600;700;800&display=swap">
+<script>document.documentElement.setAttribute("data-style", "sunshine"); document.documentElement.setAttribute("data-bg", "sky"); document.documentElement.setAttribute("data-add", "colors chunky dots bouncy");</script>
 <style>
 /* Same music stand as Song Piano: song chips, the sung lyric as the score, the keyboard, the source text below. */
 :root {
@@ -115,7 +117,7 @@ h1 em { font-style: italic; color: var(--silly); }
 .now { font-family: var(--body); font-size: 14px; color: var(--muted); }
 .now b { font-weight: 700; color: var(--ink); }
 .now .pos { font-family: var(--mono); font-style: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--silly); border: 1px solid currentColor; border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
-.sung { font-family: var(--body); font-weight: 500; font-size: clamp(22px, 3.2vw, 30px); line-height: 1.3; max-height: 9.6em; overflow-y: auto; min-width: 0; }
+.sung { font-family: var(--body); font-weight: 500; font-size: clamp(22px, 3.2vw, 30px); line-height: 1.3; max-height: 12em; overflow-y: auto; min-width: 0; }
 .sung p { margin: 0 0 .25em; }
 .sung .placeholder { color: var(--muted); font: 400 15px/1.4 var(--body); opacity: .75; }
 .stage.art .sung .placeholder { color: var(--art-sub); }
@@ -123,6 +125,26 @@ h1 em { font-style: italic; color: var(--silly); }
 .w.silly { color: var(--silly); font-weight: 700; }
 .w.silly::after { content: attr(data-pos); font: 400 10px/1.3 var(--mono); font-style: normal; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1px; white-space: nowrap; }
 .w.fresh { animation: sing .5s ease-out; }
+/* Remix: every sung word can be tapped, with a couple of other choices in tiny letters above it */
+.sung p { padding-top: 32px; }
+.w { position: relative; }
+.w[data-say], .alt[data-say] { cursor: pointer; }
+.w.tap { animation: tap-pop .3s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes tap-pop { 40% { transform: scale(1.18); } }
+/* the alternatives are a little "junk pile": tilted, faded, nudged off-line and overlapping, so they read as leftovers, not the song */
+.alts { position: absolute; bottom: 100%; left: 50%; width: 0; height: 32px; pointer-events: none;
+  font: 600 11px/1.15 var(--body); white-space: nowrap; color: var(--muted); text-shadow: none; }
+.alt { position: absolute; left: 0; bottom: var(--y, 0px); padding: 0 3px; border-radius: 4px; opacity: .5; pointer-events: auto;
+  transform: translateX(-50%) translateX(var(--x, 0px)) rotate(var(--r, 0deg)); transition: opacity .12s, transform .15s; z-index: 0; }
+.alt.silly { color: var(--silly); }
+.alt.real, .alt:not(.silly) { color: var(--guide); }
+.alt:hover, .alt.tap { opacity: 1; z-index: 2; background: color-mix(in srgb, var(--bg, #fff) 80%, transparent);
+  transform: translateX(-50%) translateX(var(--x, 0px)) rotate(0deg) scale(1.15); }
+.alt.tap { animation: tap-pop .3s cubic-bezier(.34, 1.56, .64, 1); }
+.stage.art .alts { color: var(--art-sub); }
+.stage.art .alt.silly { color: var(--art-silly); }
+@media (max-width: 640px) { .sung p { padding-top: 28px; } .alts { font-size: 10px; height: 26px; } }
+.sung-hint { text-transform: none; letter-spacing: 0; font-weight: 500; opacity: .85; }
 .sung .done { font: 500 13px/1.6 var(--body); color: var(--guide); }
 /* Start over: dim before you play, quiet while you play, filled in once the song is done */
 #clear[data-state="idle"] { opacity: .45; cursor: default; }
@@ -311,6 +333,199 @@ h1 em { font-style: italic; color: var(--silly); }
   .key.guide::after { width: 8px; height: 8px; margin-left: -4px; }
   .key.black.guide::after { top: 6px; }
 }
+
+/* ===== Sunshine look =====================================================================
+   Round friendly type, bold colour, thick toy outlines, and bounce. The rules hang off
+   attributes on <html> (set by the little script at the top of the page): data-style="sunshine",
+   data-bg (page colour) and data-add (add-ons). Remove the script and the page falls back to
+   the plain look above. */
+/* ---------- shared by every fun look ---------- */
+html:root[data-style] {
+  color-scheme: light;
+  --display: "Fredoka", system-ui, sans-serif; --body: "Nunito", system-ui, sans-serif; --mono: "Nunito", system-ui, sans-serif;
+  --ease-pop: cubic-bezier(.34, 1.56, .64, 1);
+  --guide: #22b45a;
+}
+/* each note has its own colour (C red, D orange, E yellow, F blue, G purple, A pink, B teal); the keyboard starts on C */
+html[data-style] .kb > .key:nth-child(12n+1)  { --kc: #ff5a5f; --kp: #ffd0d2; }
+html[data-style] .kb > .key:nth-child(12n+3)  { --kc: #ff9f1c; --kp: #ffe0b8; }
+html[data-style] .kb > .key:nth-child(12n+5)  { --kc: #ffcf33; --kp: #fff1b0; }
+html[data-style] .kb > .key:nth-child(12n+6)  { --kc: #3d9bff; --kp: #cfe4ff; }
+html[data-style] .kb > .key:nth-child(12n+8)  { --kc: #8b5cf6; --kp: #e2d6ff; }
+html[data-style] .kb > .key:nth-child(12n+10) { --kc: #ff5fb8; --kp: #ffd3ec; }
+html[data-style] .kb > .key:nth-child(12n+12) { --kc: #14b8b0; --kp: #c4f1ee; }
+
+html[data-style] h1 { font-weight: 700; letter-spacing: -0.01em; }
+html[data-style] h1 em { font-style: normal; }
+html[data-style] .label { font-family: var(--display); font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: none; }
+html[data-style] .w.silly::after, html[data-style] .now .pos { font-family: var(--body); font-weight: 700; letter-spacing: .02em; }
+html[data-style] .kw { font-family: var(--display); font-weight: 600; }
+html[data-style] .sung { font-family: var(--display); font-weight: 500; }
+html[data-style] .source h2, html[data-style] .how h2 { font-family: var(--display); font-weight: 700; }
+html[data-style] .src { font-family: var(--body); }
+
+/* round, chunky controls */
+html[data-style] .btn, html[data-style] .pick select, html[data-style] .chip { font-family: var(--display); font-weight: 600; font-size: 15px; border-radius: 999px; }
+html[data-style] .song-pick select { font-size: 17px; }
+html[data-style] .keys-pick select { padding-left: 16px; }
+html[data-style] .btn { padding-inline: 16px; transition: transform .12s var(--ease-pop); }
+html[data-style] .btn:hover:not(:disabled) { transform: translateY(-2px); }
+html[data-style] .btn:active:not(:disabled) { transform: translateY(1px) scale(.97); }
+html[data-style] .stage, html[data-style] .end-strip { border-radius: 20px; }
+
+/* keys squish when pressed, and the guide dot bobs */
+html[data-style] .key { transition: transform .1s var(--ease-pop), background-color .1s; }
+html[data-style] .key.white.down { transform: translateY(3px); }
+html[data-style] .key.black.down { transform: translateY(2px); }
+html[data-style] .key.white, html[data-style] .kb.art .key.white { border-radius: 0 0 12px 12px; }
+html[data-style] .key.black, html[data-style] .kb.art .key.black { border-radius: 0 0 9px 9px; }
+html[data-style] .key.guide::after { animation: bob .7s ease-in-out infinite alternate; }
+@keyframes bob { to { transform: translateY(5px); } }
+
+/* each new sung word pops in; a silly one wiggles too */
+html[data-style] .w.fresh { animation: pop .45s var(--ease-pop); }
+html[data-style] .w.silly.fresh { animation: pop .45s var(--ease-pop), wiggle .5s ease-in-out .3s; }
+@keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes wiggle { 25% { transform: rotate(-7deg); } 50% { transform: rotate(6deg); } 75% { transform: rotate(-3deg); } }
+html[data-style] .end-strip { animation: pop .5s var(--ease-pop); }
+
+
+/* =========================================================
+   SUNSHINE — one big yellow, white toy shapes with thick black outlines
+   ========================================================= */
+html:root[data-style="sunshine"] {
+  --paper: var(--sun-bg, #ffd84d); --stage: #ffffff; --ink: #1f1a10; --muted: #5c4d1e; --line: #1f1a10;
+  --brass: #1f1a10; --silly: #e8246b; --ivory: #ffffff; --ivory-down: #fff4c2;
+  --ebony: #1f1a10; --ebony-down: #4a4030; --key-ink: #1f1a10; --key-ink-on-ebony: #ffffff;
+  --key-silly: #e8246b; --key-silly-on-ebony: #ffa3c6; --chip: #ffffff; --key-note: #7a6c48; --key-hint: #a89a74;
+  --edge: 3px solid #1f1a10; --lift: 0 4px 0 #1f1a10;
+}
+html[data-style="sunshine"] h1 em { color: #fff; -webkit-text-stroke: 7px #1f1a10; paint-order: stroke fill; }
+html[data-style="sunshine"] .btn, html[data-style="sunshine"] .pick select { border: var(--edge); box-shadow: var(--lift); }
+html[data-style="sunshine"] .btn:active:not(:disabled) { box-shadow: 0 1px 0 #1f1a10; transform: translateY(3px); }
+html[data-style="sunshine"] .btn.silly { background: #ff5a5f; color: #fff; }
+html[data-style="sunshine"] .btn.restart { background: #fff; border: var(--edge); }
+html[data-style="sunshine"] .btn.ghost { background: #fff; border: var(--edge); }
+html[data-style="sunshine"] .song-pick::before { color: #ff5a5f; }
+html[data-style="sunshine"] .kb-wrap { padding: 2px 4px 10px; }
+html[data-style="sunshine"] .kb { background: #fff; border: var(--edge); border-radius: 18px; overflow: hidden; box-shadow: var(--lift); }
+html[data-style="sunshine"] .key.white, html[data-style="sunshine"] .kb.art .key.white {
+  background: #fff; border: 0; border-right: 3px solid #1f1a10; margin-right: 0; border-radius: 0; box-shadow: none;
+}
+html[data-style="sunshine"] .key.white:last-child { border-right: 0; }
+html[data-style="sunshine"] .key.white.down, html[data-style="sunshine"] .kb.art .key.white.down { background: #fff4c2; transform: none; }
+html[data-style="sunshine"] .key.black, html[data-style="sunshine"] .kb.art .key.black { background: #1f1a10; border-radius: 0 0 10px 10px; box-shadow: none; }
+html[data-style="sunshine"] .key.black.down, html[data-style="sunshine"] .kb.art .key.black.down { background: #4a4030; transform: none; }
+html[data-style="sunshine"] .key.white.guide, html[data-style="sunshine"] .kb.art .key.white.guide { background: #9be8b4; }
+html[data-style="sunshine"] .key.black.guide, html[data-style="sunshine"] .kb.art .key.black.guide { background: var(--guide); }
+/* the green key's marker is a little pointing hand that bobs, like the Auto play hand */
+html[data-style="sunshine"] .key.guide::after, html[data-style="sunshine"] .key.white.guide::after, html[data-style="sunshine"] .key.black.guide::after {
+  width: 32px; height: 42px; margin-left: -16px; top: 4px; border-radius: 0; box-shadow: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 52'%3E%3Cg transform='rotate(180 20 26)'%3E%3Cpath d='M14 6a4 4 0 018 0v16l1-.4a4 4 0 015 2.6l.3.9a4 4 0 015.5 2.9 4 4 0 015 3.5V40c0 7-5 11-12 11h-4c-5 0-8-2-10.5-6L3 33.5a4 4 0 016.3-4.9L14 33z' fill='%23fff' stroke='%231f1a10' stroke-width='3' stroke-linejoin='round'/%3E%3Cpath d='M22 22v9M28.3 25v7M33.8 28.4V34' stroke='%231f1a10' stroke-width='2.4' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 2px 0 rgb(31 26 16 / .35)); z-index: 3;
+}
+/* while Auto play's own hand is out, the bobbing one steps aside */
+html[data-style="sunshine"] .kb:has(.hand:not([hidden])) .key.guide::after { display: none; }
+html[data-style="sunshine"] .kb.art .key.white .kw:not(.silly) { color: var(--ink); }
+html[data-style="sunshine"] .kb.art .key.white .kw.silly { color: #e8246b; }
+html[data-style="sunshine"] .kb.art .key.black .kw:not(.silly) { color: #fff; }
+html[data-style="sunshine"] .stage, html[data-style="sunshine"] .end-strip { border: var(--edge); box-shadow: var(--lift); }
+html[data-style="sunshine"] .source, html[data-style="sunshine"] .how {
+  background: #fff; border: var(--edge); border-radius: 20px; padding: 16px 20px; box-shadow: var(--lift);
+}
+html[data-style="sunshine"] .legend span::before { box-shadow: 0 0 0 2px #1f1a10; }
+html[data-style="sunshine"] .now, html[data-style="sunshine"] .status, html[data-style="sunshine"] .legend { color: var(--ink); font-weight: 600; }
+
+/* =========================================================
+   SUNSHINE OPTIONS — the page colour and add-ons that are switched on (see the data- attributes set at the top)
+   ========================================================= */
+html[data-bg="sky"]    { --sun-bg: #8fd3ff; }
+
+/* Colour buttons: every control its own bright colour */
+html[data-style="sunshine"][data-add~="colors"] h1 em { color: #ff5a5f; }
+html[data-style="sunshine"][data-add~="colors"] .btn.restart { background: #3d9bff; color: #fff; }
+html[data-style="sunshine"][data-add~="colors"] .keys-pick select {
+  background-color: #8b5cf6; color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+html[data-style="sunshine"][data-add~="colors"] .btn.ghost { background: #22b45a; color: #fff; }
+html[data-style="sunshine"][data-add~="colors"] .how { background: #fff4c2; }
+html[data-style="sunshine"][data-add~="colors"] .key.black { background: #2b2f7a; }
+html[data-style="sunshine"][data-add~="colors"] .key.black.down { background: #4a4fb0; }
+
+/* Chunky: fatter lines, a deeper lift, a bigger title and bigger sung words */
+html[data-style="sunshine"][data-add~="chunky"] { --edge: 4px solid #1f1a10; --lift: 0 7px 0 #1f1a10; }
+html[data-style="sunshine"][data-add~="chunky"] h1 { font-size: clamp(42px, 8vw, 72px); text-shadow: 0 5px 0 #1f1a10; }
+html[data-style="sunshine"][data-add~="chunky"] h1 em { text-shadow: none; }
+html[data-style="sunshine"][data-add~="chunky"] .btn, html[data-style="sunshine"][data-add~="chunky"] .pick select { min-height: 48px; font-size: 16px; }
+html[data-style="sunshine"][data-add~="chunky"] .key.white, html[data-style="sunshine"][data-add~="chunky"] .kb.art .key.white { border-right-width: 4px; }
+html[data-style="sunshine"][data-add~="chunky"] .kb { border-radius: 24px; }
+html[data-style="sunshine"][data-add~="chunky"] .stage, html[data-style="sunshine"][data-add~="chunky"] .source,
+html[data-style="sunshine"][data-add~="chunky"] .how, html[data-style="sunshine"][data-add~="chunky"] .end-strip { border-radius: 26px; }
+html[data-style="sunshine"][data-add~="chunky"] .sung { font-size: clamp(26px, 3.8vw, 38px); font-weight: 600; }
+
+/* Polka dots: a soft dot pattern on the page */
+html[data-style="sunshine"][data-add~="dots"], html[data-style="sunshine"][data-add~="dots"] body {
+  background-image: radial-gradient(rgb(31 26 16 / .14) 3.5px, transparent 4px);
+  background-size: 26px 26px;
+}
+
+/* Extra bouncy: the pressed word bounces and floats away before the new one drops in (bouncy.js) */
+html[data-add~="bouncy"] .kw { --r: rotate(180deg); }
+html[data-add~="bouncy"] .kw.letter { --r: none; }
+html[data-style="sunshine"][data-add~="bouncy"] .key[data-ghosting] .kw:not(.ghost) { display: none; }
+html[data-style="sunshine"][data-add~="bouncy"] .kw.ghost { animation: ghost-out .65s ease-in forwards; }
+html[data-style="sunshine"][data-add~="bouncy"] .key[data-arriving] .kw:not(.ghost) { animation: drop-in .38s var(--ease-pop); }
+@keyframes ghost-out {
+  0%   { transform: translateY(0) var(--r) scale(1); }
+  28%  { transform: translateY(-4px) var(--r) scale(1.32); animation-timing-function: var(--ease-pop); }
+  50%  { transform: translateY(0) var(--r) scale(1); opacity: 1; }
+  100% { transform: translateY(-70px) var(--r) scale(.7); opacity: 0; }
+}
+html[data-style="sunshine"][data-add~="bouncy"] .kw.ghost.quick { animation: ghost-quick .28s ease-out forwards; }
+html[data-style="sunshine"][data-add~="bouncy"] .key[data-quick] .kw:not(.ghost) { animation: none; }
+@keyframes ghost-quick { 0% { transform: var(--r) scale(1); opacity: 1; } 100% { transform: var(--r) scale(1.4); opacity: 0; } }
+@keyframes drop-in { from { transform: translateY(-26px) var(--r) scale(.6); opacity: 0; } to { transform: translateY(0) var(--r); opacity: 1; } }
+
+/* Juice: each press flashes the key in its note's colour, squashes it, and pops music notes out of it */
+html[data-style="sunshine"][data-add~="bouncy"] .key { transform-origin: 50% 0; }
+html[data-style="sunshine"][data-add~="bouncy"] .key.juice { animation: squash .32s var(--ease-pop); }
+html[data-style="sunshine"][data-add~="bouncy"] .key::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: var(--kc, #ffd84d); mix-blend-mode: multiply;
+}
+html[data-style="sunshine"][data-add~="bouncy"] .key.black::before { mix-blend-mode: screen; background: #ffd84d; }
+html[data-style="sunshine"][data-add~="bouncy"] .key.juice::before { animation: flash .5s ease-out; }
+@keyframes squash { 0% { transform: scale(1, 1); } 30% { transform: scale(1.04, .95); } 100% { transform: scale(1, 1); } }
+@keyframes flash { 0% { opacity: .75; } 100% { opacity: 0; } }
+.juice-note {
+  position: fixed; z-index: 90; pointer-events: none; font: 700 26px/1 "Fredoka", system-ui, sans-serif;
+  color: var(--c); -webkit-text-stroke: 5px #1f1a10; paint-order: stroke fill;
+  animation: note-fly .9s cubic-bezier(.2, .7, .3, 1) forwards;
+}
+@keyframes note-fly {
+  0%   { transform: translate(-50%, 0) scale(.3) rotate(0deg); opacity: 0; }
+  15%  { opacity: 1; }
+  45%  { transform: translate(calc(-50% + var(--dx) * .6), calc(var(--dy) * .7)) scale(1.15) rotate(calc(var(--rot) * .6)); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), var(--dy)) scale(.8) rotate(var(--rot)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-add~="bouncy"] .kw.ghost, html[data-add~="bouncy"] .key[data-arriving] .kw, html[data-add~="bouncy"] .key.juice,
+  html[data-add~="bouncy"] .key.juice::before { animation: none !important; }
+  .juice-note { display: none; }
+}
+html[data-style="sunshine"][data-add~="bouncy"] .w { transition: transform .2s var(--ease-pop); }
+html[data-style="sunshine"][data-add~="bouncy"] .w:hover { transform: translateY(-3px) rotate(-3deg); }
+html[data-style="sunshine"][data-add~="bouncy"] h1 em { display: inline-block; animation: sway 2.4s ease-in-out infinite; transform-origin: 50% 80%; }
+@keyframes sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-style] .w.fresh, html[data-style] .w.silly.fresh, html[data-style] .end-strip, html[data-style] .key.guide::after { animation: none !important; }
+  html[data-style] .btn, html[data-style] .key { transition: none !important; }
+}
+@media (max-width: 640px) {
+  html[data-style="sunshine"] .key.guide::after, html[data-style="sunshine"] .key.white.guide::after, html[data-style="sunshine"] .key.black.guide::after { width: 20px; height: 26px; margin-left: -10px; top: 4px; }
+}
 </style>
 
 <div class="wrap">
@@ -342,7 +557,7 @@ h1 em { font-style: italic; color: var(--silly); }
 
   <section class="stage" id="stage" aria-live="polite">
     <div class="art-layer" id="art-layer"></div>
-    <span class="label">Your song</span>
+    <span class="label">Your song<span class="sung-hint" id="sung-hint" hidden> · tap words to sing them again, in any order</span></span>
     <div class="sung" id="sung"></div>
   </section>
 
@@ -359,6 +574,7 @@ h1 em { font-style: italic; color: var(--silly); }
       <p>Pick a song, then press the <b>green key</b>. It sings the next word of the song. Keep pressing the green key and you'll play the whole song.</p>
       <p>Press <b>any other key</b> and it sings a silly word instead, like "Twinkle, twinkle, little meatball."</p>
       <p>Your song shows up under the piano as you play. When it's done, start over or try the next song.</p>
+      <p><b>Remix it:</b> tap the words in your song to sing them again, in any order you like. The tiny words above each one are what other keys would have sung. Tap those to try a different path.</p>
       <p>Don't want to play? Press <b>Auto play</b> and watch it go.</p>
       <p>On a computer, the letter keys play the piano too.</p>
     </section>
@@ -475,6 +691,21 @@ function deal() {
   order.forEach((k, i) => S.assign[k] = { word: silly[i % silly.length], kind: "silly" });
 }
 
+// A few of the other words the keys offered when this one was sung, so the written-down song
+// can be remixed down a different path: the real word first (if a silly one was picked), then
+// the silly words on the keys nearest the one pressed. Each keeps the note of its own key.
+function altsFor(k) {
+  const a = S.assign[k], seen = new Set([keyOf(a.word)]), out = [];
+  const cands = S.assign.map((x, j) => x && j !== k && !x.cont && !/^[-~]/.test(x.word) ? { word: x.word, kind: x.kind, midi: KEYS[j] } : null)
+    .filter(Boolean).sort((p, q) => Math.abs(p.midi - KEYS[k]) - Math.abs(q.midi - KEYS[k]));
+  const real = cands.find(c => c.kind !== "silly");
+  for (const c of real ? [real, ...cands] : cands) {
+    if (out.length >= 3) break;
+    if (seen.has(keyOf(c.word))) continue;
+    seen.add(keyOf(c.word)); out.push(c);
+  }
+  return out;
+}
 function sing(k) {
   const a = S.assign[k], t = S.tokens[S.pos];
   if (!a) return null;
@@ -496,12 +727,12 @@ function sing(k) {
   if (n > 1) {
     S.cont = { word: a.word, kind: a.kind, i: 1, parts: syllableText(a.word, n) };
     const line = S.sung[S.sung.length - 1];
-    line.push({ word: line.length === 0 ? cap(a.word) : a.word, kind: a.kind, pos: POS_NAMES[t.tag] });
+    line.push({ word: line.length === 0 ? cap(a.word) : a.word, kind: a.kind, pos: POS_NAMES[t.tag], say: a.word, midi: KEYS[k], alts: altsFor(k) });
     deal();
     return { word: a.word, shown: S.cont.parts[0], kind: a.kind, part: 0, of: n };
   }
   const line = S.sung[S.sung.length - 1];
-  line.push({ word: line.length === 0 ? cap(a.word) : a.word, kind: a.kind, pos: POS_NAMES[t.tag] });
+  line.push({ word: line.length === 0 ? cap(a.word) : a.word, kind: a.kind, pos: POS_NAMES[t.tag], say: a.word, midi: KEYS[k], alts: altsFor(k) });
   return finishWord(t, a.word, a.kind, { part: 0, of: 1 });
 }
 function finishWord(t, word, kind, piece) {
@@ -833,12 +1064,36 @@ function keepGuideInView() {
 }
 function renderSung() {
   const lines = S.sung.filter(l => l.done || l.length);
-  if (!lines.length) { sungEl.innerHTML = `<p class="placeholder">Your song appears here, one word per note.</p>`; return; }
+  if (!lines.length) { sungEl.innerHTML = `<p class="placeholder">Your song appears here, one word per note.</p>`; $("sung-hint").hidden = true; return; }
   const last = lines.length - 1 - [...lines].reverse().findIndex(l => !l.done);
+  // every sung word can be tapped to sing it again; the tiny words above it are other paths you could have taken
+  const play = (word, midi) => midi == null ? "" : ` role="button" data-say="${esc(word)}" data-midi="${midi}"`;
+  // scatter them a bit (same jumble every time for the same word, so they don't jitter on each note)
+  const jig = (str, n) => { let h = 2166136261; for (const ch of str + n) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return ((h >>> 0) % 1000) / 1000; };
+  const mess = (a, i) => { const r = jig(a.word, 1), x = jig(a.word, 2), y = jig(a.word, 3);
+    return `--r:${((r - .5) * 26 + (i % 2 ? 5 : -5)).toFixed(1)}deg;--x:${((x - .5) * 34 + (i - 1) * 12).toFixed(0)}px;--y:${(i * 9.5 + y * 4).toFixed(0)}px`; };
+  const alts = w => w.alts && w.alts.length ? `<span class="alts">${w.alts.map((a, i) =>
+    `<span class="alt ${a.kind}" style="${mess(a, i)}"${play(a.word, a.midi)} title="Sing “${esc(a.word)}” instead">${esc(a.word)}</span>`).join("")}</span>` : "";
   sungEl.innerHTML = lines.map((l, li) => l.done ? `<p class="done">— the end —</p>` : `<p>${l.map((w, wi) =>
-    `<span class="w ${w.kind}${li === last && wi === l.length - 1 ? " fresh" : ""}"${w.kind === "silly" ? ` data-pos="${esc(w.pos)}"` : ""}>${esc(w.word)}</span>`).join("")}</p>`).join("");
+    `<span class="w ${w.kind}${li === last && wi === l.length - 1 ? " fresh" : ""}"${w.kind === "silly" ? ` data-pos="${esc(w.pos)}"` : ""}${play(w.say || w.word, w.midi)}>${alts(w)}${esc(w.word)}</span>`).join("")}</p>`).join("");
   sungEl.scrollTop = sungEl.scrollHeight;
+  $("sung-hint").hidden = false;
 }
+// Remix: tapping a word in your song sings it again on its note (the song doesn't move on),
+// and its key lights up as if pressed.
+function replay(word, midi) {
+  const c = audio();
+  if (c && opts.piano) piano(hz(midi), 0.26);
+  speak(word, midi);
+  const el = keyEls[midi - LOW];
+  if (el && !held.has(midi)) { el.classList.add("down"); setTimeout(() => { if (!held.has(midi)) el.classList.remove("down"); }, 180); }
+}
+sungEl.addEventListener("click", e => {
+  const t = e.target.closest("[data-say]");
+  if (!t) return;
+  replay(t.dataset.say, +t.dataset.midi);
+  t.classList.remove("tap"); void t.offsetWidth; t.classList.add("tap");
+});
 function renderSource() {
   $("src-title").textContent = S.song.title;
   $("src-credit").textContent = S.song.credit;
@@ -966,5 +1221,95 @@ window.addEventListener("blur", () => [...held].forEach(noteOff));
 window.MadLibsPianoDebug = { S, loadVoice, wordPiece, syllableText, wordData, psola, sillyWords, syllables, keyOf };
 buildKeyboard();
 loadSong(SONGS[0]);
+})();
+</script>
+<script>
+// Extra bouncy, part 2: the word you just pressed finishes its bounce before the new word appears.
+// The page swaps a pressed key's word the moment you press it, so this watches for that swap and
+// puts a copy of the OLD word in its place. The copy bounces and floats up and away; then the new
+// word drops in. Only runs when Sunshine + Extra bouncy are on. The page's own code is untouched.
+(() => {
+  const root = document.documentElement, kb = document.getElementById("kb");
+  if (!kb) return;
+  const on = () => root.dataset.style === "sunshine" && (root.dataset.add || "").split(" ").includes("bouncy");
+  const keys = () => [...kb.querySelectorAll(":scope > .key")];
+  const realWord = key => key.querySelector(".kw:not(.ghost)");
+  const last = new Map(); // key -> { text, cls } as it was after the previous change
+  const remember = () => keys().forEach(k => { const s = realWord(k); if (s) last.set(k, { text: s.textContent, cls: s.className }); });
+
+  const OUT_MS = 650, IN_MS = 380, QUICK_MS = 280;
+  function bounceOut(key, old) {
+    key.querySelectorAll(".kw.ghost").forEach(g => g.remove()); // pressed again mid-bounce: start over
+    clearTimeout(key._bouncy);
+    key.removeAttribute("data-ghosting"); key.removeAttribute("data-arriving"); key.removeAttribute("data-quick");
+    const real = realWord(key);
+    const ghost = document.createElement("span");
+    ghost.className = old.cls.replace(/\bchanged\b/, "") + " ghost";
+    ghost.textContent = old.text;
+    ghost.setAttribute("aria-hidden", "true");
+    real.after(ghost); // after, so the page's querySelector(".kw") still finds the real word
+    // The next right note is on this same key: show its word now, standing still,
+    // while the pressed word fades away quickly on top of it.
+    if (key.classList.contains("guide")) {
+      Object.assign(ghost.style, { position: "absolute", left: real.offsetLeft + "px", top: real.offsetTop + "px", margin: "0" });
+      ghost.classList.add("quick");
+      key.dataset.quick = "";
+      // drop the page's fade-in class too, or it would replay when data-quick comes off
+      key._bouncy = setTimeout(() => { ghost.remove(); real.classList.remove("changed"); key.removeAttribute("data-quick"); }, QUICK_MS);
+      return;
+    }
+    key.dataset.ghosting = "";
+    key._bouncy = setTimeout(() => {
+      ghost.remove();
+      key.removeAttribute("data-ghosting");
+      key.dataset.arriving = "";
+      key._bouncy = setTimeout(() => key.removeAttribute("data-arriving"), IN_MS);
+    }, OUT_MS);
+  }
+
+  // Juice: flash + squash the key, and pop a few music notes out of its top
+  const NOTES = ["♪", "♫", "♩", "♬"];
+  function juice(key) {
+    key.classList.remove("juice"); void key.offsetWidth; key.classList.add("juice");
+    setTimeout(() => key.classList.remove("juice"), 520);
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const r = key.getBoundingClientRect();
+    const silly = !key._wasGuide;
+    const colors = silly ? ["#ff5fb8", "#ff5a5f", "#ffd84d"] : ["#22b45a", "#3d9bff", "#ffd84d"];
+    const n = silly ? 4 : 3;
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement("span");
+      s.className = "juice-note";
+      s.textContent = NOTES[(Math.random() * NOTES.length) | 0];
+      s.style.left = r.left + r.width / 2 + "px";
+      s.style.top = r.top + 4 + "px";
+      s.style.setProperty("--c", colors[i % colors.length]);
+      s.style.setProperty("--dx", (Math.random() * 90 - 45).toFixed(0) + "px");
+      s.style.setProperty("--dy", -(60 + Math.random() * 60).toFixed(0) + "px");
+      s.style.setProperty("--rot", (Math.random() * 60 - 30).toFixed(0) + "deg");
+      s.style.animationDelay = i * 45 + "ms";
+      document.body.appendChild(s);
+      setTimeout(() => s.remove(), 1000 + i * 45);
+    }
+  }
+
+  // Remember which key was the green one, so a press can tell a right note from a silly one
+  // (by the time the press is seen, the green has already moved on to the next key).
+  const markGuide = () => keys().forEach(k => { k._wasGuide = k._isGuide; k._isGuide = k.classList.contains("guide"); });
+
+  new MutationObserver(muts => {
+    if (on()) {
+      const pressed = new Set();
+      muts.forEach(m => { if (m.type === "attributes" && m.target.classList.contains("down") && !m.oldValue?.includes("down")) pressed.add(m.target); });
+      markGuide();
+      pressed.forEach(juice);
+      keys().forEach(k => {
+        const s = realWord(k), was = last.get(k);
+        if (s && was && was.text && was.text !== s.textContent && k.classList.contains("down")) bounceOut(k, was);
+      });
+    }
+    remember();
+  }).observe(kb, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["class"], attributeOldValue: true });
+  remember(); markGuide(); markGuide();
 })();
 </script>

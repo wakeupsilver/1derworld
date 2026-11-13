@@ -94,8 +94,8 @@ export class AudioEngine {
     this.amb = g(0.9); this.amb.connect(this.out);
 
     this.noise = this.noiseBuffer(2, 'white');
-    this.brown = this.noiseBuffer(4, 'brown');
-    this.pink = this.noiseBuffer(3, 'pink');
+    this.brown = this.noiseBuffer(8, 'brown');
+    this.pink = this.noiseBuffer(6, 'pink');
 
     this.ready = true;
     // The score is pre-rendered once into looping stems: playing 5 buffers costs almost nothing,
@@ -123,8 +123,16 @@ export class AudioEngine {
       else if (type === 'pink') { b0 = 0.997 * b0 + w * 0.029591; b1 = 0.985 * b1 + w * 0.032534; b2 = 0.95 * b2 + w * 0.048056; d[i] = (b0 + b1 + b2 + w * 0.04) * 2.2; }
       else d[i] = w;
     }
+    // crossfade the tail into the head so the loop point is seamless (no thump every few seconds)
+    if (type !== 'white') {
+      const x = Math.floor(ctx.sampleRate * 0.5);
+      for (let i = 0; i < x; i++) { const a = i / x, ea = Math.sqrt(a), eb = Math.sqrt(1 - a); d[i] = d[i] * ea + d[len - x + i] * eb; }
+      return this.trim(b, len - x);
+    }
     return b;
   }
+
+  trim(b, n) { const o = this.ctx.createBuffer(1, n, b.sampleRate); o.getChannelData(0).set(b.getChannelData(0).subarray(0, n)); return o; }
 
   // ---------- mixing ----------
   setMix(name, fade = 0.8) {
@@ -499,7 +507,11 @@ export class AudioEngine {
     } else if (kind === 'rain') {
       noise(this.pink, 'highpass', 1500, 0.5).connect(out);
     } else if (kind === 'city') {
-      noise(this.brown, 'lowpass', 180, 0.5).connect(out);
+      // soft parking-lot wind: a low bed plus a faint airy layer that swells in slow, overlapping gusts
+      const bed = noise(this.brown, 'lowpass', 160, 0.3), bg = ctx.createGain(); bg.gain.value = 0.7; bed.connect(bg); bg.connect(out);
+      const air = noise(this.pink, 'lowpass', 700, 0.2), ag = ctx.createGain(); ag.gain.value = 0.08; air.connect(ag); ag.connect(out);
+      for (const [f, depth] of [[0.031, 0.04], [0.047, 0.025]]) { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = f; lg.gain.value = depth; l.connect(lg); lg.connect(ag.gain); l.start(); src.push(l); }
+      const sw = ctx.createOscillator(), sg = ctx.createGain(); sw.frequency.value = 0.023; sg.gain.value = 120; sw.connect(sg); sg.connect(air.frequency); sw.start(); src.push(sw);
     } else if (kind === 'wind') {
       const fl = noise(this.pink, 'bandpass', 500, 1.5), l = ctx.createOscillator(), lg = ctx.createGain();
       l.frequency.value = 0.08; lg.gain.value = 300; l.connect(lg); lg.connect(fl.frequency); l.start(); src.push(l); fl.connect(out);
